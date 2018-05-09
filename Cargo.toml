@@ -1,0 +1,11 @@
+[package]
+name = "reflect"
+version = "0.0.0"
+authors = ["David Tolnay <dtolnay@gmail.com>"]
+license = "MIT/Apache-2.0"
+description = "The \"but I thought Rust doesn't have reflection?\" memorial brand new way of defining procedural macros."
+
+[dependencies]
+proc-macro2 = "0.3"
+quote = "0.5"
+syn = "0.13"
