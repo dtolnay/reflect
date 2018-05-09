@@ -8,4 +8,5 @@ description = "The \"but I thought Rust doesn't have reflection?\" memorial bran
 [dependencies]
 proc-macro2 = "0.3"
 quote = "0.5"
+ref-cast = "0.2"
 syn = "0.13"
