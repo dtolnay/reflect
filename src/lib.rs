@@ -304,7 +304,7 @@
 //! simple reflection-like `reflect::Value` object manipulations into a fully
 //! general and robust procedural macro.
 
-#![doc(html_root_url = "https://docs.rs/reflect/0.0.1")]
+#![doc(html_root_url = "https://docs.rs/reflect/0.0.2")]
 #![allow(unused_variables, dead_code)]
 #![cfg_attr(
     feature = "cargo-clippy",
