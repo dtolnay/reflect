@@ -5,12 +5,11 @@ I thought Rust doesn't have reflection...?
 library! {
     extern crate std {
         mod fmt {
-            type Debug;
             type Formatter;
             type Result;
             type DebugStruct;
 
-            impl Debug {
+            trait Debug {
                 fn fmt(&self, &mut Formatter) -> Result;
             }
 

@@ -195,6 +195,12 @@ macro_rules! library {
         library!(@parse $($rest)*);
     };
 
+    (@parse trait $n:ident { $($tt:tt)* } $($rest:tt)*) => {
+        library!(@type $n);
+        library!(@impl $n { $($tt)* });
+        library!(@parse $($rest)*);
+    };
+
     (@parse) => {};
 }
 
