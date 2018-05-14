@@ -13,7 +13,7 @@
 //! relatively low level of abstraction. The macro author is responsible for the
 //! placement of every single angle bracket, lifetime, type parameter, trait bound,
 //! and phantom data. There is a large amount of domain knowledge involved and very
-//! few people can reliable produce robust macros with this approach.
+//! few people can reliably produce robust macros with this approach.
 //!
 //! The design explored here focuses on what it would take to make all the edge
 //! cases disappear -- such that if your macro works for the most basic case, then
