@@ -191,7 +191,40 @@
 //!
 //! [`DebugStruct`]: https://doc.rust-lang.org/std/fmt/struct.DebugStruct.html
 //!
-//! ```ignore
+//! ```
+//! # #[macro_use]
+//! # extern crate reflect;
+//! #
+//! # use reflect::*;
+//! #
+//! # library! {
+//! #     extern crate std {
+//! #         mod fmt {
+//! #             type Formatter;
+//! #             type Result;
+//! #             type DebugStruct;
+//! #
+//! #             trait Debug {
+//! #                 fn fmt(&self, &mut Formatter) -> Result;
+//! #             }
+//! #
+//! #             impl Formatter {
+//! #                 fn debug_struct(&mut self, &str) -> DebugStruct;
+//! #             }
+//! #
+//! #             impl DebugStruct {
+//! #                 fn field(&mut self, &str, &Debug) -> &mut DebugStruct;
+//! #                 fn finish(&mut self) -> Result;
+//! #             }
+//! #         }
+//! #     }
+//! # }
+//! #
+//! # fn debug_fmt<'a>(
+//! #     receiver: StructStruct<Value<'a>>,
+//! #     formatter: Value<'a>,
+//! #     type_name: Value<'a>,
+//! # ) -> Value<'a> {
 //! let builder = RUNTIME::std::fmt::Formatter::debug_struct
 //!     .INVOKE(formatter, type_name)
 //!     .reference_mut();
@@ -205,6 +238,9 @@
 //! }
 //!
 //! RUNTIME::std::fmt::DebugStruct::finish.INVOKE(builder)
+//! # }
+//! #
+//! # fn main() {}
 //! ```
 //!
 //! # Remaining work
