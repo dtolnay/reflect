@@ -154,8 +154,8 @@
 //! function arguments which have the type `reflect::Value` and can pass them
 //! around, pull out their fields, inspect attributes, invoke methods, and so forth.
 //!
-//! ```ignore
-//! use reflect::{MakeFunction, Value};
+//! ```
+//! use reflect::*;
 //!
 //! fn debug_fmt(f: MakeFunction) -> Value {
 //!     let receiver = f.arg(0);
@@ -167,6 +167,7 @@
 //!             Struct::Tuple(receiver) => unimplemented!(),
 //!             Struct::Struct(receiver) => {
 //!                 /* implemented below */
+//! # unimplemented!()
 //!             }
 //!         },
 //!         Data::Enum(receiver) => receiver.match_variant(|variant| match variant {

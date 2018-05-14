@@ -126,7 +126,7 @@ function arguments which have the type `reflect::Value` and can pass them
 around, pull out their fields, inspect attributes, invoke methods, and so forth.
 
 ```rust
-use reflect::{MakeFunction, Value};
+use reflect::*;
 
 fn debug_fmt(f: MakeFunction) -> Value {
     let receiver = f.arg(0);
