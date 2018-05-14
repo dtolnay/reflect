@@ -11,7 +11,7 @@ use Variant;
 use std::marker::PhantomData;
 
 impl<T> Data<T> {
-    pub fn map<F, R>(self, f: F) -> Data<R>
+    pub(crate) fn map<F, R>(self, f: F) -> Data<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -23,7 +23,7 @@ impl<T> Data<T> {
 }
 
 impl<T> Struct<T> {
-    pub fn map<F, R>(self, f: F) -> Struct<R>
+    pub(crate) fn map<F, R>(self, f: F) -> Struct<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -36,7 +36,7 @@ impl<T> Struct<T> {
 }
 
 impl<T> TupleStruct<T> {
-    pub fn map<F, R>(self, mut f: F) -> TupleStruct<R>
+    pub(crate) fn map<F, R>(self, mut f: F) -> TupleStruct<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -50,7 +50,7 @@ impl<T> TupleStruct<T> {
 }
 
 impl<T> StructStruct<T> {
-    pub fn map<F, R>(self, mut f: F) -> StructStruct<R>
+    pub(crate) fn map<F, R>(self, mut f: F) -> StructStruct<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -64,7 +64,7 @@ impl<T> StructStruct<T> {
 }
 
 impl<T> Field<T> {
-    pub fn map<F, R>(self, f: F) -> Field<R>
+    pub(crate) fn map<F, R>(self, f: F) -> Field<R>
     where
         F: FnOnce(Field<T>) -> R,
     {
@@ -77,7 +77,7 @@ impl<T> Field<T> {
 }
 
 impl<T> Enum<T> {
-    pub fn map<F, R>(self, mut f: F) -> Enum<R>
+    pub(crate) fn map<F, R>(self, mut f: F) -> Enum<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -88,7 +88,7 @@ impl<T> Enum<T> {
 }
 
 impl<T> Variant<T> {
-    pub fn map<F, R>(self, f: F) -> Variant<R>
+    pub(crate) fn map<F, R>(self, f: F) -> Variant<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -101,7 +101,7 @@ impl<T> Variant<T> {
 }
 
 impl<T> TupleVariant<T> {
-    pub fn map<F, R>(self, f: F) -> TupleVariant<R>
+    pub(crate) fn map<F, R>(self, f: F) -> TupleVariant<R>
     where
         F: FnMut(Field<T>) -> R,
     {
@@ -112,7 +112,7 @@ impl<T> TupleVariant<T> {
 }
 
 impl<T> StructVariant<T> {
-    pub fn map<F, R>(self, f: F) -> StructVariant<R>
+    pub(crate) fn map<F, R>(self, f: F) -> StructVariant<R>
     where
         F: FnMut(Field<T>) -> R,
     {
