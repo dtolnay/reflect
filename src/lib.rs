@@ -109,11 +109,32 @@
 //! that is compiled into the macro user's crate. This token stream contains no
 //! vestiges of runtime reflection.
 //!
-//! ```ignore
+//! ```
+//! # #[macro_use]
+//! # extern crate reflect;
+//! #
+//! # library! {
+//! #     extern crate std {
+//! #         mod fmt {
+//! #             type Formatter;
+//! #             type Result;
+//! #
+//! #             trait Debug {
+//! #                 fn fmt(&self, &mut Formatter) -> Result;
+//! #             }
+//! #         }
+//! #     }
+//! # }
+//! #
 //! extern crate proc_macro;
 //! use proc_macro::TokenStream;
 //!
+//! # macro_rules! ignore {
+//! #     ($($tt:tt)*) => {};
+//! # }
+//! # ignore! {
 //! #[proc_macro_derive(MyDebug)]
+//! # }
 //! pub fn derive(input: TokenStream) -> TokenStream {
 //!     reflect::derive(input, |ex| {
 //!         ex.make_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
@@ -121,6 +142,12 @@
 //!         });
 //!     })
 //! }
+//! #
+//! # fn debug_fmt(f: reflect::MakeFunction) -> reflect::Value {
+//! #     unimplemented!()
+//! # }
+//! #
+//! # fn main() {}
 //! ```
 //!
 //! The following looks like a function that does runtime reflection. It receives
