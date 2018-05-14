@@ -252,7 +252,12 @@
 //! wrapping it in a new struct. This is a real life use case drawn from how
 //! `serde_derive` handles `serialize_with` attributes. Conceptually:
 //!
-//! ```rust
+//! ```
+//! # macro_rules! ignore {
+//! #     ($($tt:tt)*) => {}
+//! # }
+//! #
+//! # ignore! {
 //! let input: syn::DeriveInput = syn::parse(...).unwrap();
 //!
 //! // Pull out one of the field types.
@@ -266,6 +271,7 @@
 //!
 //!     Wrapper { x: &self.x }
 //! }
+//! # }
 //! ```
 //!
 //! Making the `quote!` part of this simply generate compilable code for all
@@ -284,10 +290,16 @@
 //! In contrast, the `reflect` library will be able to get it right every single
 //! time with much less thought from the macro author. Possibly as trivial as:
 //!
-//! ```rust
+//! ```
+//! # macro_rules! ignore {
+//! #     ($($tt:tt)*) => {}
+//! # }
+//! #
+//! # ignore! {
 //! let wrapper: reflect::Type = reflect::new_struct_type();
 //!
 //! wrapper.instantiate(vec![input.get_field("x").reference()])
+//! # }
 //! ```
 //!
 //! # Remaining work
