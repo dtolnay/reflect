@@ -80,7 +80,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                 .collect(),
                         }))
                     }
-                    syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct {})),
+                    syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: () })),
                 }
             }
             syn::Data::Enum(data) => {

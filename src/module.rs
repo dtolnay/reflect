@@ -29,7 +29,7 @@ impl Module {
             global: self.global,
             path: self.path.clone(),
             name: name.to_owned(),
-            generics: Generics {},
+            generics: Generics { private: () },
         }
     }
 

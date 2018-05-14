@@ -18,7 +18,9 @@ pub enum Struct<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnitStruct {}
+pub struct UnitStruct {
+    pub(crate) private: (),
+}
 
 #[derive(Debug, Clone)]
 pub struct TupleStruct<T> {
@@ -95,7 +97,9 @@ pub enum Variant<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnitVariant {}
+pub struct UnitVariant {
+    pub(crate) private: (),
+}
 
 #[derive(Debug, Clone)]
 pub struct TupleVariant<T> {
