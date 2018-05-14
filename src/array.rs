@@ -1,4 +1,4 @@
-pub trait Array<T> {
+pub trait Array<T>: private::Sealed {
     #[doc(hidden)]
     fn first(&self) -> T;
     #[doc(hidden)]
@@ -16,8 +16,14 @@ macro_rules! impl_array {
                     <[_]>::to_vec(self)
                 }
             }
+
+            impl<T: Clone> private::Sealed for [T; $n] {}
         )*
     }
 }
 
 impl_array!(1 2 3 4 5 6 7 8 9 10);
+
+mod private {
+    pub trait Sealed {}
+}
