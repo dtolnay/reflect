@@ -1,5 +1,6 @@
 use Generics;
 use Type;
+use TypeNode;
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -25,20 +26,20 @@ impl Module {
     }
 
     pub fn get_type(&self, name: &str) -> Type {
-        Type::Path {
+        Type(TypeNode::Path {
             global: self.global,
             path: self.path.clone(),
             name: name.to_owned(),
             generics: Generics { private: () },
-        }
+        })
     }
 
     pub fn get_generic_type(&self, name: &str, generics: Generics) -> Type {
-        Type::Path {
+        Type(TypeNode::Path {
             global: self.global,
             path: self.path.clone(),
             name: name.to_owned(),
             generics,
-        }
+        })
     }
 }

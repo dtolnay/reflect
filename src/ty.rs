@@ -4,16 +4,20 @@ use Generics;
 use Signature;
 
 #[derive(Debug, Clone)]
-pub enum Type {
+#[repr(C)]
+pub struct Type(pub(crate) TypeNode);
+
+#[derive(Debug, Clone)]
+pub(crate) enum TypeNode {
     Infer,
     Unit,
     PrimitiveStr,
-    Reference(Box<Type>),
-    ReferenceMut(Box<Type>),
-    Dereference(Box<Type>),
+    Reference(Box<TypeNode>),
+    ReferenceMut(Box<TypeNode>),
+    Dereference(Box<TypeNode>),
     DataStructure {
         name: String,
-        data: Data<Type>,
+        data: Data<TypeNode>,
     },
     Path {
         global: bool,
@@ -25,26 +29,26 @@ pub enum Type {
 
 impl Type {
     pub fn unit() -> Self {
-        Type::Unit
+        Type(TypeNode::Unit)
     }
 
     pub fn primitive_str() -> Self {
-        Type::PrimitiveStr
+        Type(TypeNode::PrimitiveStr)
     }
 
     pub fn reference(&self) -> Self {
-        Type::Reference(Box::new(self.clone()))
+        Type(TypeNode::Reference(Box::new(self.0.clone())))
     }
 
     pub fn reference_mut(&self) -> Self {
-        Type::ReferenceMut(Box::new(self.clone()))
+        Type(TypeNode::ReferenceMut(Box::new(self.0.clone())))
     }
 
     pub fn dereference(&self) -> Self {
-        match *self {
-            Type::Reference(ref inner) => (**inner).clone(),
-            Type::ReferenceMut(ref inner) => (**inner).clone(),
-            ref other => Type::Dereference(Box::new(other.clone())),
+        match self.0 {
+            TypeNode::Reference(ref inner) => Type((**inner).clone()),
+            TypeNode::ReferenceMut(ref inner) => Type((**inner).clone()),
+            ref other => Type(TypeNode::Dereference(Box::new(other.clone()))),
         }
     }
 
@@ -57,14 +61,14 @@ impl Type {
     }
 
     pub fn data(&self) -> Data<Type> {
-        match *self {
-            Type::DataStructure { ref data, .. } => data.clone(),
-            Type::Reference(ref inner) => (**inner)
-                .clone()
+        match self.0 {
+            TypeNode::DataStructure { ref data, .. } => {
+                data.clone().map(|field| Type(field.element))
+            }
+            TypeNode::Reference(ref inner) => Type((**inner).clone())
                 .data()
                 .map(|field| field.element.reference()),
-            Type::ReferenceMut(ref inner) => (**inner)
-                .clone()
+            TypeNode::ReferenceMut(ref inner) => Type((**inner).clone())
                 .data()
                 .map(|field| field.element.reference_mut()),
             _ => panic!("Type::data"),
@@ -72,12 +76,12 @@ impl Type {
     }
 }
 
-impl Type {
+impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match *self {
-            Type::DataStructure { ref name, .. } => name.clone(),
-            Type::Reference(ref inner) => (**inner).get_name(),
-            Type::ReferenceMut(ref inner) => (**inner).get_name(),
+            TypeNode::DataStructure { ref name, .. } => name.clone(),
+            TypeNode::Reference(ref inner) => (&**inner).get_name(),
+            TypeNode::ReferenceMut(ref inner) => (&**inner).get_name(),
             _ => panic!("Type::get_name"),
         }
     }

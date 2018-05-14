@@ -7,6 +7,7 @@ use Invoke;
 use Print;
 use Receiver;
 use Type;
+use TypeNode;
 use ValueNode;
 use ValueRef;
 
@@ -72,7 +73,7 @@ impl CompleteFunction {
         }
 
         let output = match self.f.sig.output {
-            Type::Unit => None,
+            Type(TypeNode::Unit) => None,
             ref other => Some(Print::ref_cast(other)),
         };
 

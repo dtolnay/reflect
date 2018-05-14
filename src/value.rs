@@ -42,7 +42,7 @@ impl<'a> Value<'a> {
             ValueNode::Reference(v) => self.relative(v).get_type_name(),
             ValueNode::ReferenceMut(v) => self.relative(v).get_type_name(),
             ValueNode::Binding { ref ty, .. } => {
-                let node = ValueNode::Str(ty.get_name());
+                let node = ValueNode::Str(ty.0.get_name());
                 self.relative(self.function.values.borrow_mut().index_push(node))
             }
             _ => panic!("Value::get_type_name"),

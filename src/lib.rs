@@ -252,4 +252,5 @@ use node::ValueNode;
 use print::Print;
 use runtime::{RuntimeFunction, RuntimeType};
 use signature::Receiver;
+use ty::TypeNode;
 use wip::{Invoke, WipFunction, WipImpl};

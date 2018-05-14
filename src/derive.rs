@@ -10,6 +10,7 @@ use StructStruct;
 use Tracker;
 use TupleStruct;
 use Type;
+use TypeNode;
 use UnitStruct;
 use WipFunction;
 use WipImpl;
@@ -43,7 +44,7 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
 }
 
 fn syn_to_type(input: syn::DeriveInput) -> Type {
-    Type::DataStructure {
+    Type(TypeNode::DataStructure {
         name: input.ident.to_string(),
         data: match input.data {
             syn::Data::Struct(data) => {
@@ -57,7 +58,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                     Field {
                                         name: field.ident.unwrap().to_string(),
                                         // FIXME convert syn field type
-                                        element: Type::unit(),
+                                        element: Type::unit().0,
                                     }
                                 })
                                 .collect(),
@@ -74,7 +75,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                         // FIXME store field index
                                         name: i.to_string(),
                                         // FIXME convert syn field type
-                                        element: Type::unit(),
+                                        element: Type::unit().0,
                                     }
                                 })
                                 .collect(),
@@ -91,7 +92,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
             }
             syn::Data::Union(_) => unimplemented!("union"),
         },
-    }
+    })
 }
 
 fn tracker_to_program(tracker: Tracker) -> Program {
