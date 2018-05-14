@@ -10,6 +10,9 @@ keywords = ["reflection"]
 categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
 
+[badges]
+travis-ci = { repository = "dtolnay/reflect" }
+
 [dependencies]
 proc-macro2 = "0.3"
 quote = "0.5"
