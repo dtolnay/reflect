@@ -243,6 +243,53 @@
 //! # fn main() {}
 //! ```
 //!
+//! # Robustness and how things go wrong
+//!
+//! I mentioned above about how implementing robust macros simply using `syn` and
+//! `quote` is quite challenging.
+//!
+//! The example I like to use is taking a single struct field and temporarily
+//! wrapping it in a new struct. This is a real life use case drawn from how
+//! `serde_derive` handles `serialize_with` attributes. Conceptually:
+//!
+//! ```rust
+//! let input: syn::DeriveInput = syn::parse(...).unwrap();
+//!
+//! // Pull out one of the field types.
+//! let type_of_field_x: syn::Type = /* ... */;
+//!
+//! quote! {
+//!     // Very not robust.
+//!     struct Wrapper<'a> {
+//!         x: &'a #type_of_field_x,
+//!     }
+//!
+//!     Wrapper { x: &self.x }
+//! }
+//! ```
+//!
+//! Making the `quote!` part of this simply generate compilable code for all
+//! possible values of `type_of_field_x` is extremely involved. The macro author
+//! needs to consider and handle all of the following in order to make this work
+//! reliably:
+//!
+//! - Lifetime parameters used by `type_of_field_x`,
+//! - Type parameters used by `type_of_field_x`,
+//! - Associated types used by `type_of_field_x`,
+//! - Where-clauses on `input` that constrain any of the above,
+//! - Similarly, trait bounds on type parameters of `input`,
+//! - Where-clauses or bounds affecting any *other* fields of `input`,
+//! - Type parameter defaults on `input` that need to be stripped.
+//!
+//! In contrast, the `reflect` library will be able to get it right every single
+//! time with much less thought from the macro author. Possibly as trivial as:
+//!
+//! ```rust
+//! let wrapper: reflect::Type = reflect::new_struct_type();
+//!
+//! wrapper.instantiate(vec![input.get_field("x").reference()])
+//! ```
+//!
 //! # Remaining work
 //!
 //! In its current state the proof of concept generates just barely working code for
