@@ -34,8 +34,6 @@ pub(crate) struct CompleteFunction {
 
 impl Program {
     pub fn compile(&self) -> Tokens {
-        println!("{:#?}", self);
-
         let impls = self.impls.iter().map(CompleteImpl::compile);
 
         quote! {

@@ -30,8 +30,6 @@ pub fn derive(ex: Execution) {
 }
 
 fn debug_fmt(f: MakeFunction) -> Value {
-    println!("{:#?}", f);
-
     let receiver = f.arg(0);
     let formatter = f.arg(1);
 
