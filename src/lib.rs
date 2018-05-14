@@ -70,7 +70,7 @@
 //! `Serialize` and `Serializer` types, and whichever of their methods will possibly
 //! be invoked at runtime.
 //!
-//! ```ignore
+//! ```
 //! #[macro_use]
 //! extern crate reflect;
 //!
@@ -96,6 +96,8 @@
 //!         }
 //!     }
 //! }
+//! #
+//! # fn main() {}
 //! ```
 //!
 //! Next, the macro entry point is an ordinary `proc_macro_derive` function just as
