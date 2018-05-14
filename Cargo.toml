@@ -4,6 +4,11 @@ version = "0.0.0"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "The \"but I thought Rust doesn't have reflection?\" memorial brand new way of defining procedural macros."
+repository = "https://github.com/dtolnay/reflect"
+documentation = "https://docs.rs/reflect"
+keywords = ["reflection"]
+categories = ["development-tools::procedural-macro-helpers"]
+readme = "README.md"
 
 [dependencies]
 proc-macro2 = "0.3"
