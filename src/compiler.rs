@@ -1,5 +1,5 @@
 use ident::Ident;
-use quote::Tokens;
+use proc_macro2::TokenStream;
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
 use Function;
@@ -34,7 +34,7 @@ pub(crate) struct CompleteFunction {
 }
 
 impl Program {
-    pub fn compile(&self) -> Tokens {
+    pub fn compile(&self) -> TokenStream {
         let impls = self.impls.iter().map(CompleteImpl::compile);
 
         quote! {
@@ -44,7 +44,7 @@ impl Program {
 }
 
 impl CompleteImpl {
-    fn compile(&self) -> Tokens {
+    fn compile(&self) -> TokenStream {
         let of = Print::ref_cast(&self.of);
         let ty = Print::ref_cast(&self.ty);
 
@@ -59,7 +59,7 @@ impl CompleteImpl {
 }
 
 impl CompleteFunction {
-    fn compile(&self) -> Tokens {
+    fn compile(&self) -> TokenStream {
         let name = Ident::new(&self.f.name);
 
         let mut inputs = Vec::new();
@@ -140,7 +140,7 @@ impl CompleteFunction {
                         }
                     }
                 }
-                Destructure { parent, field } => {
+                Destructure { parent, ref field } => {
                     if reachable.insert(parent) {
                         stack.push(parent);
                     }
@@ -171,7 +171,7 @@ impl CompleteFunction {
         false
     }
 
-    fn compile_value(&self, v: ValueRef) -> Tokens {
+    fn compile_value(&self, v: ValueRef) -> TokenStream {
         match self.values[v.0] {
             ValueNode::Unit => quote! { () },
             ValueNode::Str(ref s) => quote! { #s },
@@ -204,7 +204,7 @@ impl CompleteFunction {
                     #parent #name ( #(#args),* )
                 }
             }
-            ValueNode::Destructure { parent, field } => {
+            ValueNode::Destructure { parent, ref field } => {
                 let parent = parent.binding();
                 quote! {
                     &#parent.#field
@@ -215,7 +215,7 @@ impl CompleteFunction {
     }
 }
 
-fn receiver_tokens(receiver: Receiver) -> Option<Tokens> {
+fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
     match receiver {
         Receiver::NoSelf => None,
         Receiver::SelfByValue => Some(quote!(self)),
