@@ -6,22 +6,18 @@ extern crate quote;
 #[macro_use]
 extern crate reflect;
 
-extern crate proc_macro2;
-
 mod debug;
-
-use proc_macro2::TokenStream;
 
 #[test]
 fn test_debug() {
-    let input = TokenStream::from(quote! {
+    let input = quote! {
         struct Point {
             x: i32,
             y: i32,
         }
-    });
+    };
 
-    let expected = TokenStream::from(quote! {
+    let expected = quote! {
         impl ::std::fmt::Debug for Point {
             fn fmt(&self, __arg0: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 /*
@@ -52,7 +48,7 @@ fn test_debug() {
                 __v11
             }
         }
-    });
+    };
 
     let actual = reflect::derive(input, debug::derive);
     assert_eq!(actual.to_string(), expected.to_string());

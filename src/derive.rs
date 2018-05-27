@@ -38,9 +38,7 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
     });
 
     let program = tracker_to_program(tracker);
-    let tokens = program.compile();
-
-    tokens.into()
+    program.compile()
 }
 
 fn syn_to_type(input: syn::DeriveInput) -> Type {
