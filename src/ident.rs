@@ -7,7 +7,10 @@ pub struct Ident(proc_macro2::Ident);
 
 impl Ident {
     pub fn new<T: Display>(ident: T) -> Self {
-        Ident(proc_macro2::Ident::new(&ident.to_string(), Span::call_site()))
+        Ident(proc_macro2::Ident::new(
+            &ident.to_string(),
+            Span::call_site(),
+        ))
     }
 }
 

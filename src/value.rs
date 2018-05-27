@@ -52,7 +52,8 @@ impl<'a> Value<'a> {
     pub fn data(&self) -> Data<Self> {
         use ValueNode::*;
         match self.node() {
-            DataStructure { ref data, .. } => data.clone()
+            DataStructure { ref data, .. } => data
+                .clone()
                 .map(|value_ref| self.relative(value_ref.element)),
             Reference(v) => self.relative(v).data().map(|v| v.element.reference()),
             ReferenceMut(v) => self.relative(v).data().map(|v| v.element.reference_mut()),

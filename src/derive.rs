@@ -107,7 +107,8 @@ fn tracker_to_program(tracker: Tracker) -> Program {
                 CompleteImpl {
                     of: imp.of,
                     ty: imp.ty,
-                    functions: imp.functions
+                    functions: imp
+                        .functions
                         .into_iter()
                         .map(|function| {
                             let function: WipFunction = function.borrow().clone();

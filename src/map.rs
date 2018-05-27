@@ -41,7 +41,8 @@ impl<T> TupleStruct<T> {
         F: FnMut(Field<T>) -> R,
     {
         TupleStruct {
-            fields: self.fields
+            fields: self
+                .fields
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
@@ -55,7 +56,8 @@ impl<T> StructStruct<T> {
         F: FnMut(Field<T>) -> R,
     {
         StructStruct {
-            fields: self.fields
+            fields: self
+                .fields
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
