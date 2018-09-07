@@ -17,4 +17,4 @@ travis-ci = { repository = "dtolnay/reflect" }
 proc-macro2 = "0.4"
 quote = "0.6"
 ref-cast = "0.2"
-syn = "0.14"
+syn = "0.15"
