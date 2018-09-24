@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate quote;
 
-#[macro_use]
 extern crate reflect;
 
 mod debug;

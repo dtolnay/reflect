@@ -352,7 +352,6 @@ mod function;
 mod generics;
 mod ident;
 mod index;
-mod macros;
 mod map;
 mod module;
 mod node;
