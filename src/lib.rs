@@ -318,6 +318,7 @@
 
 #![doc(html_root_url = "https://docs.rs/reflect/0.0.3")]
 #![allow(unused_variables, dead_code)]
+#![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(needless_pass_by_value, new_without_default, for_loop_over_option)
