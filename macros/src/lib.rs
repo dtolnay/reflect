@@ -268,6 +268,7 @@ pub fn library(input: TokenStream) -> TokenStream {
 
 fn declare_mod(module: &ItemMod) -> TokenStream2 {
     let name = &module.name;
+    let name_str = name.to_string();
     let items = module.items.iter().map(declare_item);
 
     quote! {
@@ -279,7 +280,7 @@ fn declare_mod(module: &ItemMod) -> TokenStream2 {
 
             #[allow(dead_code, non_snake_case)]
             pub fn MODULE() -> _reflect::Module {
-                super::MODULE().get_module(stringify!(#name))
+                super::MODULE().get_module(#name_str)
             }
 
             struct __Indirect<T>(T);
@@ -302,6 +303,7 @@ fn declare_item(item: &Item) -> TokenStream2 {
 
 fn declare_type(item: &ItemType) -> TokenStream2 {
     let name = &item.name;
+    let name_str = name.to_string();
 
     quote! {
         #[derive(Copy, Clone)]
@@ -309,7 +311,7 @@ fn declare_type(item: &ItemType) -> TokenStream2 {
 
         impl _reflect::runtime::RuntimeType for #name {
             fn SELF(self) -> _reflect::Type {
-                MODULE().get_type(stringify!(#name))
+                MODULE().get_type(#name_str)
             }
         }
     }
@@ -344,6 +346,7 @@ fn declare_trait(item: &ItemTrait) -> TokenStream2 {
 
 fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
     let name = &function.name;
+    let name_str = name.to_string();
     let setup_receiver = match function.receiver {
         Receiver::None => None,
         Receiver::ByValue => Some(quote! {
@@ -383,7 +386,7 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                             #setup_inputs
                         )*
                         sig.set_output(#output);
-                        _reflect::runtime::RuntimeType::SELF(#parent).get_function(stringify!(#name), sig)
+                        _reflect::runtime::RuntimeType::SELF(#parent).get_function(#name_str, sig)
                     }
                 }
 
