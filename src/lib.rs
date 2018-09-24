@@ -330,8 +330,15 @@ extern crate ref_cast;
 #[macro_use]
 extern crate quote;
 
+#[allow(unused_imports)]
+#[macro_use]
+extern crate reflect_internal;
+
 extern crate proc_macro2;
 extern crate syn;
+
+#[doc(hidden)]
+pub use reflect_internal::*;
 
 pub mod runtime;
 
