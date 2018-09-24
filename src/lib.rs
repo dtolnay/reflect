@@ -71,10 +71,9 @@
 //! be invoked at runtime.
 //!
 //! ```
-//! #[macro_use]
 //! extern crate reflect;
 //!
-//! library! {
+//! reflect::library! {
 //!     extern crate std {
 //!         mod fmt {
 //!             type Formatter;
@@ -110,10 +109,9 @@
 //! vestiges of runtime reflection.
 //!
 //! ```
-//! # #[macro_use]
 //! # extern crate reflect;
 //! #
-//! # library! {
+//! # reflect::library! {
 //! #     extern crate std {
 //! #         mod fmt {
 //! #             type Formatter;
@@ -192,12 +190,11 @@
 //! [`DebugStruct`]: https://doc.rust-lang.org/std/fmt/struct.DebugStruct.html
 //!
 //! ```
-//! # #[macro_use]
 //! # extern crate reflect;
 //! #
 //! # use reflect::*;
 //! #
-//! # library! {
+//! # reflect::library! {
 //! #     extern crate std {
 //! #         mod fmt {
 //! #             type Formatter;

@@ -71,10 +71,9 @@ types from outside the standard library. For example Serde's
 be invoked at runtime.
 
 ```rust
-#[macro_use]
 extern crate reflect;
 
-library! {
+reflect::library! {
     extern crate std {
         mod fmt {
             type Formatter;

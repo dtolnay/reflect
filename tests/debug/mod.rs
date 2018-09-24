@@ -1,6 +1,6 @@
 use reflect::*;
 
-library! {
+reflect::library! {
     extern crate std {
         mod fmt {
             type Formatter;
