@@ -4,8 +4,8 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
 use syn::parse::{Parse, ParseStream, Result};
+use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
 
 use self::proc_macro::TokenStream;
 
@@ -81,7 +81,7 @@ impl Parse for Item {
             input.parse().map(Item::Mod)
         } else if lookahead.peek(Token![type]) {
             input.parse().map(Item::Type)
-        } else if lookahead.peek(Token![impl]) {
+        } else if lookahead.peek(Token![impl ]) {
             input.parse().map(Item::Impl)
         } else if lookahead.peek(Token![trait]) {
             input.parse().map(Item::Trait)
@@ -123,7 +123,7 @@ impl Parse for ItemType {
 
 impl Parse for ItemImpl {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Token![impl]>()?;
+        input.parse::<Token![impl ]>()?;
         let name: Ident = input.parse()?;
 
         let content;
@@ -184,7 +184,12 @@ impl Parse for Function {
 
         input.parse::<Token![;]>()?;
 
-        Ok(Function { name, receiver, args, ret })
+        Ok(Function {
+            name,
+            receiver,
+            args,
+            ret,
+        })
     }
 }
 

@@ -318,7 +318,11 @@
 #![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
 #![cfg_attr(
     feature = "cargo-clippy",
-    allow(needless_pass_by_value, new_without_default, for_loop_over_option)
+    allow(
+        needless_pass_by_value,
+        new_without_default,
+        for_loop_over_option
+    )
 )]
 
 #[macro_use]
