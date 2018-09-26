@@ -111,8 +111,8 @@ impl CompleteFunction {
         }
     }
 
-    fn refs(&self) -> Box<Iterator<Item = ValueRef>> {
-        Box::new((0..self.values.len()).map(ValueRef))
+    fn refs(&self) -> impl Iterator<Item = ValueRef> {
+        (0..self.values.len()).map(ValueRef)
     }
 
     fn compute_reachability(&self) -> Set<ValueRef> {
