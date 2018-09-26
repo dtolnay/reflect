@@ -1,12 +1,12 @@
-use Data;
-use Enum;
-use Field;
-use Struct;
-use StructStruct;
-use StructVariant;
-use TupleStruct;
-use TupleVariant;
-use Variant;
+use crate::Data;
+use crate::Enum;
+use crate::Field;
+use crate::Struct;
+use crate::StructStruct;
+use crate::StructVariant;
+use crate::TupleStruct;
+use crate::TupleVariant;
+use crate::Variant;
 
 use std::marker::PhantomData;
 

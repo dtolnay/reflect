@@ -1,9 +1,9 @@
-use Data;
-use Ident;
-use Push;
-use ValueNode;
-use ValueRef;
-use WipFunction;
+use crate::Data;
+use crate::Ident;
+use crate::Push;
+use crate::ValueNode;
+use crate::ValueRef;
+use crate::WipFunction;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Value<'a> {
@@ -50,7 +50,7 @@ impl<'a> Value<'a> {
     }
 
     pub fn data(&self) -> Data<Self> {
-        use ValueNode::*;
+        use crate::ValueNode::*;
         match self.node() {
             DataStructure { ref data, .. } => data
                 .clone()

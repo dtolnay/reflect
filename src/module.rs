@@ -1,6 +1,6 @@
-use Generics;
-use Type;
-use TypeNode;
+use crate::Generics;
+use crate::Type;
+use crate::TypeNode;
 
 #[derive(Debug, Clone)]
 pub struct Module {

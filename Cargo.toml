@@ -9,6 +9,7 @@ documentation = "https://docs.rs/reflect"
 keywords = ["reflection"]
 categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "dtolnay/reflect" }

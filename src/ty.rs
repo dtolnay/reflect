@@ -1,7 +1,7 @@
-use Data;
-use Function;
-use Generics;
-use Signature;
+use crate::Data;
+use crate::Function;
+use crate::Generics;
+use crate::Signature;
 
 #[derive(Debug, Clone)]
 #[repr(C)]

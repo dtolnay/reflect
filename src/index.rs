@@ -1,5 +1,5 @@
-use Invoke;
-use ValueNode;
+use crate::Invoke;
+use crate::ValueNode;
 
 pub(crate) trait Push {
     type Element: TypedIndex;

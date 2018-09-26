@@ -1,4 +1,4 @@
-use Type;
+use crate::Type;
 
 #[derive(Debug, Clone)]
 pub struct Signature {

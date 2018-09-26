@@ -125,7 +125,7 @@
 //! # }
 //! #
 //! extern crate proc_macro;
-//! use proc_macro::TokenStream;
+//! use self::proc_macro::TokenStream;
 //!
 //! # macro_rules! ignore {
 //! #     ($($tt:tt)*) => {};
@@ -325,19 +325,6 @@
     )
 )]
 
-#[macro_use]
-extern crate ref_cast;
-
-#[macro_use]
-extern crate quote;
-
-#[allow(unused_imports)]
-#[macro_use]
-extern crate reflect_internal;
-
-extern crate proc_macro2;
-extern crate syn;
-
 #[doc(hidden)]
 pub use reflect_internal::*;
 
@@ -362,29 +349,29 @@ mod ty;
 mod value;
 mod wip;
 
-pub use data::{
+pub use crate::data::{
     Data, Enum, Struct, StructStruct, StructVariant, TupleStruct, TupleVariant, UnitStruct,
     UnitVariant, Variant,
 };
-pub use derive::derive;
-pub use execution::Execution;
-pub use field::{Field, Fields};
-pub use function::Function;
-pub use generics::Generics;
-pub use module::Module;
-pub use signature::Signature;
-pub use ty::Type;
-pub use value::Value;
-pub use wip::{MakeFunction, MakeImpl};
+pub use crate::derive::derive;
+pub use crate::execution::Execution;
+pub use crate::field::{Field, Fields};
+pub use crate::function::Function;
+pub use crate::generics::Generics;
+pub use crate::module::Module;
+pub use crate::signature::Signature;
+pub use crate::ty::Type;
+pub use crate::value::Value;
+pub use crate::wip::{MakeFunction, MakeImpl};
 
-use array::Array;
-use compiler::{CompleteFunction, CompleteImpl, Program};
-use execution::Tracker;
-use ident::Ident;
-use index::{InvokeRef, Push, ValueRef};
-use node::ValueNode;
-use print::Print;
-use runtime::{RuntimeFunction, RuntimeType};
-use signature::Receiver;
-use ty::TypeNode;
-use wip::{Invoke, WipFunction, WipImpl};
+use crate::array::Array;
+use crate::compiler::{CompleteFunction, CompleteImpl, Program};
+use crate::execution::Tracker;
+use crate::ident::Ident;
+use crate::index::{InvokeRef, Push, ValueRef};
+use crate::node::ValueNode;
+use crate::print::Print;
+use crate::runtime::{RuntimeFunction, RuntimeType};
+use crate::signature::Receiver;
+use crate::ty::TypeNode;
+use crate::wip::{Invoke, WipFunction, WipImpl};

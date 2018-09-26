@@ -1,5 +1,5 @@
-use Function;
-use Type;
+use crate::Function;
+use crate::Type;
 
 pub trait RuntimeType {
     #[allow(non_snake_case)]

@@ -1,11 +1,11 @@
-use Function;
-use Ident;
-use Push;
-use RuntimeFunction;
-use Type;
-use Value;
-use ValueNode;
-use ValueRef;
+use crate::Function;
+use crate::Ident;
+use crate::Push;
+use crate::RuntimeFunction;
+use crate::Type;
+use crate::Value;
+use crate::ValueNode;
+use crate::ValueRef;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -72,7 +72,7 @@ impl<'a> MakeFunction<'a> {
     }
 
     pub fn arg(&self, mut index: usize) -> Value<'a> {
-        use Receiver::*;
+        use crate::Receiver::*;
 
         let node = match match self.wip.f.sig.receiver {
             SelfByValue if index == 0 => Some(self.wip.self_ty.clone()),

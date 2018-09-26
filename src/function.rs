@@ -1,10 +1,10 @@
-use Array;
-use Invoke;
-use Push;
-use Signature;
-use Type;
-use Value;
-use ValueNode;
+use crate::Array;
+use crate::Invoke;
+use crate::Push;
+use crate::Signature;
+use crate::Type;
+use crate::Value;
+use crate::ValueNode;
 
 #[derive(Debug, Clone)]
 pub struct Function {

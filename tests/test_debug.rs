@@ -1,9 +1,6 @@
 #![recursion_limit = "256"]
 
-#[macro_use]
-extern crate quote;
-
-extern crate reflect;
+use quote::quote;
 
 mod debug;
 

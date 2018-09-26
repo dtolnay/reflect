@@ -1,8 +1,8 @@
-use Data;
-use Ident;
-use InvokeRef;
-use Type;
-use ValueRef;
+use crate::Data;
+use crate::Ident;
+use crate::InvokeRef;
+use crate::Type;
+use crate::ValueRef;
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {

@@ -1,9 +1,9 @@
-use Ident;
-use MakeImpl;
-use Module;
-use RuntimeType;
-use Type;
-use WipImpl;
+use crate::Ident;
+use crate::MakeImpl;
+use crate::Module;
+use crate::RuntimeType;
+use crate::Type;
+use crate::WipImpl;
 
 use std::cell::RefCell;
 use std::rc::Rc;

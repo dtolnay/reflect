@@ -1,15 +1,16 @@
-use ident::Ident;
+use crate::ident::Ident;
+use crate::Function;
+use crate::Invoke;
+use crate::Print;
+use crate::Receiver;
+use crate::Type;
+use crate::TypeNode;
+use crate::ValueNode;
+use crate::ValueRef;
 use proc_macro2::TokenStream;
+use quote::quote;
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
-use Function;
-use Invoke;
-use Print;
-use Receiver;
-use Type;
-use TypeNode;
-use ValueNode;
-use ValueRef;
 
 #[derive(Debug)]
 pub(crate) struct Program {
@@ -122,7 +123,7 @@ impl CompleteFunction {
             reachable.insert(ret);
         }
 
-        use ValueNode::*;
+        use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
             match self.values[v.0] {
                 Unit => {}

@@ -1,9 +1,9 @@
-use Ident;
-use Type;
-use TypeNode;
+use crate::Ident;
+use crate::Type;
+use crate::TypeNode;
 
 use proc_macro2::TokenStream;
-use quote::{ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
 
 #[derive(RefCast)]
@@ -18,7 +18,7 @@ impl ToTokens for Print<Type> {
 
 impl ToTokens for Print<TypeNode> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        use TypeNode::*;
+        use crate::TypeNode::*;
         tokens.append_all(match self.0 {
             Infer => quote!(_),
             Unit => quote!(()),
