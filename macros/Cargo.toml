@@ -2,7 +2,7 @@
 name = "reflect-internal"
 version = "0.0.3"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "Procedural macros required by the `reflect` crate."
 repository = "https://github.com/dtolnay/reflect"
 edition = "2018"
