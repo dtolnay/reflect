@@ -81,7 +81,7 @@ impl Parse for Item {
             input.parse().map(Item::Mod)
         } else if lookahead.peek(Token![type]) {
             input.parse().map(Item::Type)
-        } else if lookahead.peek(Token![impl ]) {
+        } else if lookahead.peek(Token![impl]) {
             input.parse().map(Item::Impl)
         } else if lookahead.peek(Token![trait]) {
             input.parse().map(Item::Trait)
@@ -123,7 +123,7 @@ impl Parse for ItemType {
 
 impl Parse for ItemImpl {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Token![impl ]>()?;
+        input.parse::<Token![impl]>()?;
         let name: Ident = input.parse()?;
 
         let content;

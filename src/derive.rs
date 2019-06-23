@@ -58,7 +58,8 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                         // FIXME convert syn field type
                                         element: Type::unit().0,
                                     }
-                                }).collect(),
+                                })
+                                .collect(),
                         }))
                     }
                     syn::Fields::Unnamed(fields) => {
@@ -74,7 +75,8 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                         // FIXME convert syn field type
                                         element: Type::unit().0,
                                     }
-                                }).collect(),
+                                })
+                                .collect(),
                         }))
                     }
                     syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: () })),
@@ -117,8 +119,10 @@ fn tracker_to_program(tracker: Tracker) -> Program {
                                 invokes,
                                 ret: function.ret,
                             }
-                        }).collect(),
+                        })
+                        .collect(),
                 }
-            }).collect(),
+            })
+            .collect(),
     }
 }
