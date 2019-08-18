@@ -75,7 +75,10 @@ impl CompleteFunction {
 
         let output = match self.f.sig.output {
             Type(TypeNode::Unit) => None,
-            ref other => Some(Print::ref_cast(other)),
+            ref other => {
+                let ty = Print::ref_cast(other);
+                Some(quote!(-> #ty))
+            }
         };
 
         let reachable = self.compute_reachability();
@@ -104,7 +107,7 @@ impl CompleteFunction {
         let ret = self.ret.map(ValueRef::binding);
 
         quote! {
-            fn #name (#(#inputs),*) #(-> #output)* {
+            fn #name (#(#inputs),*) #output {
                 #(#values)*
                 #ret
             }
