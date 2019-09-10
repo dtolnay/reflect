@@ -370,7 +370,10 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
             sig.add_input(#ty);
         }
     });
-    let output = function.ret.as_ref().map(|ty| to_runtime_type(&ty));
+    let set_output = function.ret.as_ref().map(|ty| {
+        let ty = to_runtime_type(&ty);
+        quote!(sig.set_output(#ty);)
+    });
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
         .map(|i| Ident::new(&format!("v{}", i), Span::call_site()));
     let vars2 = vars.clone();
@@ -390,7 +393,7 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                         #(
                             #setup_inputs
                         )*
-                        sig.set_output(#output);
+                        #set_output
                         _reflect::runtime::RuntimeType::SELF(#parent).get_function(#name_str, sig)
                     }
                 }
