@@ -1,4 +1,4 @@
-use crate::Array;
+use crate::execution::WIP;
 use crate::Invoke;
 use crate::Push;
 use crate::Signature;
@@ -14,16 +14,28 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn invoke<'a, Args: Array<Value<'a>>>(&self, args: Args) -> Value<'a> {
-        let wip = args.first().function;
-        let invoke = wip.invokes.borrow_mut().index_push(Invoke {
-            function: self.clone(),
-            args: args.to_vec().into_iter().map(|value| value.index).collect(),
+    pub fn invoke(&self, args: &[Value]) -> Value {
+        let invoke = WIP.with(|wip| {
+            wip.borrow()
+                .as_ref()
+                .unwrap()
+                .invokes
+                .borrow_mut()
+                .index_push(Invoke {
+                    function: self.clone(),
+                    args: args.to_vec().into_iter().map(|value| value.index).collect(),
+                })
         });
         let node = ValueNode::Invoke(invoke);
         Value {
-            function: wip,
-            index: wip.values.borrow_mut().index_push(node),
+            index: WIP.with(|wip| {
+                wip.borrow()
+                    .as_ref()
+                    .unwrap()
+                    .values
+                    .borrow_mut()
+                    .index_push(node)
+            }),
         }
     }
 }

@@ -75,10 +75,10 @@ pub struct Enum<T> {
     pub(crate) variants: Vec<Variant<T>>,
 }
 
-impl<'a> Enum<Value<'a>> {
-    pub fn match_variant<Run>(&self, run: Run) -> Value<'a>
+impl Enum<Value> {
+    pub fn match_variant<Run>(&self, run: Run) -> Value
     where
-        Run: Fn(Variant<Value<'a>>) -> Value<'a>,
+        Run: Fn(Variant<Value>) -> Value,
     {
         let mut arms = Vec::new();
         for variant in self.variants.clone() {

@@ -1,3 +1,4 @@
+use crate::execution::WIP;
 use crate::Push;
 use crate::Type;
 use crate::Value;
@@ -24,11 +25,17 @@ pub struct Field<T> {
     pub(crate) element: T,
 }
 
-impl<'a> Field<Value<'a>> {
-    pub fn get_name(&self) -> Value<'a> {
+impl Field<Value> {
+    pub fn get_name(&self) -> Value {
         let node = ValueNode::Str(self.name.clone());
-        self.element
-            .relative(self.element.function.values.borrow_mut().index_push(node))
+        self.element.relative(WIP.with(|wip| {
+            wip.borrow()
+                .as_ref()
+                .unwrap()
+                .values
+                .borrow_mut()
+                .index_push(node)
+        }))
     }
 }
 
@@ -38,8 +45,8 @@ impl Field<Type> {
     }
 }
 
-impl<'a> Field<Value<'a>> {
-    pub fn get_value(&self) -> Value<'a> {
+impl Field<Value> {
+    pub fn get_value(&self) -> Value {
         self.element
     }
 }

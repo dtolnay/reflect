@@ -399,13 +399,13 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                 }
 
                 impl #name {
-                    pub fn INVOKE<'a>(
+                    pub fn INVOKE(
                         self,
                         #(
-                            #vars: _reflect::Value<'a>,
+                            #vars: _reflect::Value,
                         )*
-                    ) -> _reflect::Value<'a> {
-                        _reflect::runtime::RuntimeFunction::SELF(self).invoke([#(#vars2,)*])
+                    ) -> _reflect::Value {
+                        _reflect::runtime::RuntimeFunction::SELF(self).invoke(&[#(#vars2,)*])
                     }
                 }
 

@@ -20,14 +20,14 @@ pub(crate) struct Program {
 
 #[derive(Debug)]
 pub(crate) struct CompleteImpl {
-    pub of: Type,
+    pub trait_ty: Option<Type>,
     pub ty: Type,
     pub functions: Vec<CompleteFunction>,
 }
 
 #[derive(Debug)]
 pub(crate) struct CompleteFunction {
-    pub self_ty: Type,
+    pub self_ty: Option<Type>,
     pub f: Function,
     pub values: Vec<ValueNode>,
     pub invokes: Vec<Invoke>,
@@ -46,14 +46,21 @@ impl Program {
 
 impl CompleteImpl {
     fn compile(&self) -> TokenStream {
-        let of = Print::ref_cast(&self.of);
         let ty = Print::ref_cast(&self.ty);
-
         let functions = self.functions.iter().map(CompleteFunction::compile);
 
-        quote! {
-            impl #of for #ty {
-                #(#functions)*
+        if let Some(trait_ty) = &self.trait_ty {
+            let trait_ty = Print::ref_cast(trait_ty);
+            quote! {
+                impl #trait_ty for #ty {
+                    #(#functions)*
+                }
+            }
+        } else {
+            quote! {
+                impl #ty {
+                    #(#functions)*
+                }
             }
         }
     }

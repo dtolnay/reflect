@@ -135,7 +135,7 @@
 //! # }
 //! pub fn derive(input: TokenStream) -> TokenStream {
 //!     reflect::derive(input, |ex| {
-//!         ex.make_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
+//!         ex.make_trait_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
 //!             block.make_function(RUNTIME::std::fmt::Debug::fmt, debug_fmt);
 //!         });
 //!     })
@@ -218,10 +218,10 @@
 //! # }
 //! #
 //! # fn debug_fmt<'a>(
-//! #     receiver: StructStruct<Value<'a>>,
-//! #     formatter: Value<'a>,
-//! #     type_name: Value<'a>,
-//! # ) -> Value<'a> {
+//! #     receiver: StructStruct<Value>,
+//! #     formatter: Value,
+//! #     type_name: Value,
+//! # ) -> Value {
 //! let builder = RUNTIME::std::fmt::Formatter::debug_struct
 //!     .INVOKE(formatter, type_name)
 //!     .reference_mut();
@@ -360,7 +360,6 @@ pub use crate::ty::Type;
 pub use crate::value::Value;
 pub use crate::wip::{MakeFunction, MakeImpl};
 
-use crate::array::Array;
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
 use crate::ident::Ident;

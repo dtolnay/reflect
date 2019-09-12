@@ -24,7 +24,7 @@ reflect::library! {
 }
 
 pub fn derive(ex: Execution) {
-    ex.make_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
+    ex.make_trait_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
         block.make_function(RUNTIME::std::fmt::Debug::fmt, debug_fmt);
     });
 }

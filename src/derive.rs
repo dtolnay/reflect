@@ -103,7 +103,7 @@ fn tracker_to_program(tracker: Tracker) -> Program {
             .map(|imp| {
                 let imp: WipImpl = imp.borrow().clone();
                 CompleteImpl {
-                    of: imp.of,
+                    trait_ty: imp.trait_ty,
                     ty: imp.ty,
                     functions: imp
                         .functions

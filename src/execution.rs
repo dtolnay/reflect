@@ -3,10 +3,13 @@ use crate::MakeImpl;
 use crate::Module;
 use crate::RuntimeType;
 use crate::Type;
+use crate::WipFunction;
 use crate::WipImpl;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
+thread_local!(pub(crate) static WIP: RefCell<Option<WipFunction>> = RefCell::new(None));
 
 #[derive(Clone, Copy)]
 pub struct Execution<'a> {
@@ -25,7 +28,7 @@ impl<'a> Execution<'a> {
         self.tracker.load_crate(name)
     }
 
-    pub fn make_impl<TraitType, SelfType>(
+    pub fn make_trait_impl<TraitType, SelfType>(
         self,
         trait_type: TraitType,
         self_type: SelfType,
@@ -35,7 +38,7 @@ impl<'a> Execution<'a> {
         SelfType: RuntimeType,
     {
         self.tracker
-            .make_impl(trait_type.SELF(), self_type.SELF(), run);
+            .make_trait_impl(trait_type.SELF(), self_type.SELF(), run);
     }
 
     pub fn target_type(self) -> Type {
@@ -59,9 +62,9 @@ impl Tracker {
         }
     }
 
-    fn make_impl(&self, of: Type, ty: Type, run: fn(MakeImpl)) {
+    fn make_trait_impl(&self, trait_ty: Type, ty: Type, run: fn(MakeImpl)) {
         let wip = Rc::new(RefCell::new(WipImpl {
-            of,
+            trait_ty: Some(trait_ty),
             ty,
             functions: Vec::new(),
         }));

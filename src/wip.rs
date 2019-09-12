@@ -1,3 +1,4 @@
+use crate::execution::WIP;
 use crate::Function;
 use crate::Ident;
 use crate::Push;
@@ -17,19 +18,18 @@ pub struct MakeImpl {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WipImpl {
-    pub(crate) of: Type,
+    pub(crate) trait_ty: Option<Type>,
     pub(crate) ty: Type,
     pub(crate) functions: Vec<Rc<RefCell<WipFunction>>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct MakeFunction<'a> {
-    pub(crate) wip: &'a WipFunction,
-}
+pub struct MakeFunction;
 
 #[derive(Debug, Clone)]
 pub(crate) struct WipFunction {
-    pub(crate) self_ty: Type,
+    // self_ty is None for freestanding functions
+    pub(crate) self_ty: Option<Type>,
     pub(crate) f: Function,
     pub(crate) values: RefCell<Vec<ValueNode>>,
     pub(crate) invokes: RefCell<Vec<Invoke>>,
@@ -47,14 +47,20 @@ impl MakeImpl {
     where
         F: RuntimeFunction,
     {
-        let mut wip = WipFunction {
-            self_ty: self.wip.borrow().ty.clone(),
-            f: f.SELF(),
-            values: RefCell::new(Vec::new()),
-            invokes: RefCell::new(Vec::new()),
-            ret: None,
-        };
-        wip.ret = Some(run(MakeFunction { wip: &wip }).index);
+        WIP.with(|old_wip| {
+            *old_wip.borrow_mut() = Some(WipFunction {
+                self_ty: Some(self.wip.borrow().ty.clone()),
+                f: f.SELF(),
+                values: RefCell::new(Vec::new()),
+                invokes: RefCell::new(Vec::new()),
+                ret: None,
+            })
+        });
+
+        let ret = Some(run(MakeFunction).index);
+        let mut wip = WIP.with(|wip| wip.borrow_mut().take().unwrap());
+        wip.ret = ret;
+
         self.wip
             .borrow_mut()
             .functions
@@ -62,22 +68,38 @@ impl MakeImpl {
     }
 }
 
-impl<'a> MakeFunction<'a> {
-    pub fn unit(&self) -> Value<'a> {
-        self.wip.unit()
+impl MakeFunction {
+    pub fn unit(&self) -> Value {
+        WIP.with(|wip| wip.borrow().as_ref().unwrap().unit())
     }
 
-    pub fn string(&self, s: &str) -> Value<'a> {
-        self.wip.string(s)
+    pub fn string(&self, s: &str) -> Value {
+        WIP.with(|wip| wip.borrow().as_ref().unwrap().string(s))
     }
 
-    pub fn arg(&self, mut index: usize) -> Value<'a> {
+    pub fn arg(&self, mut index: usize) -> Value {
         use crate::Receiver::*;
 
-        let node = match match self.wip.f.sig.receiver {
-            SelfByValue if index == 0 => Some(self.wip.self_ty.clone()),
-            SelfByReference if index == 0 => Some(self.wip.self_ty.clone().reference()),
-            SelfByReferenceMut if index == 0 => Some(self.wip.self_ty.clone().reference_mut()),
+        let node = match match WIP.with(|wip| wip.borrow().as_ref().unwrap().f.sig.receiver) {
+            SelfByValue if index == 0 => {
+                WIP.with(|wip| wip.borrow().as_ref().unwrap().self_ty.clone())
+            }
+            SelfByReference if index == 0 => WIP.with(|wip| {
+                wip.borrow()
+                    .as_ref()
+                    .unwrap()
+                    .self_ty
+                    .clone()
+                    .map(|ty| ty.reference())
+            }),
+            SelfByReferenceMut if index == 0 => WIP.with(|wip| {
+                wip.borrow()
+                    .as_ref()
+                    .unwrap()
+                    .self_ty
+                    .clone()
+                    .map(|ty| ty.reference_mut())
+            }),
             NoSelf => None,
             SelfByValue | SelfByReference | SelfByReferenceMut => {
                 index -= 1;
@@ -90,13 +112,19 @@ impl<'a> MakeFunction<'a> {
             },
             None => ValueNode::Binding {
                 name: Ident::new(format!("__arg{}", index)),
-                ty: self.wip.f.sig.inputs[index].clone(),
+                ty: WIP.with(|wip| wip.borrow().as_ref().unwrap().f.sig.inputs[index].clone()),
             },
         };
 
         Value {
-            function: self.wip,
-            index: self.wip.values.borrow_mut().index_push(node),
+            index: WIP.with(|wip| {
+                wip.borrow()
+                    .as_ref()
+                    .unwrap()
+                    .values
+                    .borrow_mut()
+                    .index_push(node)
+            }),
         }
     }
 }
@@ -109,7 +137,6 @@ impl WipFunction {
     fn unit(&self) -> Value {
         let node = ValueNode::Unit;
         Value {
-            function: self,
             index: self.values.borrow_mut().index_push(node),
         }
     }
@@ -117,7 +144,6 @@ impl WipFunction {
     fn string(&self, s: &str) -> Value {
         let node = ValueNode::Str(s.to_owned());
         Value {
-            function: self,
             index: self.values.borrow_mut().index_push(node),
         }
     }
