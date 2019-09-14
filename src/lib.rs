@@ -326,7 +326,6 @@ pub use reflect_internal::*;
 
 pub mod runtime;
 
-mod array;
 mod compiler;
 mod data;
 mod derive;
@@ -362,6 +361,7 @@ pub use crate::wip::{MakeFunction, MakeImpl};
 
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
+use crate::execution::WIP;
 use crate::ident::Ident;
 use crate::index::{InvokeRef, Push, ValueRef};
 use crate::node::ValueNode;

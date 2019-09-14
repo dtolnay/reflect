@@ -9,7 +9,7 @@ use crate::WipImpl;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-thread_local!(pub(crate) static WIP: RefCell<Option<WipFunction>> = RefCell::new(None));
+thread_local!(pub(crate) static WIP: Rc<RefCell<Option<WipFunction>>> = Rc::new(RefCell::new(None)));
 
 #[derive(Clone, Copy)]
 pub struct Execution<'a> {

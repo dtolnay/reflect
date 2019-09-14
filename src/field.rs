@@ -1,8 +1,8 @@
-use crate::execution::WIP;
 use crate::Push;
 use crate::Type;
 use crate::Value;
 use crate::ValueNode;
+use crate::WIP;
 
 use std::vec;
 
@@ -28,14 +28,16 @@ pub struct Field<T> {
 impl Field<Value> {
     pub fn get_name(&self) -> Value {
         let node = ValueNode::Str(self.name.clone());
-        self.element.relative(WIP.with(|wip| {
-            wip.borrow()
-                .as_ref()
-                .unwrap()
-                .values
-                .borrow_mut()
-                .index_push(node)
-        }))
+        Value {
+            index: WIP.with(|wip| {
+                wip.borrow()
+                    .as_ref()
+                    .unwrap()
+                    .values
+                    .borrow_mut()
+                    .index_push(node)
+            }),
+        }
     }
 }
 

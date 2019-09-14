@@ -1,4 +1,3 @@
-use crate::execution::WIP;
 use crate::Function;
 use crate::Ident;
 use crate::Push;
@@ -7,6 +6,7 @@ use crate::Type;
 use crate::Value;
 use crate::ValueNode;
 use crate::ValueRef;
+use crate::WIP;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -24,7 +24,9 @@ pub(crate) struct WipImpl {
 }
 
 #[derive(Debug, Clone)]
-pub struct MakeFunction;
+pub struct MakeFunction {
+    private: (),
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct WipFunction {
@@ -57,7 +59,7 @@ impl MakeImpl {
             })
         });
 
-        let ret = Some(run(MakeFunction).index);
+        let ret = Some(run(MakeFunction { private: () }).index);
         let mut wip = WIP.with(|wip| wip.borrow_mut().take().unwrap());
         wip.ret = ret;
 
@@ -79,27 +81,14 @@ impl MakeFunction {
 
     pub fn arg(&self, mut index: usize) -> Value {
         use crate::Receiver::*;
+        let wip = WIP.with(Rc::clone);
+        let wip = wip.borrow();
+        let wip = wip.as_ref().unwrap();
 
-        let node = match match WIP.with(|wip| wip.borrow().as_ref().unwrap().f.sig.receiver) {
-            SelfByValue if index == 0 => {
-                WIP.with(|wip| wip.borrow().as_ref().unwrap().self_ty.clone())
-            }
-            SelfByReference if index == 0 => WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
-                    .unwrap()
-                    .self_ty
-                    .clone()
-                    .map(|ty| ty.reference())
-            }),
-            SelfByReferenceMut if index == 0 => WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
-                    .unwrap()
-                    .self_ty
-                    .clone()
-                    .map(|ty| ty.reference_mut())
-            }),
+        let node = match match wip.f.sig.receiver {
+            SelfByValue if index == 0 => wip.self_ty.clone(),
+            SelfByReference if index == 0 => wip.self_ty.clone().map(|ty| ty.reference()),
+            SelfByReferenceMut if index == 0 => wip.self_ty.clone().map(|ty| ty.reference_mut()),
             NoSelf => None,
             SelfByValue | SelfByReference | SelfByReferenceMut => {
                 index -= 1;
@@ -112,20 +101,13 @@ impl MakeFunction {
             },
             None => ValueNode::Binding {
                 name: Ident::new(format!("__arg{}", index)),
-                ty: WIP.with(|wip| wip.borrow().as_ref().unwrap().f.sig.inputs[index].clone()),
+                ty: wip.f.sig.inputs[index].clone(),
             },
         };
-
-        Value {
-            index: WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
-                    .unwrap()
-                    .values
-                    .borrow_mut()
-                    .index_push(node)
-            }),
-        }
+        let value = Value {
+            index: wip.values.borrow_mut().index_push(node),
+        };
+        value
     }
 }
 
