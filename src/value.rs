@@ -1,6 +1,7 @@
 use crate::Data;
 use crate::Ident;
 use crate::Push;
+use crate::StaticBorrow;
 use crate::ValueNode;
 use crate::ValueRef;
 use crate::WIP;
@@ -14,26 +15,14 @@ impl Value {
     pub fn reference(&self) -> Self {
         let node = ValueNode::Reference(self.index);
         Value {
-            index: WIP.with(|wip| {
-                wip.borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .values
-                    .index_push(node)
-            }),
+            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
         }
     }
 
     pub fn reference_mut(&self) -> Self {
         let node = ValueNode::ReferenceMut(self.index);
         Value {
-            index: WIP.with(|wip| {
-                wip.borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .values
-                    .index_push(node)
-            }),
+            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
         }
     }
 
@@ -44,13 +33,7 @@ impl Value {
             ref other => {
                 let node = ValueNode::Dereference(self.index);
                 Value {
-                    index: WIP.with(|wip| {
-                        wip.borrow_mut()
-                            .as_mut()
-                            .unwrap()
-                            .values
-                            .index_push(node)
-                    }),
+                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
                 }
             }
         }
@@ -61,13 +44,7 @@ impl Value {
             ValueNode::DataStructure { ref name, .. } => {
                 let node = ValueNode::Str(name.to_owned());
                 Value {
-                    index: WIP.with(|wip| {
-                        wip.borrow_mut()
-                            .as_mut()
-                            .unwrap()
-                            .values
-                            .index_push(node)
-                    }),
+                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
                 }
             }
             ValueNode::Reference(v) => Value { index: v }.get_type_name(),
@@ -75,13 +52,7 @@ impl Value {
             ValueNode::Binding { ref ty, .. } => {
                 let node = ValueNode::Str(ty.0.get_name());
                 Value {
-                    index: WIP.with(|wip| {
-                        wip.borrow_mut()
-                            .as_mut()
-                            .unwrap()
-                            .values
-                            .index_push(node)
-                    }),
+                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
                 }
             }
             _ => panic!("Value::get_type_name"),
@@ -104,13 +75,7 @@ impl Value {
                     field: Ident::new(ty.name),
                 };
                 Value {
-                    index: WIP.with(|wip| {
-                        wip.borrow_mut()
-                            .as_mut()
-                            .unwrap()
-                            .values
-                            .index_push(node)
-                    }),
+                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
                 }
             }),
             _ => panic!("Value::data"),
@@ -120,6 +85,6 @@ impl Value {
 
 impl Value {
     pub(crate) fn node(self) -> ValueNode {
-        WIP.with(|wip| wip.borrow().as_ref().unwrap().node(self.index))
+        WIP.with_borrow(|wip| wip.node(self.index))
     }
 }

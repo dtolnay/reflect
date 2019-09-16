@@ -2,6 +2,7 @@ use crate::Function;
 use crate::Ident;
 use crate::Push;
 use crate::RuntimeFunction;
+use crate::StaticBorrow;
 use crate::Type;
 use crate::Value;
 use crate::ValueNode;
@@ -69,11 +70,11 @@ impl<'a> MakeImpl<'a> {
 
 impl MakeFunction {
     pub fn unit(&self) -> Value {
-        WIP.with(|wip| wip.borrow_mut().as_mut().unwrap().unit())
+        WIP.with_borrow_mut(|wip| wip.unit())
     }
 
     pub fn string(&self, s: &str) -> Value {
-        WIP.with(|wip| wip.borrow_mut().as_mut().unwrap().string(s))
+        WIP.with_borrow_mut(|wip| wip.string(s))
     }
 
     pub fn arg(&self, mut index: usize) -> Value {

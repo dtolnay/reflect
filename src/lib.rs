@@ -361,6 +361,7 @@ pub use crate::wip::{MakeFunction, MakeImpl};
 
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
+use crate::execution::StaticBorrow;
 use crate::execution::WIP;
 use crate::ident::Ident;
 use crate::index::{InvokeRef, Push, ValueRef};

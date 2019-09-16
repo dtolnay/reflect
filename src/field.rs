@@ -1,4 +1,5 @@
 use crate::Push;
+use crate::StaticBorrow;
 use crate::Type;
 use crate::Value;
 use crate::ValueNode;
@@ -29,13 +30,7 @@ impl Field<Value> {
     pub fn get_name(&self) -> Value {
         let node = ValueNode::Str(self.name.clone());
         Value {
-            index: WIP.with(|wip| {
-                wip.borrow_mut()
-                    .as_mut()
-                    .unwrap()
-                    .values
-                    .index_push(node)
-            }),
+            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
         }
     }
 }
