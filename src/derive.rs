@@ -13,7 +13,6 @@ use crate::Type;
 use crate::TypeNode;
 use crate::UnitStruct;
 use crate::WipFunction;
-use crate::WipImpl;
 
 use proc_macro2::{self, TokenStream};
 use syn;
@@ -95,33 +94,31 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
 
 fn tracker_to_program(tracker: Tracker) -> Program {
     Program {
-        crates: tracker.crates.borrow().clone(),
+        crates: tracker.crates.into_inner(),
         impls: tracker
             .impls
-            .borrow()
-            .iter()
-            .map(|imp| {
-                let imp: WipImpl = imp.borrow().clone();
-                CompleteImpl {
-                    trait_ty: imp.trait_ty,
-                    ty: imp.ty,
-                    functions: imp
-                        .functions
-                        .into_iter()
-                        .map(|function| {
-                            let function: WipFunction = function.borrow().clone();
-                            let values = function.values.borrow().clone();
-                            let invokes = function.invokes.borrow().clone();
-                            CompleteFunction {
-                                self_ty: function.self_ty,
-                                f: function.f,
-                                values,
-                                invokes,
-                                ret: function.ret,
-                            }
-                        })
-                        .collect(),
-                }
+            .into_inner()
+            .into_iter()
+            .map(|imp| CompleteImpl {
+                trait_ty: imp.trait_ty,
+                ty: imp.ty,
+                functions: imp
+                    .functions
+                    .into_inner()
+                    .into_iter()
+                    .map(|function| {
+                        let function: WipFunction = function;
+                        let values = function.values;
+                        let invokes = function.invokes;
+                        CompleteFunction {
+                            self_ty: function.self_ty,
+                            f: function.f,
+                            values,
+                            invokes,
+                            ret: function.ret,
+                        }
+                    })
+                    .collect(),
             })
             .collect(),
     }

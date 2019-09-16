@@ -30,11 +30,10 @@ impl Field<Value> {
         let node = ValueNode::Str(self.name.clone());
         Value {
             index: WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
+                wip.borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .values
-                    .borrow_mut()
                     .index_push(node)
             }),
         }

@@ -20,7 +20,7 @@ pub struct Execution<'a> {
 #[derive(Debug, Clone)]
 pub(crate) struct Tracker {
     pub(crate) crates: RefCell<Vec<Ident>>,
-    pub(crate) impls: RefCell<Vec<Rc<RefCell<WipImpl>>>>,
+    pub(crate) impls: RefCell<Vec<WipImpl>>,
 }
 
 impl<'a> Execution<'a> {
@@ -63,12 +63,12 @@ impl Tracker {
     }
 
     fn make_trait_impl(&self, trait_ty: Type, ty: Type, run: fn(MakeImpl)) {
-        let wip = Rc::new(RefCell::new(WipImpl {
+        let wip = WipImpl {
             trait_ty: Some(trait_ty),
             ty,
-            functions: Vec::new(),
-        }));
-        self.impls.borrow_mut().push(wip.clone());
-        run(MakeImpl { wip });
+            functions: RefCell::new(Vec::new()),
+        };
+        run(MakeImpl { wip: &wip });
+        self.impls.borrow_mut().push(wip);
     }
 }

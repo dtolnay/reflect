@@ -15,11 +15,10 @@ impl Value {
         let node = ValueNode::Reference(self.index);
         Value {
             index: WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
+                wip.borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .values
-                    .borrow_mut()
                     .index_push(node)
             }),
         }
@@ -29,11 +28,10 @@ impl Value {
         let node = ValueNode::ReferenceMut(self.index);
         Value {
             index: WIP.with(|wip| {
-                wip.borrow()
-                    .as_ref()
+                wip.borrow_mut()
+                    .as_mut()
                     .unwrap()
                     .values
-                    .borrow_mut()
                     .index_push(node)
             }),
         }
@@ -47,11 +45,10 @@ impl Value {
                 let node = ValueNode::Dereference(self.index);
                 Value {
                     index: WIP.with(|wip| {
-                        wip.borrow()
-                            .as_ref()
+                        wip.borrow_mut()
+                            .as_mut()
                             .unwrap()
                             .values
-                            .borrow_mut()
                             .index_push(node)
                     }),
                 }
@@ -65,11 +62,10 @@ impl Value {
                 let node = ValueNode::Str(name.to_owned());
                 Value {
                     index: WIP.with(|wip| {
-                        wip.borrow()
-                            .as_ref()
+                        wip.borrow_mut()
+                            .as_mut()
                             .unwrap()
                             .values
-                            .borrow_mut()
                             .index_push(node)
                     }),
                 }
@@ -80,11 +76,10 @@ impl Value {
                 let node = ValueNode::Str(ty.0.get_name());
                 Value {
                     index: WIP.with(|wip| {
-                        wip.borrow()
-                            .as_ref()
+                        wip.borrow_mut()
+                            .as_mut()
                             .unwrap()
                             .values
-                            .borrow_mut()
                             .index_push(node)
                     }),
                 }
@@ -110,11 +105,10 @@ impl Value {
                 };
                 Value {
                     index: WIP.with(|wip| {
-                        wip.borrow()
-                            .as_ref()
+                        wip.borrow_mut()
+                            .as_mut()
                             .unwrap()
                             .values
-                            .borrow_mut()
                             .index_push(node)
                     }),
                 }
