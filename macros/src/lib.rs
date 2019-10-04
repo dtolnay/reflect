@@ -405,7 +405,7 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                             #vars: _reflect::Value,
                         )*
                     ) -> _reflect::Value {
-                        _reflect::runtime::RuntimeFunction::SELF(self).invoke(&[#(#vars2,)*])
+                        _reflect::runtime::RuntimeFunction::SELF(self).invoke(&[#(#vars2),*])
                     }
                 }
 
