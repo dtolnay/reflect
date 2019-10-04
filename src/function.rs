@@ -22,7 +22,7 @@ impl Function {
 
         let invoke = wip.invokes.index_push(Invoke {
             function: self.clone(),
-            args: args.to_vec().into_iter().map(|value| value.index).collect(),
+            args: args.into_iter().map(|value| value.index).collect(),
         });
         let node = ValueNode::Invoke(invoke);
         let value = Value {
