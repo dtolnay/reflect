@@ -34,7 +34,7 @@ impl ToTokens for Print<TypeNode> {
             Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { ref name, .. } => {
                 // FIXME generics
-                let name = Ident::new(name);
+                let name = Ident::from(name.clone());
                 quote!(#name)
             }
             Path {

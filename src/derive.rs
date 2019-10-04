@@ -4,6 +4,7 @@ use crate::Data;
 use crate::Enum;
 use crate::Execution;
 use crate::Field;
+use crate::Ident;
 use crate::Program;
 use crate::Struct;
 use crate::StructStruct;
@@ -42,7 +43,7 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
 
 fn syn_to_type(input: syn::DeriveInput) -> Type {
     Type(TypeNode::DataStructure {
-        name: input.ident.to_string(),
+        name: Ident::from(input.ident),
         data: match input.data {
             syn::Data::Struct(data) => {
                 match data.fields {
