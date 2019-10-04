@@ -64,8 +64,13 @@ impl Parse for Input {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut crates = Vec::new();
         while !input.is_empty() {
-            input.parse::<Token![extern]>()?;
-            input.parse::<Token![crate]>()?;
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Token![use]) {
+                input.parse::<Token![use]>()?;
+            } else {
+                input.parse::<Token![extern]>()?;
+                input.parse::<Token![crate]>()?;
+            }
             let name: Ident = input.parse()?;
             let items = ItemMod::parse_items(input)?;
             crates.push(ItemMod { name, items });

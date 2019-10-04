@@ -2,6 +2,8 @@ use crate::GenericRef;
 use crate::Ident;
 use crate::Type;
 
+//FIXME: where clause
+
 #[derive(Debug, Clone)]
 pub struct Generics {
     pub(crate) params: Vec<GenericParam>,

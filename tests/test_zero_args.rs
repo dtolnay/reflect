@@ -8,7 +8,7 @@ mod zero {
 }
 
 library! {
-    extern crate zero {
+    use zero {
         trait Zero {
             fn zero();
         }
