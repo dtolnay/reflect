@@ -1,7 +1,9 @@
 use crate::Data;
 use crate::Function;
-use crate::Generics;
+use crate::Ident;
+use crate::Path;
 use crate::Signature;
+use crate::TypeParamBound;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -15,16 +17,9 @@ pub(crate) enum TypeNode {
     Reference(Box<TypeNode>),
     ReferenceMut(Box<TypeNode>),
     Dereference(Box<TypeNode>),
-    DataStructure {
-        name: String,
-        data: Data<TypeNode>,
-    },
-    Path {
-        global: bool,
-        path: Vec<String>,
-        name: String,
-        generics: Generics,
-    },
+    TypeTraitObject(Vec<TypeParamBound>),
+    DataStructure { name: Ident, data: Data<TypeNode> },
+    Path(Path),
 }
 
 impl Type {
@@ -79,7 +74,7 @@ impl Type {
 impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match *self {
-            TypeNode::DataStructure { ref name, .. } => name.clone(),
+            TypeNode::DataStructure { ref name, .. } => name.to_string(),
             TypeNode::Reference(ref inner) => (&**inner).get_name(),
             TypeNode::ReferenceMut(ref inner) => (&**inner).get_name(),
             _ => panic!("Type::get_name"),

@@ -44,3 +44,14 @@ impl TypedIndex for Invoke {
         InvokeRef(i)
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct GenericRef(pub usize);
+
+impl TypedIndex for GenericRef {
+    type Index = GenericRef;
+
+    fn index(i: usize) -> Self::Index {
+        GenericRef(i)
+    }
+}

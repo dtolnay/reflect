@@ -1,6 +1,10 @@
-use crate::Generics;
+use crate::Ident;
+use crate::Path;
+use crate::PathArguments;
+use crate::PathSegment;
 use crate::Type;
 use crate::TypeNode;
+use std::iter::once;
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -26,20 +30,17 @@ impl Module {
     }
 
     pub fn get_type(&self, name: &str) -> Type {
-        Type(TypeNode::Path {
+        Type(TypeNode::Path(Path {
             global: self.global,
-            path: self.path.clone(),
-            name: name.to_owned(),
-            generics: Generics { private: () },
-        })
-    }
-
-    pub fn get_generic_type(&self, name: &str, generics: Generics) -> Type {
-        Type(TypeNode::Path {
-            global: self.global,
-            path: self.path.clone(),
-            name: name.to_owned(),
-            generics,
-        })
+            path: self
+                .path
+                .iter()
+                .chain(once(&name.to_owned()))
+                .map(|segment| PathSegment {
+                    ident: Ident::new(segment),
+                    args: PathArguments::None,
+                })
+                .collect(),
+        }))
     }
 }
