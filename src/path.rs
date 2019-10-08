@@ -34,3 +34,40 @@ pub(crate) struct ParenthesizedGenericArguments {
     /// C
     pub(crate) output: Type,
 }
+
+impl Path {
+    pub(crate) fn syn_to_path(path: syn::Path) -> Path {
+        match path {
+            syn::Path {
+                leading_colon,
+                segments,
+            } => {
+                let path: Vec<_> = segments
+                    .into_iter()
+                    .map(|syn::PathSegment { ident, arguments }| {
+                        let ident = Ident::from(ident);
+                        match arguments {
+                            syn::PathArguments::None => PathSegment {
+                                ident,
+                                args: PathArguments::None,
+                            },
+                            //FIXME: generics
+                            syn::PathArguments::AngleBracketed(_generic_args) => {
+                                unimplemented!("Type::syn_to_type: angle bracketed generic args")
+                            }
+
+                            //FIXME: Generics
+                            syn::PathArguments::Parenthesized(_parenthesized) => {
+                                unimplemented!("Type::syn_to_type: parentesized generic args")
+                            }
+                        }
+                    })
+                    .collect();
+                Path {
+                    global: leading_colon.is_some(),
+                    path,
+                }
+            }
+        }
+    }
+}

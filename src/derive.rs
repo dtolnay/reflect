@@ -4,6 +4,7 @@ use crate::Data;
 use crate::Enum;
 use crate::Execution;
 use crate::Field;
+use crate::Generics;
 use crate::Ident;
 use crate::Program;
 use crate::Struct;
@@ -44,6 +45,7 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
 fn syn_to_type(input: syn::DeriveInput) -> Type {
     Type(TypeNode::DataStructure {
         name: Ident::from(input.ident),
+        generics: Generics::syn_to_generics(input.generics),
         data: match input.data {
             syn::Data::Struct(data) => {
                 match data.fields {
@@ -53,7 +55,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                             .into_iter()
                             .map(|field| Field {
                                 name: field.ident.unwrap().to_string(),
-                                element: Type::syn_to_type(&field.ty).0,
+                                element: Type::syn_to_type(field.ty),
                             })
                             .collect(),
                     })),
@@ -67,7 +69,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                     Field {
                                         // FIXME store field index
                                         name: i.to_string(),
-                                        element: Type::syn_to_type(&field.ty).0,
+                                        element: Type::syn_to_type(field.ty),
                                     }
                                 })
                                 .collect(),

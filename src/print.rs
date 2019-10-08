@@ -123,6 +123,13 @@ impl ToTokens for Print<TypeParam> {
 impl ToTokens for Print<Lifetime> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = Ident::new(format!("'a{}", self.0.index.0));
+        tokens.append_all(quote!(#ident))
+    }
+}
+
+impl ToTokens for Print<LifetimeDef> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let ident = Ident::new(format!("'a{}", self.0.index.0));
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None

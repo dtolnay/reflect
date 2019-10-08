@@ -1,10 +1,9 @@
 use crate::Data;
 use crate::Function;
+use crate::Generics;
 use crate::Ident;
 use crate::Lifetime;
 use crate::Path;
-use crate::PathArguments;
-use crate::PathSegment;
 use crate::Signature;
 use crate::TypeParamBound;
 
@@ -29,7 +28,8 @@ pub(crate) enum TypeNode {
     TraitObject(Vec<TypeParamBound>),
     DataStructure {
         name: Ident,
-        data: Data<TypeNode>,
+        generics: Generics,
+        data: Data<Type>,
     },
     Path(Path),
 }
@@ -75,9 +75,7 @@ impl Type {
 
     pub fn data(&self) -> Data<Type> {
         match self.0 {
-            TypeNode::DataStructure { ref data, .. } => {
-                data.clone().map(|field| Type(field.element))
-            }
+            TypeNode::DataStructure { ref data, .. } => data.clone().map(|field| field.element),
             TypeNode::Reference {
                 ref lifetime,
                 ref inner,
@@ -100,45 +98,15 @@ impl Type {
         }
     }
 
-    pub(crate) fn syn_to_type(ty: &syn::Type) -> Type {
+    pub(crate) fn syn_to_type(ty: syn::Type) -> Type {
         match ty {
             syn::Type::Path(syn::TypePath {
                 //FIXME add qself to Path
                 qself: None,
-                path:
-                    syn::Path {
-                        leading_colon,
-                        segments,
-                    },
-            }) => {
-                let path: Vec<_> = segments
-                    .iter()
-                    .map(|syn::PathSegment { ident, arguments }| {
-                        let ident = Ident::from(ident.clone());
-                        match arguments {
-                            syn::PathArguments::None => PathSegment {
-                                ident,
-                                args: PathArguments::None,
-                            },
-                            //FIXME: generics
-                            syn::PathArguments::AngleBracketed(_generic_args) => {
-                                unimplemented!("Type::syn_to_type: angle bracketed generic args")
-                            }
-
-                            //FIXME: Generics
-                            syn::PathArguments::Parenthesized(_parenthesized) => {
-                                unimplemented!("Type::syn_to_type: parentesized generic args")
-                            }
-                        }
-                    })
-                    .collect();
-                Type(TypeNode::Path(Path {
-                    global: leading_colon.is_some(),
-                    path,
-                }))
-            }
+                path,
+            }) => Type(TypeNode::Path(Path::syn_to_path(path))),
             syn::Type::Reference(reference) => {
-                let inner = Box::new(Type::syn_to_type(&*reference.elem).0);
+                let inner = Box::new(Type::syn_to_type(*reference.elem).0);
                 let lifetime = reference.lifetime.as_ref().map(|lifetime| {
                     //FIXME: generics
                     unimplemented!("Type::syn_to_type: lifetime")
