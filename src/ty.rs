@@ -3,6 +3,8 @@ use crate::Function;
 use crate::Ident;
 use crate::Lifetime;
 use crate::Path;
+use crate::PathArguments;
+use crate::PathSegment;
 use crate::Signature;
 use crate::TypeParamBound;
 
@@ -95,6 +97,71 @@ impl Type {
                 })
             }),
             _ => panic!("Type::data"),
+        }
+    }
+
+    pub(crate) fn syn_to_type(ty: &syn::Type) -> Type {
+        match ty {
+            syn::Type::Path(syn::TypePath {
+                //FIXME add qself to Path
+                qself: None,
+                path:
+                    syn::Path {
+                        leading_colon,
+                        segments,
+                    },
+            }) => {
+                let path: Vec<_> = segments
+                    .iter()
+                    .map(|syn::PathSegment { ident, arguments }| {
+                        let ident = Ident::from(ident.clone());
+                        match arguments {
+                            syn::PathArguments::None => PathSegment {
+                                ident,
+                                args: PathArguments::None,
+                            },
+                            //FIXME: generics
+                            syn::PathArguments::AngleBracketed(_generic_args) => {
+                                unimplemented!("Type::syn_to_type: angle bracketed generic args")
+                            }
+
+                            //FIXME: Generics
+                            syn::PathArguments::Parenthesized(_parenthesized) => {
+                                unimplemented!("Type::syn_to_type: parentesized generic args")
+                            }
+                        }
+                    })
+                    .collect();
+                Type(TypeNode::Path(Path {
+                    global: leading_colon.is_some(),
+                    path,
+                }))
+            }
+            syn::Type::Reference(reference) => {
+                let inner = Box::new(Type::syn_to_type(&*reference.elem).0);
+                let lifetime = reference.lifetime.as_ref().map(|lifetime| {
+                    //FIXME: generics
+                    unimplemented!("Type::syn_to_type: lifetime")
+                });
+                if reference.mutability.is_some() {
+                    Type(TypeNode::ReferenceMut { lifetime, inner })
+                } else {
+                    Type(TypeNode::Reference { lifetime, inner })
+                }
+            }
+            //FIXME: TraitObject
+            syn::Type::TraitObject(type_trait_object) => {
+                unimplemented!("Type::syn_to_type: TraitObject")
+            }
+
+            syn::Type::Tuple(type_tuple) => {
+                if type_tuple.elems.is_empty() {
+                    Type::unit()
+                } else {
+                    unimplemented!("Type::syn_to_type: type tuple")
+                }
+            }
+            _ => unimplemented!("Type::syn_to_type"),
         }
     }
 }

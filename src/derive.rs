@@ -47,21 +47,16 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
         data: match input.data {
             syn::Data::Struct(data) => {
                 match data.fields {
-                    syn::Fields::Named(fields) => {
-                        Data::Struct(Struct::Struct(StructStruct {
-                            fields: fields
-                                .named
-                                .into_iter()
-                                .map(|field| {
-                                    Field {
-                                        name: field.ident.unwrap().to_string(),
-                                        // FIXME convert syn field type
-                                        element: Type::unit().0,
-                                    }
-                                })
-                                .collect(),
-                        }))
-                    }
+                    syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
+                        fields: fields
+                            .named
+                            .into_iter()
+                            .map(|field| Field {
+                                name: field.ident.unwrap().to_string(),
+                                element: Type::syn_to_type(&field.ty).0,
+                            })
+                            .collect(),
+                    })),
                     syn::Fields::Unnamed(fields) => {
                         Data::Struct(Struct::Tuple(TupleStruct {
                             fields: fields
@@ -72,8 +67,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                                     Field {
                                         // FIXME store field index
                                         name: i.to_string(),
-                                        // FIXME convert syn field type
-                                        element: Type::unit().0,
+                                        element: Type::syn_to_type(&field.ty).0,
                                     }
                                 })
                                 .collect(),
