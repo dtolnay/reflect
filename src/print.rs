@@ -25,13 +25,25 @@ impl ToTokens for Print<TypeNode> {
             Infer => quote!(_),
             Unit => quote!(()),
             PrimitiveStr => quote!(str),
-            Reference(ref inner) => {
+            Reference {
+                ref lifetime,
+                ref inner,
+            } => {
+                let lifetime = lifetime
+                    .as_ref()
+                    .map(|lifetime| Ident::new(format!("'a{}", lifetime.index.0)));
                 let inner = Print::ref_cast(&**inner);
-                quote!(&#inner)
+                quote!(&#lifetime #inner)
             }
-            ReferenceMut(ref inner) => {
+            ReferenceMut {
+                ref lifetime,
+                ref inner,
+            } => {
+                let lifetime = lifetime
+                    .as_ref()
+                    .map(|lifetime| Ident::new(format!("'a{}", lifetime.index.0)));
                 let inner = Print::ref_cast(&**inner);
-                quote!(&mut #inner)
+                quote!(&mut #lifetime #inner)
             }
             Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { ref name, .. } => {

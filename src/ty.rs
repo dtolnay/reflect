@@ -1,6 +1,7 @@
 use crate::Data;
 use crate::Function;
 use crate::Ident;
+use crate::Lifetime;
 use crate::Path;
 use crate::Signature;
 use crate::TypeParamBound;
@@ -14,11 +15,20 @@ pub(crate) enum TypeNode {
     Infer,
     Unit,
     PrimitiveStr,
-    Reference(Box<TypeNode>),
-    ReferenceMut(Box<TypeNode>),
+    Reference {
+        lifetime: Option<Lifetime>,
+        inner: Box<TypeNode>,
+    },
+    ReferenceMut {
+        lifetime: Option<Lifetime>,
+        inner: Box<TypeNode>,
+    },
     Dereference(Box<TypeNode>),
     TypeTraitObject(Vec<TypeParamBound>),
-    DataStructure { name: Ident, data: Data<TypeNode> },
+    DataStructure {
+        name: Ident,
+        data: Data<TypeNode>,
+    },
     Path(Path),
 }
 
@@ -32,17 +42,23 @@ impl Type {
     }
 
     pub fn reference(&self) -> Self {
-        Type(TypeNode::Reference(Box::new(self.0.clone())))
+        Type(TypeNode::Reference {
+            lifetime: None,
+            inner: Box::new(self.0.clone()),
+        })
     }
 
     pub fn reference_mut(&self) -> Self {
-        Type(TypeNode::ReferenceMut(Box::new(self.0.clone())))
+        Type(TypeNode::ReferenceMut {
+            lifetime: None,
+            inner: Box::new(self.0.clone()),
+        })
     }
 
     pub fn dereference(&self) -> Self {
         match self.0 {
-            TypeNode::Reference(ref inner) => Type((**inner).clone()),
-            TypeNode::ReferenceMut(ref inner) => Type((**inner).clone()),
+            TypeNode::Reference { ref inner, .. } => Type((**inner).clone()),
+            TypeNode::ReferenceMut { ref inner, .. } => Type((**inner).clone()),
             ref other => Type(TypeNode::Dereference(Box::new(other.clone()))),
         }
     }
@@ -60,12 +76,24 @@ impl Type {
             TypeNode::DataStructure { ref data, .. } => {
                 data.clone().map(|field| Type(field.element))
             }
-            TypeNode::Reference(ref inner) => Type((**inner).clone())
-                .data()
-                .map(|field| field.element.reference()),
-            TypeNode::ReferenceMut(ref inner) => Type((**inner).clone())
-                .data()
-                .map(|field| field.element.reference_mut()),
+            TypeNode::Reference {
+                ref lifetime,
+                ref inner,
+            } => Type((**inner).clone()).data().map(|field| {
+                Type(TypeNode::Reference {
+                    lifetime: lifetime.clone(),
+                    inner: Box::new(field.element.0.clone()),
+                })
+            }),
+            TypeNode::ReferenceMut {
+                ref lifetime,
+                ref inner,
+            } => Type((**inner).clone()).data().map(|field| {
+                Type(TypeNode::ReferenceMut {
+                    lifetime: lifetime.clone(),
+                    inner: Box::new(field.element.0.clone()),
+                })
+            }),
             _ => panic!("Type::data"),
         }
     }
@@ -75,8 +103,8 @@ impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match *self {
             TypeNode::DataStructure { ref name, .. } => name.to_string(),
-            TypeNode::Reference(ref inner) => (&**inner).get_name(),
-            TypeNode::ReferenceMut(ref inner) => (&**inner).get_name(),
+            TypeNode::Reference { ref inner, .. } => (&**inner).get_name(),
+            TypeNode::ReferenceMut { ref inner, .. } => (&**inner).get_name(),
             _ => panic!("Type::get_name"),
         }
     }
