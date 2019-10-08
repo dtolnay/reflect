@@ -51,7 +51,7 @@ impl ToTokens for Print<TypeNode> {
                 let name = Ident::from(name.clone());
                 quote!(#name)
             }
-            TypeTraitObject(ref bounds) => {
+            TraitObject(ref bounds) => {
                 let bounds = bounds.iter().map(Print::ref_cast);
                 quote!((dyn #(#bounds)+*))
             }

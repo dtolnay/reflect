@@ -24,7 +24,7 @@ pub(crate) enum TypeNode {
         inner: Box<TypeNode>,
     },
     Dereference(Box<TypeNode>),
-    TypeTraitObject(Vec<TypeParamBound>),
+    TraitObject(Vec<TypeParamBound>),
     DataStructure {
         name: Ident,
         data: Data<TypeNode>,
