@@ -46,20 +46,26 @@ impl ToTokens for Print<TypeNode> {
                 quote!(&mut #lifetime #inner)
             }
             Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
-            DataStructure { ref name, .. } => {
-                // FIXME generics
+            DataStructure {
+                ref name,
+                ref generics,
+                ..
+            } => {
                 let name = Ident::from(name.clone());
-                quote!(#name)
+                if generics.params.is_empty() {
+                    quote!(#name)
+                } else {
+                    let generics = Print::ref_cast(generics);
+                    quote!(#name <#generics>)
+                }
             }
             TraitObject(ref bounds) => {
                 let bounds = bounds.iter().map(Print::ref_cast);
                 quote!((dyn #(#bounds)+*))
             }
-            Path(path::Path { global, ref path }) => {
-                // FIXME generics
-                let leading = if global { Some(quote!(::)) } else { None };
-                let path = path.iter().map(|segment| segment.ident.clone());
-                quote!(#leading #(#path)::*)
+            Path(ref path) => {
+                let path = Print::ref_cast(path);
+                quote!(#path)
             }
         });
     }
@@ -96,14 +102,14 @@ impl ToTokens for Print<TypeParamBound> {
 
 impl ToTokens for Print<TraitBound> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ty = Print::ref_cast(&self.0.ty);
+        let path = Print::ref_cast(&self.0.path);
         let lifetimes = self.0.lifetimes.iter().map(Print::ref_cast);
         let lifetimes = if self.0.lifetimes.is_empty() {
             None
         } else {
             Some(quote!(for <#(#lifetimes)+*>))
         };
-        tokens.append_all(quote!(#lifetimes #ty))
+        tokens.append_all(quote!(#lifetimes #path))
     }
 }
 
@@ -182,5 +188,17 @@ impl ToTokens for Print<GenericArgument> {
 
             GenericArgument::Const(ref _expr) => unimplemented!(),
         }
+    }
+}
+
+impl ToTokens for Print<path::Path> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let leading = if self.0.global {
+            Some(quote!(::))
+        } else {
+            None
+        };
+        let path = self.0.path.iter().map(|segment| &segment.ident);
+        tokens.append_all(quote!(#leading #(#path)::*));
     }
 }
