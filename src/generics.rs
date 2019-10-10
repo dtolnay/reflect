@@ -1,5 +1,3 @@
-use crate::index::TypedIndex;
-use crate::GenericRef;
 use crate::Ident;
 use crate::Path;
 use crate::Type;
@@ -14,15 +12,15 @@ pub struct Generics {
 
 #[derive(Debug, Clone)]
 pub(crate) enum GenericParam {
-    Type(TypeParam),
+    Type(PredicateType),
     Lifetime(LifetimeDef),
     Const(ConstParam),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TypeParam {
-    pub(crate) ident: Ident,
-    pub(crate) index: GenericRef,
+pub(crate) struct PredicateType {
+    pub(crate) lifetimes: Vec<Lifetime>,
+    pub(crate) bounded_ty: Type,
     pub(crate) bounds: Vec<TypeParamBound>,
 }
 
@@ -42,13 +40,11 @@ pub(crate) struct TraitBound {
 #[derive(Debug, Clone)]
 pub(crate) struct Lifetime {
     pub(crate) ident: Ident,
-    pub(crate) index: GenericRef,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct LifetimeDef {
     pub(crate) ident: Ident,
-    pub(crate) index: GenericRef,
     pub(crate) bounds: Vec<Lifetime>,
 }
 
@@ -74,14 +70,12 @@ pub(crate) enum GenericArgument {
 #[derive(Debug, Clone)]
 pub(crate) struct Binding {
     pub(crate) ident: Ident,
-    pub(crate) index: GenericRef,
     pub(crate) ty: Type,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Constraint {
     pub(crate) ident: Ident,
-    pub(crate) index: GenericRef,
     pub(crate) bounds: Vec<TypeParamBound>,
 }
 
@@ -92,17 +86,16 @@ pub(crate) struct Expr {
 
 impl Generics {
     pub(crate) fn syn_to_generics(generics: syn::Generics) -> Generics {
+        // FIXME where clause
         Generics {
             params: generics
                 .params
                 .into_iter()
-                .enumerate()
-                .map(|(i, param)| match param {
+                .map(|param| match param {
                     syn::GenericParam::Type(syn::TypeParam { ident, bounds, .. }) => {
-                        GenericParam::Type(TypeParam {
-                            ident: Ident::from(ident),
-                            //FIXME incorrect indexing
-                            index: Generics::index(i),
+                        GenericParam::Type(PredicateType {
+                            lifetimes: Vec::new(),
+                            bounded_ty: Type(TypeNode::Path(Path::ident_to_path(Ident::from(ident)))),
                             bounds: bounds
                                 .into_iter()
                                 .map(|bound| match bound {
@@ -110,8 +103,6 @@ impl Generics {
                                         ident, ..
                                     }) => TypeParamBound::Lifetime(Lifetime {
                                         ident: Ident::from(ident),
-                                        //FIXME: incorrect indexing
-                                        index: Generics::index(i),
                                     }),
 
                                     syn::TypeParamBound::Trait(syn::TraitBound {
@@ -124,8 +115,6 @@ impl Generics {
                                                 lifetimes.lifetimes.into_iter().map(
                                                     |syn::LifetimeDef { lifetime: syn::Lifetime {ident, ..}, ..}| Lifetime {
                                                         ident: Ident::from(ident),
-                                                        //FIXME: incorrect indexing
-                                                        index: Generics::index(i),
                                                     },
                                                 ).collect()
                                             }),
@@ -138,12 +127,9 @@ impl Generics {
                     syn::GenericParam::Lifetime(syn::LifetimeDef { lifetime: syn::Lifetime {ident, ..}, bounds, ..}) => {
                         GenericParam::Lifetime(LifetimeDef {
                             ident: Ident::from(ident),
-                            //FIXME: incorrect indexing
-                            index: Generics::index(i),
                             bounds: bounds.into_iter().map(|syn::Lifetime {ident, ..}| {
                                 Lifetime {
                                     ident: Ident::from(ident),
-                                    index: Generics::index(i),
                                 }
                             }).collect(),
                         })

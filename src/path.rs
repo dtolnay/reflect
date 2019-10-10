@@ -70,4 +70,14 @@ impl Path {
             }
         }
     }
+
+    pub(crate) fn ident_to_path(ident: Ident) -> Path {
+        Path {
+            global: false,
+            path: vec![PathSegment {
+                ident,
+                args: PathArguments::None,
+            }],
+        }
+    }
 }

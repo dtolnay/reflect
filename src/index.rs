@@ -1,4 +1,3 @@
-use crate::Generics;
 use crate::Invoke;
 use crate::ValueNode;
 
@@ -43,16 +42,5 @@ impl TypedIndex for Invoke {
 
     fn index(i: usize) -> Self::Index {
         InvokeRef(i)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct GenericRef(pub usize);
-
-impl TypedIndex for Generics {
-    type Index = GenericRef;
-
-    fn index(i: usize) -> Self::Index {
-        GenericRef(i)
     }
 }

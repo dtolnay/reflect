@@ -31,7 +31,7 @@ impl ToTokens for Print<TypeNode> {
             } => {
                 let lifetime = lifetime
                     .as_ref()
-                    .map(|lifetime| Ident::new(format!("'a{}", lifetime.index.0)));
+                    .map(|lifetime| Ident::new(format!("'{}", lifetime.ident)));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&#lifetime #inner)
             }
@@ -41,7 +41,7 @@ impl ToTokens for Print<TypeNode> {
             } => {
                 let lifetime = lifetime
                     .as_ref()
-                    .map(|lifetime| Ident::new(format!("'a{}", lifetime.index.0)));
+                    .map(|lifetime| Ident::new(format!("'{}", lifetime.ident)));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&mut #lifetime #inner)
             }
@@ -107,29 +107,35 @@ impl ToTokens for Print<TraitBound> {
     }
 }
 
-impl ToTokens for Print<TypeParam> {
+impl ToTokens for Print<PredicateType> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("T{}", self.0.index.0));
+        let lifetimes = self.0.lifetimes.iter().map(Print::ref_cast);
+        let lifetimes = if self.0.lifetimes.is_empty() {
+            None
+        } else {
+            Some(quote!(for <#(#lifetimes)+*>))
+        };
+        let ty = Print::ref_cast(&self.0.bounded_ty);
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon (#(#bounds)+*)))
+        tokens.append_all(quote!(#lifetimes #ty #colon (#(#bounds)+*)))
     }
 }
 
 impl ToTokens for Print<Lifetime> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("'a{}", self.0.index.0));
+        let ident = Ident::new(format!("'{}", self.0.ident));
         tokens.append_all(quote!(#ident))
     }
 }
 
 impl ToTokens for Print<LifetimeDef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("'a{}", self.0.index.0));
+        let ident = Ident::new(format!("'{}", self.0.ident));
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None
@@ -142,7 +148,7 @@ impl ToTokens for Print<LifetimeDef> {
 
 impl ToTokens for Print<Binding> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("T{}", self.0.index.0));
+        let ident = Ident::from(self.0.ident.clone());
         let ty = Print::ref_cast(&self.0.ty);
         tokens.append_all(quote!(#ident : ty))
     }
@@ -150,7 +156,7 @@ impl ToTokens for Print<Binding> {
 
 impl ToTokens for Print<Constraint> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("T{}", self.0.index.0));
+        let ident = Ident::from(self.0.ident.clone());
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None

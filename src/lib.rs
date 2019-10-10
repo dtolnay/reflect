@@ -364,7 +364,7 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::generics::{Lifetime, TypeParamBound};
 use crate::ident::Ident;
-use crate::index::{GenericRef, InvokeRef, Push, ValueRef};
+use crate::index::{InvokeRef, Push, ValueRef};
 use crate::node::ValueNode;
 use crate::path::Path;
 use crate::path::{PathArguments, PathSegment};
