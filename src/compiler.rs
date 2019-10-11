@@ -46,6 +46,7 @@ impl Program {
 
 impl CompleteImpl {
     fn compile(&self) -> TokenStream {
+        //FIXME: generics
         let ty = Print::ref_cast(&self.ty);
         let functions = self.functions.iter().map(CompleteFunction::compile);
 

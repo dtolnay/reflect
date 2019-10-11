@@ -5,14 +5,30 @@ use crate::TypeNode;
 
 #[derive(Debug, Clone)]
 pub struct Generics {
+    /// Represents the generic params without bounds.
+    /// The bounds are moved to constraints.
     pub(crate) params: Vec<GenericParam>,
+
+    /// Essentially represents the where clause
+    pub(crate) constraints: Vec<GenericConstraint>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum GenericParam {
+    Type(TypeParam),
+    Lifetime(Lifetime),
+    Const(ConstParam),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TypeParam {
+    pub(crate) ident: Ident,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum GenericConstraint {
     Type(PredicateType),
     Lifetime(LifetimeDef),
-    Const(ConstParam),
 }
 
 #[derive(Debug, Clone)]
@@ -85,36 +101,18 @@ pub(crate) struct Expr {
 
 impl Generics {
     pub(crate) fn syn_to_generics(generics: syn::Generics) -> Generics {
-        let generic_params = syn_to_generic_params(generics.params);
-        let generic_params = if let Some(where_clause) = generics.where_clause {
-            where_clause
-                .predicates
-                .into_iter()
-                .map(|predicate| match predicate {
-                    syn::WherePredicate::Type(syn::PredicateType {
-                        lifetimes,
-                        bounded_ty,
-                        bounds,
-                        ..
-                    }) => GenericParam::Type(PredicateType {
-                        lifetimes: syn_to_lifetimes(lifetimes),
-                        bounded_ty: Type::syn_to_type(bounded_ty),
-                        bounds: syn_to_type_param_bounds(bounds),
-                    }),
-                    syn::WherePredicate::Lifetime(lifetime) => unimplemented!(),
-                    syn::WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
-                })
-                .collect()
-        } else {
-            generic_params.collect()
+        let (params, mut constraints) = syn_to_generic_params(generics.params);
+        if let Some(where_clause) = generics.where_clause {
+            constraints.extend(syn_to_generic_constraints(where_clause));
         };
         Generics {
-            params: generic_params,
+            params,
+            constraints,
         }
     }
 }
 
-fn syn_to_lifetimes(lifetimes: Option<syn::BoundLifetimes>) -> Vec<Lifetime> {
+fn syn_to_bound_lifetimes(lifetimes: Option<syn::BoundLifetimes>) -> Vec<Lifetime> {
     lifetimes.map_or_else(Vec::new, |lifetimes| {
         lifetimes
             .lifetimes
@@ -131,49 +129,101 @@ fn syn_to_lifetimes(lifetimes: Option<syn::BoundLifetimes>) -> Vec<Lifetime> {
     })
 }
 
-fn syn_to_generic_params<T>(params: T) -> impl Iterator<Item = GenericParam>
+fn syn_to_generic_constraints(
+    where_clause: syn::WhereClause,
+) -> impl Iterator<Item = GenericConstraint> {
+    where_clause
+        .predicates
+        .into_iter()
+        .map(|predicate| match predicate {
+            syn::WherePredicate::Type(syn::PredicateType {
+                lifetimes,
+                bounded_ty,
+                bounds,
+                ..
+            }) => GenericConstraint::Type(PredicateType {
+                lifetimes: syn_to_bound_lifetimes(lifetimes),
+                bounded_ty: Type::syn_to_type(bounded_ty),
+                bounds: syn_to_type_param_bounds(bounds),
+            }),
+            syn::WherePredicate::Lifetime(syn::PredicateLifetime {
+                lifetime: syn::Lifetime { ident, .. },
+                bounds,
+                ..
+            }) => GenericConstraint::Lifetime(LifetimeDef {
+                ident: Ident::from(ident),
+                bounds: bounds
+                    .into_iter()
+                    .map(|syn::Lifetime { ident, .. }| Lifetime {
+                        ident: Ident::from(ident),
+                    })
+                    .collect(),
+            }),
+            syn::WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
+        })
+}
+
+fn syn_to_generic_params<T>(params: T) -> (Vec<GenericParam>, Vec<GenericConstraint>)
 where
     T: IntoIterator<Item = syn::GenericParam>,
 {
-    params.into_iter().map(|param| match param {
-        syn::GenericParam::Type(syn::TypeParam { ident, bounds, .. }) => {
-            GenericParam::Type(PredicateType {
-                lifetimes: Vec::new(),
-                bounded_ty: Type(TypeNode::Path(Path::ident_to_path(Ident::from(ident)))),
-                bounds: bounds
-                    .into_iter()
-                    .map(|bound| match bound {
-                        syn::TypeParamBound::Lifetime(syn::Lifetime { ident, .. }) => {
-                            TypeParamBound::Lifetime(Lifetime {
+    let mut constraints = Vec::new();
+    let params = params
+        .into_iter()
+        .map(|param| match param {
+            syn::GenericParam::Type(syn::TypeParam { ident, bounds, .. }) => {
+                let ident = Ident::from(ident);
+                if !bounds.is_empty() {
+                    constraints.push(GenericConstraint::Type(PredicateType {
+                        lifetimes: Vec::new(),
+                        bounded_ty: Type(TypeNode::Path(Path::ident_to_path(ident.clone()))),
+                        bounds: bounds
+                            .into_iter()
+                            .map(|bound| match bound {
+                                syn::TypeParamBound::Lifetime(syn::Lifetime { ident, .. }) => {
+                                    TypeParamBound::Lifetime(Lifetime {
+                                        ident: Ident::from(ident),
+                                    })
+                                }
+
+                                syn::TypeParamBound::Trait(syn::TraitBound {
+                                    lifetimes,
+                                    path,
+                                    ..
+                                }) => TypeParamBound::Trait(TraitBound {
+                                    lifetimes: syn_to_bound_lifetimes(lifetimes),
+                                    path: Path::syn_to_path(path),
+                                }),
+                            })
+                            .collect(),
+                    }));
+                }
+
+                GenericParam::Type(TypeParam { ident })
+            }
+            syn::GenericParam::Lifetime(syn::LifetimeDef {
+                lifetime: syn::Lifetime { ident, .. },
+                bounds,
+                ..
+            }) => {
+                let ident = Ident::from(ident);
+                if !bounds.is_empty() {
+                    constraints.push(GenericConstraint::Lifetime(LifetimeDef {
+                        ident: ident.clone(),
+                        bounds: bounds
+                            .into_iter()
+                            .map(|syn::Lifetime { ident, .. }| Lifetime {
                                 ident: Ident::from(ident),
                             })
-                        }
-
-                        syn::TypeParamBound::Trait(syn::TraitBound {
-                            lifetimes, path, ..
-                        }) => TypeParamBound::Trait(TraitBound {
-                            lifetimes: syn_to_lifetimes(lifetimes),
-                            path: Path::syn_to_path(path),
-                        }),
-                    })
-                    .collect(),
-            })
-        }
-        syn::GenericParam::Lifetime(syn::LifetimeDef {
-            lifetime: syn::Lifetime { ident, .. },
-            bounds,
-            ..
-        }) => GenericParam::Lifetime(LifetimeDef {
-            ident: Ident::from(ident),
-            bounds: bounds
-                .into_iter()
-                .map(|syn::Lifetime { ident, .. }| Lifetime {
-                    ident: Ident::from(ident),
-                })
-                .collect(),
-        }),
-        syn::GenericParam::Const(_const) => unimplemented!("Generics::syn_to_generics: Const"),
-    })
+                            .collect(),
+                    }));
+                }
+                GenericParam::Lifetime(Lifetime { ident })
+            }
+            syn::GenericParam::Const(_const) => unimplemented!("Generics::syn_to_generics: Const"),
+        })
+        .collect();
+    (params, constraints)
 }
 
 fn syn_to_type_param_bounds<T>(bounds: T) -> Vec<TypeParamBound>
@@ -186,7 +236,7 @@ where
             syn::TypeParamBound::Trait(syn::TraitBound {
                 lifetimes, path, ..
             }) => TypeParamBound::Trait(TraitBound {
-                lifetimes: syn_to_lifetimes(lifetimes),
+                lifetimes: syn_to_bound_lifetimes(lifetimes),
                 path: Path::syn_to_path(path),
             }),
             syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(Lifetime {

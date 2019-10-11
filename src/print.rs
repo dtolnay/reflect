@@ -19,6 +19,7 @@ impl ToTokens for Print<Type> {
 }
 
 impl ToTokens for Print<TypeNode> {
+    //FIXME: generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use crate::TypeNode::*;
         tokens.append_all(match self.0 {
@@ -46,18 +47,10 @@ impl ToTokens for Print<TypeNode> {
                 quote!(&mut #lifetime #inner)
             }
             Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
-            DataStructure {
-                ref name,
-                ref generics,
-                ..
-            } => {
+            DataStructure { ref name, .. } => {
+                //FIXME: generics
                 let name = Ident::from(name.clone());
-                if generics.params.is_empty() {
-                    quote!(#name)
-                } else {
-                    let generics = Print::ref_cast(generics);
-                    quote!(#name <#generics>)
-                }
+                quote!(#name)
             }
             TraitObject(ref bounds) => {
                 let bounds = bounds.iter().map(Print::ref_cast);
@@ -85,6 +78,13 @@ impl ToTokens for Print<GenericParam> {
             GenericParam::Lifetime(ref lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
             GenericParam::Const(ref _const) => unimplemented!("const generics"),
         }
+    }
+}
+
+impl ToTokens for Print<TypeParam> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let ident = &self.0.ident;
+        ident.to_tokens(tokens);
     }
 }
 
@@ -192,6 +192,7 @@ impl ToTokens for Print<GenericArgument> {
 }
 
 impl ToTokens for Print<path::Path> {
+    //FIXME generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let leading = if self.0.global {
             Some(quote!(::))

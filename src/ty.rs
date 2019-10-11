@@ -101,7 +101,7 @@ impl Type {
     pub(crate) fn syn_to_type(ty: syn::Type) -> Type {
         match ty {
             syn::Type::Path(syn::TypePath {
-                //FIXME add qself to Path
+                //FIXME: add qself to Path
                 qself: None,
                 path,
             }) => Type(TypeNode::Path(Path::syn_to_path(path))),
