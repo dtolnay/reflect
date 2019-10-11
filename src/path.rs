@@ -32,7 +32,7 @@ pub(crate) struct ParenthesizedGenericArguments {
     /// (A, B)
     pub(crate) inputs: Vec<Type>,
     /// C
-    pub(crate) output: Type,
+    pub(crate) output: Option<Type>,
 }
 
 impl Path {
@@ -51,15 +51,37 @@ impl Path {
                                 ident,
                                 args: PathArguments::None,
                             },
-                            //FIXME: generics
-                            syn::PathArguments::AngleBracketed(_generic_args) => {
-                                unimplemented!("Type::syn_to_type: angle bracketed generic args")
-                            }
+                            syn::PathArguments::AngleBracketed(generic_args) => PathSegment {
+                                ident,
+                                args: PathArguments::AngleBracketed(
+                                    AngleBracketedGenericArguments {
+                                        args: GenericArguments {
+                                            args: generic_args
+                                                .args
+                                                .into_iter()
+                                                .map(GenericArguments::syn_to_generic_argument)
+                                                .collect(),
+                                        },
+                                    },
+                                ),
+                            },
 
-                            //FIXME: Generics
-                            syn::PathArguments::Parenthesized(_parenthesized) => {
-                                unimplemented!("Type::syn_to_type: parentesized generic args")
-                            }
+                            syn::PathArguments::Parenthesized(parenthesized) => PathSegment {
+                                ident,
+                                args: PathArguments::Parenthesized(ParenthesizedGenericArguments {
+                                    inputs: parenthesized
+                                        .inputs
+                                        .into_iter()
+                                        .map(Type::syn_to_type)
+                                        .collect(),
+                                    output: match parenthesized.output {
+                                        syn::ReturnType::Default => None,
+                                        syn::ReturnType::Type(_, ty) => {
+                                            Some(Type::syn_to_type(*ty))
+                                        }
+                                    },
+                                }),
+                            },
                         }
                     })
                     .collect();

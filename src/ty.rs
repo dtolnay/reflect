@@ -1,11 +1,19 @@
+use crate::generics;
 use crate::Data;
 use crate::Function;
+use crate::GenericConstraint;
+use crate::GenericParam;
 use crate::Generics;
 use crate::Ident;
 use crate::Lifetime;
 use crate::Path;
+use crate::Print;
 use crate::Signature;
 use crate::TypeParamBound;
+use ref_cast::RefCast;
+
+use proc_macro2::TokenStream;
+use quote::quote;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -105,11 +113,11 @@ impl Type {
                 qself: None,
                 path,
             }) => Type(TypeNode::Path(Path::syn_to_path(path))),
+
             syn::Type::Reference(reference) => {
                 let inner = Box::new(Type::syn_to_type(*reference.elem).0);
-                let lifetime = reference.lifetime.as_ref().map(|lifetime| {
-                    //FIXME: generics
-                    unimplemented!("Type::syn_to_type: lifetime")
+                let lifetime = reference.lifetime.map(|lifetime| Lifetime {
+                    ident: Ident::from(lifetime.ident),
                 });
                 if reference.mutability.is_some() {
                     Type(TypeNode::ReferenceMut { lifetime, inner })
@@ -118,9 +126,9 @@ impl Type {
                 }
             }
             //FIXME: TraitObject
-            syn::Type::TraitObject(type_trait_object) => {
-                unimplemented!("Type::syn_to_type: TraitObject")
-            }
+            syn::Type::TraitObject(type_trait_object) => Type(TypeNode::TraitObject(
+                generics::syn_to_type_param_bounds(type_trait_object.bounds),
+            )),
 
             syn::Type::Tuple(type_tuple) => {
                 if type_tuple.elems.is_empty() {
@@ -132,6 +140,12 @@ impl Type {
             _ => unimplemented!("Type::syn_to_type"),
         }
     }
+
+    pub(crate) fn name_and_generics(
+        &self,
+    ) -> (TokenStream, Vec<GenericParam>, Vec<GenericConstraint>) {
+        self.0.name_and_generics()
+    }
 }
 
 impl TypeNode {
@@ -141,6 +155,57 @@ impl TypeNode {
             TypeNode::Reference { ref inner, .. } => (&**inner).get_name(),
             TypeNode::ReferenceMut { ref inner, .. } => (&**inner).get_name(),
             _ => panic!("Type::get_name"),
+        }
+    }
+
+    pub(crate) fn name_and_generics(
+        &self,
+    ) -> (TokenStream, Vec<GenericParam>, Vec<GenericConstraint>) {
+        use super::TypeNode::*;
+        match self {
+            Infer => panic!("Type::name_and_generics: Infer"),
+
+            Unit => (quote!(()), Vec::new(), Vec::new()),
+
+            PrimitiveStr => (quote!(str), Vec::new(), Vec::new()),
+
+            Reference { lifetime, inner } => {
+                let lifetime = lifetime.as_ref().map(Print::ref_cast);
+                let (name, params, constraints) = inner.name_and_generics();
+                (quote!(& #lifetime #name), params, constraints)
+            }
+
+            ReferenceMut { lifetime, inner } => {
+                let lifetime = lifetime.as_ref().map(Print::ref_cast);
+                let (name, params, constraints) = inner.name_and_generics();
+                (quote!(&mut #lifetime #name), params, constraints)
+            }
+
+            Dereference(_dereference) => panic!("Type::name_and_generics: Dereference"),
+
+            TraitObject(type_param_bound) => {
+                if type_param_bound.len() != 1 {
+                    panic!("Type::name_and_generics: TraitObject has more than one bound")
+                }
+                let type_param_bound = Print::ref_cast(&type_param_bound[0]);
+                (quote!(dyn #type_param_bound), Vec::new(), Vec::new())
+            }
+
+            DataStructure {
+                name,
+                generics:
+                    Generics {
+                        params,
+                        constraints,
+                    },
+                ..
+            } => (quote!(#name), params.clone(), constraints.clone()),
+
+            Path(path) => {
+                //FIXME: separate generics from path if possible
+                let path = Print::ref_cast(path);
+                (quote!(path), Vec::new(), Vec::new())
+            }
         }
     }
 }

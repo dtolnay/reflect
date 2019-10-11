@@ -75,8 +75,8 @@ pub struct GenericArguments {
 
 #[derive(Debug, Clone)]
 pub(crate) enum GenericArgument {
-    Lifetime(Lifetime),
     Type(Type),
+    Lifetime(Lifetime),
     Binding(Binding),
     Constraint(Constraint),
     Const(Expr),
@@ -177,25 +177,7 @@ where
                     constraints.push(GenericConstraint::Type(PredicateType {
                         lifetimes: Vec::new(),
                         bounded_ty: Type(TypeNode::Path(Path::ident_to_path(ident.clone()))),
-                        bounds: bounds
-                            .into_iter()
-                            .map(|bound| match bound {
-                                syn::TypeParamBound::Lifetime(syn::Lifetime { ident, .. }) => {
-                                    TypeParamBound::Lifetime(Lifetime {
-                                        ident: Ident::from(ident),
-                                    })
-                                }
-
-                                syn::TypeParamBound::Trait(syn::TraitBound {
-                                    lifetimes,
-                                    path,
-                                    ..
-                                }) => TypeParamBound::Trait(TraitBound {
-                                    lifetimes: syn_to_bound_lifetimes(lifetimes),
-                                    path: Path::syn_to_path(path),
-                                }),
-                            })
-                            .collect(),
+                        bounds: syn_to_type_param_bounds(bounds),
                     }));
                 }
 
@@ -226,7 +208,7 @@ where
     (params, constraints)
 }
 
-fn syn_to_type_param_bounds<T>(bounds: T) -> Vec<TypeParamBound>
+pub(crate) fn syn_to_type_param_bounds<T>(bounds: T) -> Vec<TypeParamBound>
 where
     T: IntoIterator<Item = syn::TypeParamBound>,
 {
@@ -244,4 +226,32 @@ where
             }),
         })
         .collect()
+}
+
+impl GenericArguments {
+    pub(crate) fn syn_to_generic_argument(arg: syn::GenericArgument) -> GenericArgument {
+        match arg {
+            syn::GenericArgument::Type(ty) => GenericArgument::Type(Type::syn_to_type(ty)),
+
+            syn::GenericArgument::Lifetime(lifetime) => GenericArgument::Lifetime(Lifetime {
+                ident: Ident::from(lifetime.ident),
+            }),
+
+            syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {
+                ident: Ident::from(binding.ident),
+                ty: Type::syn_to_type(binding.ty),
+            }),
+
+            syn::GenericArgument::Constraint(constraint) => {
+                GenericArgument::Constraint(Constraint {
+                    ident: Ident::from(constraint.ident),
+                    bounds: syn_to_type_param_bounds(constraint.bounds),
+                })
+            }
+
+            syn::GenericArgument::Const(_expr) => {
+                unimplemented!("GenericArguments::syn_to_generic_arguments: Const")
+            }
+        }
+    }
 }
