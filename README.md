@@ -135,7 +135,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     reflect::derive(input, |ex| {
         // Instruct the library to generate an impl of Debug for the derive
         // macro's target type / Self type.
-        ex.make_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
+        ex.make_trait_impl(RUNTIME::std::fmt::Debug, ex.target_type(), |block| {
             // Instruct the library to compile debug_fmt (a function shown
             // below) into the source code for the impl's Debug::fmt method.
             block.make_function(RUNTIME::std::fmt::Debug::fmt, debug_fmt);
