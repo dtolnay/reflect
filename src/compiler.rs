@@ -46,20 +46,34 @@ impl Program {
 
 impl CompleteImpl {
     fn compile(&self) -> TokenStream {
-        //FIXME: generics
-        let ty = Print::ref_cast(&self.ty);
         let functions = self.functions.iter().map(CompleteFunction::compile);
+
+        let (name, params, constraints) = self.ty.name_and_generics();
+        let params = if params.is_empty() {
+            None
+        } else {
+            let params = params.iter().map(Print::ref_cast);
+            Some(quote!(<#(#params),*>))
+        };
+        let where_clause = if constraints.is_empty() {
+            None
+        } else {
+            let constraints = constraints.iter().map(Print::ref_cast);
+            Some(quote!(where #(#constraints,)*))
+        };
 
         if let Some(trait_ty) = &self.trait_ty {
             let trait_ty = Print::ref_cast(trait_ty);
             quote! {
-                impl #trait_ty for #ty {
+                // FIXME: assosiated types
+                // FIXME: trait generics
+                impl #params #trait_ty for #name #params #where_clause {
                     #(#functions)*
                 }
             }
         } else {
             quote! {
-                impl #ty {
+                impl #params #name #params #where_clause {
                     #(#functions)*
                 }
             }

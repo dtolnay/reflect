@@ -4,7 +4,7 @@ use crate::Ident;
 use crate::Type;
 use crate::TypeNode;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Punct, Spacing, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
 
@@ -30,9 +30,7 @@ impl ToTokens for Print<TypeNode> {
                 ref lifetime,
                 ref inner,
             } => {
-                let lifetime = lifetime
-                    .as_ref()
-                    .map(|lifetime| Ident::new(format!("'{}", lifetime.ident)));
+                let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&#lifetime #inner)
             }
@@ -40,9 +38,7 @@ impl ToTokens for Print<TypeNode> {
                 ref lifetime,
                 ref inner,
             } => {
-                let lifetime = lifetime
-                    .as_ref()
-                    .map(|lifetime| Ident::new(format!("'{}", lifetime.ident)));
+                let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&mut #lifetime #inner)
             }
@@ -77,6 +73,17 @@ impl ToTokens for Print<GenericParam> {
             GenericParam::Type(ref type_param) => Print::ref_cast(type_param).to_tokens(tokens),
             GenericParam::Lifetime(ref lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
             GenericParam::Const(ref _const) => unimplemented!("const generics"),
+        }
+    }
+}
+
+impl ToTokens for Print<GenericConstraint> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.0 {
+            GenericConstraint::Type(ref predicate) => Print::ref_cast(predicate).to_tokens(tokens),
+            GenericConstraint::Lifetime(ref lifetime) => {
+                Print::ref_cast(lifetime).to_tokens(tokens)
+            }
         }
     }
 }
@@ -128,27 +135,30 @@ impl ToTokens for Print<PredicateType> {
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#lifetimes #ty #colon (#(#bounds)+*)))
+        tokens.append_all(quote!(#lifetimes #ty #colon #(#bounds)+*))
     }
 }
 
 impl ToTokens for Print<Lifetime> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("'{}", self.0.ident));
-        tokens.append_all(quote!(#ident))
+        let apostrophe = Punct::new('\'', Spacing::Joint);
+        tokens.append(apostrophe);
+        self.0.ident.to_tokens(tokens);
     }
 }
 
 impl ToTokens for Print<LifetimeDef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::new(format!("'{}", self.0.ident));
+        let apostrophe = Punct::new('\'', Spacing::Joint);
+        tokens.append(apostrophe);
+        let ident = &self.0.ident;
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon (#(#bounds)+*)))
+        tokens.append_all(quote!(#ident #colon #(#bounds)+*))
     }
 }
 
@@ -169,7 +179,7 @@ impl ToTokens for Print<Constraint> {
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon (#(#bounds)+*)))
+        tokens.append_all(quote!(#ident #colon #(#bounds)+*))
     }
 }
 
