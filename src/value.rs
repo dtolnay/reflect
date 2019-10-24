@@ -40,22 +40,9 @@ impl Value {
     }
 
     pub fn get_type_name(&self) -> Self {
-        match self.node() {
-            ValueNode::DataStructure { ref name, .. } => {
-                let node = ValueNode::Str(name.to_owned());
-                Value {
-                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
-                }
-            }
-            ValueNode::Reference(v) => Value { index: v }.get_type_name(),
-            ValueNode::ReferenceMut(v) => Value { index: v }.get_type_name(),
-            ValueNode::Binding { ref ty, .. } => {
-                let node = ValueNode::Str(ty.0.get_name());
-                Value {
-                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
-                }
-            }
-            _ => panic!("Value::get_type_name"),
+        let node = self.node().get_type_name();
+        Value {
+            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
         }
     }
 
@@ -85,6 +72,12 @@ impl Value {
 
 impl Value {
     pub(crate) fn node(self) -> ValueNode {
-        WIP.with_borrow(|wip| wip.node(self.index))
+        self.index.node()
+    }
+}
+
+impl ValueRef {
+    pub(crate) fn node(self) -> ValueNode {
+        WIP.with_borrow(|wip| wip.node(self))
     }
 }
