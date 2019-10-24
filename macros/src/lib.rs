@@ -5,6 +5,7 @@ extern crate proc_macro;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
+use syn::punctuated::Punctuated;
 use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
 
 use self::proc_macro::TokenStream;
@@ -54,7 +55,7 @@ enum Receiver {
 }
 
 enum Type {
-    Unit,
+    Tuple(Vec<Type>),
     Ident(Ident),
     Reference(Box<Type>),
     ReferenceMut(Box<Type>),
@@ -224,8 +225,8 @@ impl Parse for Type {
         if lookahead.peek(token::Paren) {
             let content;
             parenthesized!(content in input);
-            let _ = content;
-            Ok(Type::Unit)
+            let content: Punctuated<Type, Token![,]> = Punctuated::parse_terminated(&content)?;
+            Ok(Type::Tuple(content.into_iter().collect()))
         } else if lookahead.peek(Token![&]) {
             input.parse::<Token![&]>()?;
             let mut_token: Option<Token![mut]> = input.parse()?;
@@ -425,9 +426,12 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
 
 fn to_runtime_type(ty: &Type) -> TokenStream2 {
     match ty {
-        Type::Unit => quote! {
-            _reflect::Type::unit()
-        },
+        Type::Tuple(types) => {
+            let types = types.iter().map(to_runtime_type);
+            quote! {
+                _reflect::Type(_reflect::TypeNode::Tuple(vec![#(#types),*]))
+            }
+        }
         Type::Ident(ident) => quote! {
             _reflect::runtime::RuntimeType::SELF(#ident)
         },

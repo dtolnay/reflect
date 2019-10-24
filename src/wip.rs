@@ -115,7 +115,7 @@ impl WipFunction {
     }
 
     fn unit(&mut self) -> Value {
-        let node = ValueNode::Unit;
+        let node = ValueNode::Tuple(Vec::new());
         Value {
             index: self.values.index_push(node),
         }

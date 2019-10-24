@@ -22,7 +22,7 @@ pub struct Type(pub(crate) TypeNode);
 #[derive(Debug, Clone)]
 pub(crate) enum TypeNode {
     Infer,
-    Unit,
+    Tuple(Vec<Type>),
     PrimitiveStr,
     Reference {
         lifetime: Option<Lifetime>,
@@ -44,7 +44,7 @@ pub(crate) enum TypeNode {
 
 impl Type {
     pub fn unit() -> Self {
-        Type(TypeNode::Unit)
+        Type(TypeNode::Tuple(Vec::new()))
     }
 
     pub fn primitive_str() -> Self {
@@ -165,7 +165,10 @@ impl TypeNode {
         match self {
             Infer => panic!("Type::name_and_generics: Infer"),
 
-            Unit => (quote!(()), Vec::new(), Vec::new()),
+            Tuple(ref types) => {
+                let types = types.iter().map(Print::ref_cast);
+                (quote!((#(#types),*)), Vec::new(), Vec::new())
+            }
 
             PrimitiveStr => (quote!(str), Vec::new(), Vec::new()),
 

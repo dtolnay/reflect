@@ -24,7 +24,10 @@ impl ToTokens for Print<TypeNode> {
         use crate::TypeNode::*;
         tokens.append_all(match self.0 {
             Infer => quote!(_),
-            Unit => quote!(()),
+            Tuple(ref types) => {
+                let types = types.iter().map(Print::ref_cast);
+                quote!((#(#types),*))
+            }
             PrimitiveStr => quote!(str),
             Reference {
                 ref lifetime,

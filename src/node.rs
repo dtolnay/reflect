@@ -6,7 +6,7 @@ use crate::ValueRef;
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {
-    Unit,
+    Tuple(Vec<ValueRef>),
     Str(String),
     Reference(ValueRef),
     ReferenceMut(ValueRef),

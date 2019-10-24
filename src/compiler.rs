@@ -96,7 +96,8 @@ impl CompleteFunction {
         }
 
         let output = match self.f.sig.output {
-            Type(TypeNode::Unit) => None,
+            //FIXME: tuple
+            Type(TypeNode::Tuple(_)) => None,
             ref other => {
                 let ty = Print::ref_cast(other);
                 Some(quote!(-> #ty))
@@ -151,7 +152,7 @@ impl CompleteFunction {
         use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
             match self.values[v.0] {
-                Unit => {}
+                Tuple(_) => {}
                 Str(ref s) => {}
                 Reference(v) | ReferenceMut(v) | Dereference(v) => {
                     if reachable.insert(v) {
@@ -199,7 +200,10 @@ impl CompleteFunction {
 
     fn compile_value(&self, v: ValueRef) -> TokenStream {
         match self.values[v.0] {
-            ValueNode::Unit => quote! { () },
+            ValueNode::Tuple(ref values) => {
+                let values = values.iter().map(|v| v.binding());
+                quote! { (#(#values),*) }
+            }
             ValueNode::Str(ref s) => quote! { #s },
             ValueNode::Reference(v) => {
                 let v = v.binding();
