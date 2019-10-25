@@ -70,7 +70,7 @@ impl Value {
     }
 
     /// Returns a Value from a Tuple
-    pub fn get_tuple_value(&self, index: usize) -> Value {
+    pub fn get_tuple_value(&self, index: usize) -> Self {
         match self.index.node() {
             ValueNode::Tuple(values) => Value {
                 index: values[index],

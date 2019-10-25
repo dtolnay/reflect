@@ -81,7 +81,7 @@ impl Type {
         }
     }
 
-    pub fn data(&self) -> Data<Type> {
+    pub fn data(&self) -> Data<Self> {
         match self.0 {
             TypeNode::DataStructure { ref data, .. } => data.clone().map(|field| field.element),
             TypeNode::Reference {
@@ -107,14 +107,14 @@ impl Type {
     }
 
     /// Returns a Type from a Tuple
-    pub fn get_tuple_type(&self, index: usize) -> Type {
+    pub fn get_tuple_type(&self, index: usize) -> Self {
         match self.0 {
             TypeNode::Tuple(ref types) => types[index].clone(),
             _ => panic!("Type::get_tuple_type: Not a Tuple"),
         }
     }
 
-    pub(crate) fn syn_to_type(ty: syn::Type) -> Type {
+    pub(crate) fn syn_to_type(ty: syn::Type) -> Self {
         match ty {
             syn::Type::Path(syn::TypePath {
                 //FIXME: add qself to Path

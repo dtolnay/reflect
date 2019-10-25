@@ -100,7 +100,7 @@ pub(crate) struct Expr {
 }
 
 impl Generics {
-    pub(crate) fn syn_to_generics(generics: syn::Generics) -> Generics {
+    pub(crate) fn syn_to_generics(generics: syn::Generics) -> Self {
         let (params, mut constraints) = syn_to_generic_params(generics.params);
         if let Some(where_clause) = generics.where_clause {
             constraints.extend(syn_to_generic_constraints(where_clause));
@@ -228,8 +228,8 @@ where
         .collect()
 }
 
-impl GenericArguments {
-    pub(crate) fn syn_to_generic_argument(arg: syn::GenericArgument) -> GenericArgument {
+impl GenericArgument {
+    pub(crate) fn syn_to_generic_argument(arg: syn::GenericArgument) -> Self {
         match arg {
             syn::GenericArgument::Type(ty) => GenericArgument::Type(Type::syn_to_type(ty)),
 

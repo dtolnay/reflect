@@ -1,3 +1,4 @@
+use crate::GenericArgument;
 use crate::GenericArguments;
 use crate::Ident;
 use crate::Type;
@@ -36,7 +37,7 @@ pub(crate) struct ParenthesizedGenericArguments {
 }
 
 impl Path {
-    pub(crate) fn syn_to_path(path: syn::Path) -> Path {
+    pub(crate) fn syn_to_path(path: syn::Path) -> Self {
         match path {
             syn::Path {
                 leading_colon,
@@ -59,7 +60,7 @@ impl Path {
                                             args: generic_args
                                                 .args
                                                 .into_iter()
-                                                .map(GenericArguments::syn_to_generic_argument)
+                                                .map(GenericArgument::syn_to_generic_argument)
                                                 .collect(),
                                         },
                                     },
