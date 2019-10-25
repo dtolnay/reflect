@@ -68,6 +68,16 @@ impl Value {
             _ => panic!("Value::data"),
         }
     }
+
+    /// Returns a Value from a Tuple
+    pub fn get_tuple_value(&self, index: usize) -> Value {
+        match self.index.node() {
+            ValueNode::Tuple(values) => Value {
+                index: values[index],
+            },
+            _ => panic!("Value:get_tuple_value: Not a Tuple"),
+        }
+    }
 }
 
 impl Value {
