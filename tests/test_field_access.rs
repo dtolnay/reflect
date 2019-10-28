@@ -27,7 +27,7 @@ library! {
 }
 
 #[test]
-fn test_zero_args() {
+fn test_field_access() {
     let input = quote! {
         struct Test {
             pub test: String,
@@ -35,11 +35,11 @@ fn test_zero_args() {
     };
 
     let expected = quote! {
-        impl ::tuple::Tuple for Tuple
+        impl ::base::Trait for Test
         {
-            fn swap() {
-                let __v0 = ();
-                __v0
+            fn trivial(&self) {
+                let __v3 = ();
+                __v3
             }
         }
     };

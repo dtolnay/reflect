@@ -14,6 +14,7 @@ use ref_cast::RefCast;
 
 use proc_macro2::TokenStream;
 use quote::quote;
+use quote::ToTokens;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -159,9 +160,15 @@ impl Type {
 impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match *self {
+            //FIXME: Add more TypeNode branches
             TypeNode::DataStructure { ref name, .. } => name.to_string(),
             TypeNode::Reference { ref inner, .. } => (&**inner).get_name(),
             TypeNode::ReferenceMut { ref inner, .. } => (&**inner).get_name(),
+            TypeNode::Path(ref path) => {
+                let mut tokens = TokenStream::new();
+                Print::ref_cast(path).to_tokens(&mut tokens);
+                tokens.to_string()
+            }
             _ => panic!("Type::get_name"),
         }
     }

@@ -28,7 +28,7 @@ fn derive(ex: Execution) {
 }
 
 #[test]
-fn test_zero_args() {
+fn test_generics() {
     let input = quote! {
         struct Generics<'a, 'b,  T: ::simple::Bound + Send> where 'b: 'a {
             pub param: &'a &'b T
