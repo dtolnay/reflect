@@ -167,7 +167,9 @@ impl CompleteFunction {
                         }
                     }
                 }
-                Destructure { parent, ref field } => {
+                Destructure {
+                    parent, ref field, ..
+                } => {
                     if reachable.insert(parent) {
                         stack.push(parent);
                     }
@@ -234,7 +236,9 @@ impl CompleteFunction {
                     #parent #name ( #(#args),* )
                 }
             }
-            ValueNode::Destructure { parent, ref field } => {
+            ValueNode::Destructure {
+                parent, ref field, ..
+            } => {
                 let parent = parent.binding();
                 quote! {
                     &#parent.#field

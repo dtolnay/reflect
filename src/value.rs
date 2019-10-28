@@ -59,7 +59,8 @@ impl Value {
                 let node = ValueNode::Destructure {
                     parent: self.index,
                     // FIXME does not work for tuple struct fields
-                    field: Ident::new(ty.name),
+                    field: Ident::new(ty.name.clone()),
+                    ty: ty.element.clone(),
                 };
                 Value {
                     index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),

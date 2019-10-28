@@ -11,10 +11,20 @@ pub(crate) enum ValueNode {
     Reference(ValueRef),
     ReferenceMut(ValueRef),
     Dereference(ValueRef),
-    Binding { name: Ident, ty: Type },
-    DataStructure { name: String, data: Data<ValueRef> },
+    Binding {
+        name: Ident,
+        ty: Type,
+    },
+    DataStructure {
+        name: String,
+        data: Data<ValueRef>,
+    },
     Invoke(InvokeRef),
-    Destructure { parent: ValueRef, field: Ident },
+    Destructure {
+        parent: ValueRef,
+        field: Ident,
+        ty: Type,
+    },
 }
 
 impl ValueNode {
@@ -34,13 +44,15 @@ impl ValueNode {
                 let types = format!("({})", types.trim_end_matches(", "));
                 ValueNode::Str(types)
             }
+            ValueNode::Str(_) => ValueNode::Str(String::from("&str")),
             ValueNode::DataStructure { ref name, .. } => ValueNode::Str(name.to_owned()),
             ValueNode::Reference(v) => v.node().get_type_name().map_str(|s| format!("&{}", s)),
             ValueNode::ReferenceMut(v) => {
                 v.node().get_type_name().map_str(|s| format!("&mut {}", s))
             }
             ValueNode::Binding { ref ty, .. } => ValueNode::Str(ty.0.get_name()),
-            _ => panic!("Value::get_type_name"),
+            ValueNode::Destructure { parent, field, ty } => ValueNode::Str(ty.0.get_name()),
+            node => panic!("ValueNode::get_type_name"),
         }
     }
 
