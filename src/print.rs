@@ -1,16 +1,28 @@
 use crate::generics::*;
 use crate::path;
+use crate::Accessor;
 use crate::Ident;
 use crate::Type;
 use crate::TypeNode;
 
-use proc_macro2::{Punct, Spacing, TokenStream};
+use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
+use syn::LitInt;
 
 #[derive(RefCast)]
 #[repr(C)]
 pub(crate) struct Print<T>(T);
+
+impl ToTokens for Print<Accessor> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        use Accessor::*;
+        match self.0 {
+            Name(ref ident) => ident.to_tokens(tokens),
+            Index(ref i) => LitInt::new(&i.to_string(), Span::call_site()).to_tokens(tokens),
+        }
+    }
+}
 
 impl ToTokens for Print<Type> {
     fn to_tokens(&self, tokens: &mut TokenStream) {

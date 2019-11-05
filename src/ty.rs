@@ -48,6 +48,10 @@ impl Type {
         Type(TypeNode::Tuple(Vec::new()))
     }
 
+    pub fn tuple(types: &[Self]) -> Self {
+        Type(TypeNode::Tuple(Vec::from(types)))
+    }
+
     pub fn primitive_str() -> Self {
         Type(TypeNode::PrimitiveStr)
     }
@@ -159,8 +163,13 @@ impl Type {
 
 impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
-        match *self {
+        match self {
             //FIXME: Add more TypeNode branches
+            TypeNode::Tuple(ref types) => {
+                let types = types.iter().map(Print::ref_cast);
+                quote!((#(#types),*)).to_string()
+            }
+            TypeNode::PrimitiveStr => String::from("str"),
             TypeNode::DataStructure { ref name, .. } => name.to_string(),
             TypeNode::Reference { ref inner, .. } => (&**inner).get_name(),
             TypeNode::ReferenceMut { ref inner, .. } => (&**inner).get_name(),

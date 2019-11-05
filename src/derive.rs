@@ -1,3 +1,4 @@
+use crate::Accessor;
 use crate::CompleteFunction;
 use crate::CompleteImpl;
 use crate::Data;
@@ -47,37 +48,30 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
         name: Ident::from(input.ident),
         generics: Generics::syn_to_generics(input.generics),
         data: match input.data {
-            syn::Data::Struct(data) => {
-                match data.fields {
-                    syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
-                        fields: fields
-                            .named
-                            .into_iter()
-                            .map(|field| Field {
-                                name: field.ident.unwrap().to_string(),
-                                element: Type::syn_to_type(field.ty),
-                            })
-                            .collect(),
-                    })),
-                    syn::Fields::Unnamed(fields) => {
-                        Data::Struct(Struct::Tuple(TupleStruct {
-                            fields: fields
-                                .unnamed
-                                .into_iter()
-                                .enumerate()
-                                .map(|(i, field)| {
-                                    Field {
-                                        // FIXME store field index
-                                        name: i.to_string(),
-                                        element: Type::syn_to_type(field.ty),
-                                    }
-                                })
-                                .collect(),
-                        }))
-                    }
-                    syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: () })),
-                }
-            }
+            syn::Data::Struct(data) => match data.fields {
+                syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
+                    fields: fields
+                        .named
+                        .into_iter()
+                        .map(|field| Field {
+                            accessor: Accessor::Name(Ident::from(field.ident.unwrap())),
+                            element: Type::syn_to_type(field.ty),
+                        })
+                        .collect(),
+                })),
+                syn::Fields::Unnamed(fields) => Data::Struct(Struct::Tuple(TupleStruct {
+                    fields: fields
+                        .unnamed
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, field)| Field {
+                            accessor: Accessor::Index(i),
+                            element: Type::syn_to_type(field.ty),
+                        })
+                        .collect(),
+                })),
+                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: () })),
+            },
             syn::Data::Enum(data) => {
                 // FIXME convert enum variants
                 Data::Enum(Enum {

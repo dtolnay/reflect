@@ -318,6 +318,7 @@ fn declare_type(item: &ItemType) -> TokenStream2 {
 
     quote! {
         #[derive(Copy, Clone)]
+        #[allow(non_camel_case_types)]
         pub struct #name;
 
         impl _reflect::runtime::RuntimeType for #name {
@@ -429,7 +430,7 @@ fn to_runtime_type(ty: &Type) -> TokenStream2 {
         Type::Tuple(types) => {
             let types = types.iter().map(to_runtime_type);
             quote! {
-                _reflect::Type(_reflect::TypeNode::Tuple(vec![#(#types),*]))
+                _reflect::Type::tuple(&[#(#types),*])
             }
         }
         Type::Ident(ident) => quote! {

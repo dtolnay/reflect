@@ -1,3 +1,4 @@
+use crate::Accessor;
 use crate::Data;
 use crate::Ident;
 use crate::InvokeRef;
@@ -22,7 +23,7 @@ pub(crate) enum ValueNode {
     Invoke(InvokeRef),
     Destructure {
         parent: ValueRef,
-        field: Ident,
+        accessor: Accessor,
         ty: Type,
     },
 }
@@ -33,8 +34,8 @@ impl ValueNode {
             ValueNode::Tuple(ref types) => {
                 let types: String = types.iter().fold(String::from(""), |mut acc, v| {
                     match v.node().get_type_name() {
-                        ValueNode::Str(name) => {
-                            acc.push_str(&name);
+                        ValueNode::Str(ref name) => {
+                            acc.push_str(name);
                             acc.push_str(", ");
                             acc
                         }
@@ -44,25 +45,17 @@ impl ValueNode {
                 let types = format!("({})", types.trim_end_matches(", "));
                 ValueNode::Str(types)
             }
-            ValueNode::Str(_) => ValueNode::Str(String::from("&str")),
+            ValueNode::Str(_) => ValueNode::Str(String::from("str")),
             ValueNode::DataStructure { ref name, .. } => ValueNode::Str(name.to_owned()),
-            ValueNode::Reference(v) => v.node().get_type_name().map_str(|s| format!("&{}", s)),
-            ValueNode::ReferenceMut(v) => {
-                v.node().get_type_name().map_str(|s| format!("&mut {}", s))
-            }
+            ValueNode::Reference(v) => v.node().get_type_name(),
+            ValueNode::ReferenceMut(v) => v.node().get_type_name(),
             ValueNode::Binding { ref ty, .. } => ValueNode::Str(ty.0.get_name()),
-            ValueNode::Destructure { parent, field, ty } => ValueNode::Str(ty.0.get_name()),
+            ValueNode::Destructure {
+                parent,
+                accessor,
+                ty,
+            } => ValueNode::Str(ty.0.get_name()),
             node => panic!("ValueNode::get_type_name"),
-        }
-    }
-
-    fn map_str<F>(self, f: F) -> Self
-    where
-        F: FnOnce(String) -> String,
-    {
-        match self {
-            ValueNode::Str(s) => ValueNode::Str(f(s)),
-            other => other,
         }
     }
 }

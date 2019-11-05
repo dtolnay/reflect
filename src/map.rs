@@ -70,9 +70,9 @@ impl<T> Field<T> {
     where
         F: FnOnce(Field<T>) -> R,
     {
-        let name = self.name.clone();
+        let accessor = self.accessor.clone();
         Field {
-            name,
+            accessor,
             element: f(self),
         }
     }

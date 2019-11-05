@@ -96,8 +96,7 @@ impl CompleteFunction {
         }
 
         let output = match self.f.sig.output {
-            //FIXME: tuple
-            Type(TypeNode::Tuple(_)) => None,
+            Type(TypeNode::Tuple(ref types)) if types.is_empty() => None,
             ref other => {
                 let ty = Print::ref_cast(other);
                 Some(quote!(-> #ty))
@@ -146,13 +145,20 @@ impl CompleteFunction {
         let mut stack: Vec<_> = self.refs().filter(|v| self.is_important(*v)).collect();
 
         if let Some(ret) = self.ret {
+            stack.push(ret);
             reachable.insert(ret);
         }
 
         use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
             match self.values[v.0] {
-                Tuple(_) => {}
+                Tuple(ref values) => {
+                    for &v in values.iter() {
+                        if reachable.insert(v) {
+                            stack.extend(values);
+                        }
+                    }
+                }
                 Str(ref s) => {}
                 Reference(v) | ReferenceMut(v) | Dereference(v) => {
                     if reachable.insert(v) {
@@ -167,9 +173,7 @@ impl CompleteFunction {
                         }
                     }
                 }
-                Destructure {
-                    parent, ref field, ..
-                } => {
+                Destructure { parent, .. } => {
                     if reachable.insert(parent) {
                         stack.push(parent);
                     }
@@ -237,11 +241,15 @@ impl CompleteFunction {
                 }
             }
             ValueNode::Destructure {
-                parent, ref field, ..
+                parent,
+                ref accessor,
+                ..
             } => {
                 let parent = parent.binding();
+                let accessor = Print::ref_cast(accessor);
+
                 quote! {
-                    &#parent.#field
+                    &#parent.#accessor
                 }
             }
             ValueNode::DataStructure { .. } => unimplemented!(),

@@ -1,7 +1,9 @@
+use crate::Accessor;
 use crate::Data;
-use crate::Ident;
 use crate::Push;
 use crate::StaticBorrow;
+use crate::Type;
+use crate::TypeNode;
 use crate::ValueNode;
 use crate::ValueRef;
 use crate::WIP;
@@ -12,6 +14,13 @@ pub struct Value {
 }
 
 impl Value {
+    pub fn tuple(values: &[Self]) -> Self {
+        let node = ValueNode::Tuple(values.iter().map(|v| v.index).collect());
+        Value {
+            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+        }
+    }
+
     pub fn reference(&self) -> Self {
         let node = ValueNode::Reference(self.index);
         Value {
@@ -55,12 +64,11 @@ impl Value {
             Reference(v) => Value { index: v }.data().map(|v| v.element.reference()),
             ReferenceMut(v) => Value { index: v }.data().map(|v| v.element.reference_mut()),
             // FIXME generate match and propagate the binding
-            Binding { ref name, ref ty } => ty.data().map(|ty| {
+            Binding { ref name, ref ty } => ty.data().map(|field| {
                 let node = ValueNode::Destructure {
                     parent: self.index,
-                    // FIXME does not work for tuple struct fields
-                    field: Ident::new(ty.name.clone()),
-                    ty: ty.element.clone(),
+                    accessor: field.accessor.clone(),
+                    ty: field.element.clone(),
                 };
                 Value {
                     index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
@@ -76,6 +84,22 @@ impl Value {
             ValueNode::Tuple(values) => Value {
                 index: values[index],
             },
+            ValueNode::Binding {
+                ty: Type(TypeNode::Tuple(types)),
+                ..
+            } => {
+                if index >= types.len() {
+                    panic!("Value:get_tuple_value: Out of bounds")
+                }
+                let node = ValueNode::Destructure {
+                    parent: self.index,
+                    accessor: Accessor::Index(index),
+                    ty: types[index].clone(),
+                };
+                Value {
+                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+                }
+            }
             _ => panic!("Value:get_tuple_value: Not a Tuple"),
         }
     }
