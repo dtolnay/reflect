@@ -1,6 +1,7 @@
 use crate::Ident;
 use crate::MakeImpl;
 use crate::Module;
+use crate::Path;
 use crate::RuntimeType;
 use crate::Type;
 use crate::WipFunction;
@@ -58,8 +59,7 @@ impl Tracker {
     fn load_crate(&self, name: &str) -> Module {
         self.crates.borrow_mut().push(Ident::new(name));
         Module {
-            global: false,
-            path: vec![name.to_owned()],
+            path: Path::empty().get_path(name),
         }
     }
 

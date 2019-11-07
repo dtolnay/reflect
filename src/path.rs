@@ -4,7 +4,8 @@ use crate::Ident;
 use crate::Type;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Path {
+// Consider just using syn::Path
+pub struct Path {
     pub(crate) global: bool,
     pub(crate) path: Vec<PathSegment>,
 }
@@ -37,6 +38,29 @@ pub(crate) struct ParenthesizedGenericArguments {
 }
 
 impl Path {
+    pub(crate) fn root() -> Self {
+        Path {
+            global: true,
+            path: Vec::new(),
+        }
+    }
+
+    pub(crate) fn empty() -> Self {
+        Path {
+            global: false,
+            path: Vec::new(),
+        }
+    }
+
+    pub(crate) fn get_path(&self, segment: &str) -> Self {
+        let mut path = self.clone();
+        path.path.push(PathSegment {
+            ident: Ident::new(segment),
+            args: PathArguments::None,
+        });
+        path
+    }
+
     pub(crate) fn syn_to_path(path: syn::Path) -> Self {
         match path {
             syn::Path {

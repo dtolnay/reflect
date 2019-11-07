@@ -355,6 +355,7 @@ pub use crate::field::{Field, Fields};
 pub use crate::function::Function;
 pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
+pub use crate::path::Path;
 pub use crate::signature::Signature;
 pub use crate::ty::Type;
 pub use crate::value::Value;
@@ -363,12 +364,12 @@ pub use crate::wip::{MakeFunction, MakeImpl};
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
-use crate::generics::{GenericArgument, GenericConstraint, GenericParam, Lifetime, TypeParamBound};
+use crate::generics::{
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParamBound,
+};
 use crate::ident::Ident;
 use crate::index::{InvokeRef, Push, ValueRef};
 use crate::node::ValueNode;
-use crate::path::Path;
-use crate::path::{PathArguments, PathSegment};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeType};
 use crate::signature::Receiver;

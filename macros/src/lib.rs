@@ -57,6 +57,7 @@ enum Receiver {
 enum Type {
     Tuple(Vec<Type>),
     Ident(Ident),
+    TraitObject(Vec<Ident>),
     Reference(Box<Type>),
     ReferenceMut(Box<Type>),
 }
@@ -236,6 +237,10 @@ impl Parse for Type {
             } else {
                 Ok(Type::Reference(Box::new(inner)))
             }
+        } else if lookahead.peek(Token![dyn]) {
+            let _: Token![dyn] = input.parse()?;
+            let bounds: Punctuated<Ident, Token![+]> = Punctuated::parse_terminated(&input)?;
+            Ok(Type::TraitObject(bounds.into_iter().collect()))
         } else if lookahead.peek(Ident) {
             input.parse().map(Type::Ident)
         } else {
@@ -344,12 +349,20 @@ fn declare_trait(item: &ItemTrait) -> TokenStream2 {
     let d_type = declare_type(&ItemType {
         name: item.name.clone(),
     });
+    let name = &item.name;
+    let name_str = name.to_string();
 
     let parent = &item.name;
     let functions = item.functions.iter().map(|f| declare_function(parent, f));
 
     quote! {
         #d_type
+
+        impl _reflect::runtime::RuntimeTrait for #name {
+            fn SELF(self) -> _reflect::Path {
+                MODULE().get_path(#name_str)
+            }
+        }
         #(
             #functions
         )*
@@ -436,6 +449,13 @@ fn to_runtime_type(ty: &Type) -> TokenStream2 {
         Type::Ident(ident) => quote! {
             _reflect::runtime::RuntimeType::SELF(#ident)
         },
+        Type::TraitObject(bounds) => {
+            quote! {
+                _reflect::runtime::RuntimeTraitObject::SELF(&[
+                    #(_reflect::runtime::RuntimeTrait::SELF(#bounds)),*
+                ] as &[_])
+            }
+        }
         Type::Reference(inner) => {
             let inner = to_runtime_type(inner);
             quote! {
