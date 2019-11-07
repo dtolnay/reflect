@@ -227,7 +227,13 @@ impl Parse for Type {
             let content;
             parenthesized!(content in input);
             let content: Punctuated<Type, Token![,]> = Punctuated::parse_terminated(&content)?;
-            Ok(Type::Tuple(content.into_iter().collect()))
+            if content.len() == 1 && !content.trailing_punct() {
+                // It is not a tuple. The parentheses were just used to
+                // disambiguate the type.
+                Ok(content.into_iter().next().unwrap())
+            } else {
+                Ok(Type::Tuple(content.into_iter().collect()))
+            }
         } else if lookahead.peek(Token![&]) {
             input.parse::<Token![&]>()?;
             let mut_token: Option<Token![mut]> = input.parse()?;

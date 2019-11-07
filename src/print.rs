@@ -37,8 +37,13 @@ impl ToTokens for Print<TypeNode> {
         tokens.append_all(match self.0 {
             Infer => quote!(_),
             Tuple(ref types) => {
-                let types = types.iter().map(Print::ref_cast);
-                quote!((#(#types),*))
+                if types.len() == 1 {
+                    let ty = Print::ref_cast(&types[0]);
+                    quote!((#ty,))
+                } else {
+                    let types = types.iter().map(Print::ref_cast);
+                    quote!((#(#types),*))
+                }
             }
             PrimitiveStr => quote!(str),
             Reference {

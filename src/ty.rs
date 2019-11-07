@@ -146,8 +146,18 @@ impl Type {
             syn::Type::Tuple(type_tuple) => {
                 if type_tuple.elems.is_empty() {
                     Type::unit()
+                } else if type_tuple.elems.len() == 1 && !type_tuple.elems.trailing_punct() {
+                    // It is not a tuple. The parentheses were just used to
+                    // disambiguate the type.
+                    Self::syn_to_type(type_tuple.elems.into_iter().next().unwrap())
                 } else {
-                    unimplemented!("Type::syn_to_type: type tuple")
+                    Type(TypeNode::Tuple(
+                        type_tuple
+                            .elems
+                            .into_iter()
+                            .map(Self::syn_to_type)
+                            .collect(),
+                    ))
                 }
             }
             _ => unimplemented!("Type::syn_to_type"),
