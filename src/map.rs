@@ -71,7 +71,10 @@ impl<T> Field<T> {
         F: FnOnce(Field<T>) -> R,
     {
         let accessor = self.accessor.clone();
+        let attrs = self.attrs.clone();
+
         Field {
+            attrs,
             accessor,
             element: f(self),
         }

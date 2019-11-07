@@ -6,7 +6,8 @@ use crate::Value;
 use crate::ValueNode;
 use crate::WIP;
 
-use std::fmt::{self, Display};
+use quote::ToTokens;
+use std::fmt::{self, Debug, Display};
 use std::vec;
 
 #[derive(Debug, Clone)]
@@ -28,18 +29,42 @@ pub(crate) enum Accessor {
     Index(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Field<T> {
     pub(crate) accessor: Accessor,
     pub(crate) element: T,
+    pub(crate) attrs: Vec<syn::Attribute>,
+}
+
+impl<T: Debug> Debug for Field<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct FieldDebug<'a, T> {
+            accessor: &'a Accessor,
+            element: &'a T,
+            attrs: Vec<String>,
+        }
+
+        let view = FieldDebug {
+            accessor: &self.accessor,
+            element: &self.element,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
 }
 
 impl Display for Accessor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use crate::Accessor::*;
         match self {
-            Name(ident) => ident.fmt(f),
-            Index(i) => i.fmt(f),
+            Name(ident) => Display::fmt(ident, f),
+            Index(i) => Display::fmt(i, f),
         }
     }
 }
@@ -50,6 +75,10 @@ impl Field<Value> {
         Value {
             index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
         }
+    }
+
+    pub fn get_attrs(&self) -> &[syn::Attribute] {
+        &self.attrs
     }
 }
 

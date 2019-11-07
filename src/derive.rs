@@ -54,6 +54,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                         .named
                         .into_iter()
                         .map(|field| Field {
+                            attrs: field.attrs,
                             accessor: Accessor::Name(Ident::from(field.ident.unwrap())),
                             element: Type::syn_to_type(field.ty),
                         })
@@ -65,6 +66,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                         .into_iter()
                         .enumerate()
                         .map(|(i, field)| Field {
+                            attrs: field.attrs,
                             accessor: Accessor::Index(i),
                             element: Type::syn_to_type(field.ty),
                         })
