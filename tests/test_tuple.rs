@@ -1,19 +1,6 @@
 use quote::quote;
 use reflect::*;
 
-mod tuple {
-
-    #[derive(Copy, Clone)]
-    pub(super) struct One;
-
-    #[derive(Copy, Clone)]
-    pub(super) struct Two;
-
-    pub(super) trait Tuple {
-        fn swap(tuple: (One, Two)) -> (Two, One);
-    }
-}
-
 library! {
     use tuple {
         type One;

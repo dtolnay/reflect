@@ -1,12 +1,6 @@
 use quote::quote;
 use reflect::*;
 
-mod zero {
-    pub(super) trait Zero {
-        fn zero();
-    }
-}
-
 library! {
     use zero {
         trait Zero {

@@ -1,14 +1,6 @@
 use quote::quote;
 use reflect::*;
 
-mod simple {
-    pub(super) trait Simple {
-        fn simple();
-    }
-
-    pub(super) trait Bound {}
-}
-
 library! {
     use simple {
         trait Simple {
