@@ -4,9 +4,9 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::parse::{Parse, ParseStream, Result};
+use syn::parse::{Parse, ParseBuffer, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
+use syn::{braced, parenthesized, parse_macro_input, token, Error, Ident, Token};
 
 use self::proc_macro::TokenStream;
 
@@ -19,6 +19,7 @@ enum Item {
     Type(ItemType),
     Impl(ItemImpl),
     Trait(ItemTrait),
+    Macro(ItemMacro),
 }
 
 struct ItemMod {
@@ -45,6 +46,10 @@ struct Function {
     receiver: Receiver,
     args: Vec<Type>,
     ret: Option<Type>,
+}
+
+struct ItemMacro {
+    name: Ident,
 }
 
 enum Receiver {
@@ -92,6 +97,8 @@ impl Parse for Item {
             input.parse().map(Item::Impl)
         } else if lookahead.peek(Token![trait]) {
             input.parse().map(Item::Trait)
+        } else if lookahead.peek(Token![macro]) {
+            input.parse().map(Item::Macro)
         } else {
             Err(lookahead.error())
         }
@@ -255,6 +262,17 @@ impl Parse for Type {
     }
 }
 
+impl Parse for ItemMacro {
+    fn parse(input: ParseStream) -> Result<Self> {
+        input.parse::<Token![macro]>()?;
+
+        let name: Ident = input.parse()?;
+        input.parse::<Token![;]>()?;
+
+        Ok(Self { name })
+    }
+}
+
 impl Receiver {
     fn is_none(&self) -> bool {
         use self::Receiver::*;
@@ -320,6 +338,7 @@ fn declare_item(item: &Item) -> TokenStream2 {
         Item::Type(item) => declare_type(item),
         Item::Impl(item) => declare_impl(item),
         Item::Trait(item) => declare_trait(item),
+        Item::Macro(item) => declare_macro(item),
     }
 }
 
@@ -439,6 +458,29 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                     #[allow(non_upper_case_globals)]
                     pub const #name: #name = #name;
                 }
+            }
+        }
+    }
+}
+
+fn declare_macro(item: &ItemMacro) -> TokenStream2 {
+    let name = &item.name;
+    let macro_name = name.to_string();
+
+    quote! {
+        #[warn(non_camel_case_types)]
+        #[derive(Copy, Clone)]
+        pub struct #name;
+
+        impl #name {
+            #[allow(non_upper_case_globals)]
+            pub const #name: #name = #name;
+
+            pub fn INVOKE(
+                self,
+                values: &[_reflect::Value],
+            ) -> _reflect::Value {
+                _reflect::Module::root().invoke_macro(#macro_name, values)
             }
         }
     }

@@ -103,11 +103,13 @@ fn tracker_to_program(tracker: Tracker) -> Program {
                         let function: WipFunction = function;
                         let values = function.values;
                         let invokes = function.invokes;
+                        let macros = function.macros;
                         CompleteFunction {
                             self_ty: function.self_ty,
                             f: function.f,
                             values,
                             invokes,
+                            macros,
                             ret: function.ret,
                         }
                     })

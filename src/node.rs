@@ -26,6 +26,7 @@ pub(crate) enum ValueNode {
         accessor: Accessor,
         ty: Type,
     },
+    MacroInvocation(InvokeRef),
 }
 
 impl ValueNode {

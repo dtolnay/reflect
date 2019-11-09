@@ -374,4 +374,4 @@ use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeType};
 use crate::signature::Receiver;
 use crate::ty::TypeNode;
-use crate::wip::{Invoke, WipFunction, WipImpl};
+use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};
