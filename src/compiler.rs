@@ -8,7 +8,7 @@ use crate::TypeNode;
 use crate::ValueNode;
 use crate::ValueRef;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
 
@@ -106,6 +106,11 @@ impl CompleteFunction {
         let reachable = self.compute_reachability();
         let mutable = self.compute_mutability();
         let values = self.refs().flat_map(|v| {
+            // Don't create let bindings for string literals as they're will be inlined
+            if let ValueNode::Str(_) = self.values[v.0] {
+                return None;
+            }
+
             let expr = self.compile_value(v);
             if reachable.contains(&v) {
                 let let_mut = if mutable.contains(&v) {
@@ -207,8 +212,11 @@ impl CompleteFunction {
     fn compile_value(&self, v: ValueRef) -> TokenStream {
         match self.values[v.0] {
             ValueNode::Tuple(ref values) => {
-                let values = values.iter().map(|v| v.binding());
-                quote! { (#(#values),*) }
+                let values = self.make_values_list(values);
+
+                quote! {
+                    ( #values )
+                }
             }
             ValueNode::Str(ref s) => quote! { #s },
             ValueNode::Reference(v) => {
@@ -234,10 +242,10 @@ impl CompleteFunction {
                     None => None,
                 };
                 let name = Ident::new(&invoke.function.name);
-                let args = invoke.args.iter().map(|value| value.binding());
+                let args = self.make_values_list(&invoke.args);
 
                 quote! {
-                    #parent #name ( #(#args),* )
+                    #parent #name ( #args )
                 }
             }
             ValueNode::Destructure {
@@ -254,6 +262,16 @@ impl CompleteFunction {
             }
             ValueNode::DataStructure { .. } => unimplemented!(),
         }
+    }
+
+    /// Makes a list of comma-separated values with string literals inlined
+    fn make_values_list(&self, values: &[ValueRef]) -> TokenStream {
+        let values = values.iter().map(|value| match &self.values[value.0] {
+            ValueNode::Str(s) => self.compile_value(*value),
+            _ => value.binding().to_token_stream(),
+        });
+
+        quote! { #(#values),* }
     }
 }
 

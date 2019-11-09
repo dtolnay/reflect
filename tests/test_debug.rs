@@ -31,15 +31,12 @@ fn test_debug() {
 
                 let __v0 = self;
                 let __v1 = __arg0;
-                let __v2 = "Point";
                 let __v3 = &__v0.x;
                 let __v4 = &__v0.y;
-                let mut __v5 = ::std::fmt::Formatter::debug_struct(__v1, __v2);
+                let mut __v5 = ::std::fmt::Formatter::debug_struct(__v1, "Point");
                 let __v6 = &mut __v5;
-                let __v7 = "x";
-                let _ = ::std::fmt::DebugStruct::field(__v6, __v7, __v3);
-                let __v9 = "y";
-                let _ = ::std::fmt::DebugStruct::field(__v6, __v9, __v4);
+                let _ = ::std::fmt::DebugStruct::field(__v6, "x", __v3);
+                let _ = ::std::fmt::DebugStruct::field(__v6, "y", __v4);
                 let __v11 = ::std::fmt::DebugStruct::finish(__v6);
                 __v11
             }
