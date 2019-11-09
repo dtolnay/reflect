@@ -273,13 +273,11 @@ impl CompleteFunction {
             ValueNode::MacroInvocation(invoke) => {
                 let invoke = &self.macros[invoke.0];
                 let name = Ident::new(&invoke.macro_name);
-                let args = invoke.args.iter().map(|value| value.binding());
+                let args = self.make_values_list(&invoke.args);
 
                 let tokens = quote! {
-                    #name ! ( #(#args),* )
+                    #name ! ( #args )
                 };
-
-                println!("{}", tokens.to_string());
 
                 tokens
             }

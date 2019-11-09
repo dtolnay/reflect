@@ -4,9 +4,9 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::parse::{Parse, ParseBuffer, ParseStream, Result};
+use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, parenthesized, parse_macro_input, token, Error, Ident, Token};
+use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
 
 use self::proc_macro::TokenStream;
 
@@ -468,7 +468,7 @@ fn declare_macro(item: &ItemMacro) -> TokenStream2 {
     let macro_name = name.to_string();
 
     quote! {
-        #[warn(non_camel_case_types)]
+        #[allow(non_camel_case_types)]
         #[derive(Copy, Clone)]
         pub struct #name;
 

@@ -16,8 +16,8 @@ impl<T> Data<T> {
         F: FnMut(Field<T>) -> R,
     {
         match self {
-            Data::Struct(data) => Data::Struct(data.map(f)),
-            Data::Enum(data) => Data::Enum(data.map(f)),
+            Data::Struct(data, attrs) => Data::Struct(data.map(f), attrs),
+            Data::Enum(data, attrs) => Data::Enum(data.map(f), attrs),
         }
     }
 }

@@ -357,7 +357,7 @@ pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
 pub use crate::path::Path;
 pub use crate::signature::Signature;
-pub use crate::ty::Type;
+pub use crate::ty::{AttributeWrapper, Type};
 pub use crate::value::Value;
 pub use crate::wip::{MakeFunction, MakeImpl};
 

@@ -3,9 +3,8 @@ use crate::Path;
 use crate::Type;
 use crate::TypeNode;
 use crate::WIP;
-use crate::{Ident, MacroInvoke, Value, ValueNode};
+use crate::{MacroInvoke, Value, ValueNode};
 
-use std::iter::once;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]

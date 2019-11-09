@@ -2,12 +2,13 @@ use crate::Field;
 use crate::Fields;
 use crate::Value;
 
+use crate::ty::AttributeWrapper;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 pub enum Data<T> {
-    Struct(Struct<T>),
-    Enum(Enum<T>),
+    Struct(Struct<T>, Vec<AttributeWrapper>),
+    Enum(Enum<T>, Vec<AttributeWrapper>),
 }
 
 #[derive(Debug, Clone)]

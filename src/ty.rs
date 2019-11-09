@@ -15,6 +15,7 @@ use ref_cast::RefCast;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -39,8 +40,24 @@ pub(crate) enum TypeNode {
         name: Ident,
         generics: Generics,
         data: Data<Type>,
+        attrs: Vec<AttributeWrapper>,
     },
     Path(Path),
+}
+
+#[derive(Clone)]
+pub struct AttributeWrapper(pub syn::Attribute);
+
+impl Debug for AttributeWrapper {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "{}", self.0.to_token_stream())
+    }
+}
+
+impl std::convert::From<syn::Attribute> for AttributeWrapper {
+    fn from(attr: syn::Attribute) -> Self {
+        Self(attr)
+    }
 }
 
 impl Type {

@@ -36,7 +36,7 @@ fn debug_fmt(f: MakeFunction) -> Value {
     let type_name = receiver.get_type_name();
 
     match receiver.data() {
-        Data::Struct(receiver) => match receiver {
+        Data::Struct(receiver, ..) => match receiver {
             Struct::Unit(_receiver) => unimplemented!(),
             Struct::Tuple(_receiver) => unimplemented!(),
             Struct::Struct(receiver) => {
@@ -55,7 +55,7 @@ fn debug_fmt(f: MakeFunction) -> Value {
                 RUNTIME::std::fmt::DebugStruct::finish.INVOKE(builder)
             }
         },
-        Data::Enum(receiver) => receiver.match_variant(|variant| match variant {
+        Data::Enum(receiver, ..) => receiver.match_variant(|variant| match variant {
             Variant::Unit(_variant) => unimplemented!(),
             Variant::Tuple(_variant) => unimplemented!(),
             Variant::Struct(_variant) => unimplemented!(),
