@@ -7,8 +7,8 @@ use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 pub enum Data<T> {
-    Struct(Struct<T>, Vec<AttributeWrapper>),
-    Enum(Enum<T>, Vec<AttributeWrapper>),
+    Struct(Struct<T>),
+    Enum(Enum<T>),
 }
 
 #[derive(Debug, Clone)]
@@ -21,16 +21,19 @@ pub enum Struct<T> {
 #[derive(Debug, Clone)]
 pub struct UnitStruct {
     pub(crate) private: (),
+    pub(crate) attrs: Vec<AttributeWrapper>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TupleStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
+    pub(crate) attrs: Vec<AttributeWrapper>,
 }
 
 #[derive(Debug, Clone)]
 pub struct StructStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
+    pub(crate) attrs: Vec<AttributeWrapper>,
 }
 
 impl<T> Struct<T> {
@@ -58,6 +61,10 @@ impl<T> TupleStruct<T> {
             fields: self.fields.clone().into_iter(),
         }
     }
+
+    pub fn attrs(&self) -> &[AttributeWrapper] {
+        &self.attrs
+    }
 }
 
 impl<T> StructStruct<T> {
@@ -69,11 +76,16 @@ impl<T> StructStruct<T> {
             fields: self.fields.clone().into_iter(),
         }
     }
+
+    pub fn attrs(&self) -> &[AttributeWrapper] {
+        &self.attrs
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Enum<T> {
     pub(crate) variants: Vec<Variant<T>>,
+    pub(crate) attrs: Vec<AttributeWrapper>,
 }
 
 impl Enum<Value> {
@@ -87,6 +99,10 @@ impl Enum<Value> {
         }
         // FIXME introduce a match node
         unimplemented!()
+    }
+
+    pub fn attrs(&self) -> &[AttributeWrapper] {
+        &self.attrs
     }
 }
 

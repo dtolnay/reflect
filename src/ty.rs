@@ -40,7 +40,6 @@ pub(crate) enum TypeNode {
         name: Ident,
         generics: Generics,
         data: Data<Type>,
-        attrs: Vec<AttributeWrapper>,
     },
     Path(Path),
 }

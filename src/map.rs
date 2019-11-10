@@ -16,8 +16,8 @@ impl<T> Data<T> {
         F: FnMut(Field<T>) -> R,
     {
         match self {
-            Data::Struct(data, attrs) => Data::Struct(data.map(f), attrs),
-            Data::Enum(data, attrs) => Data::Enum(data.map(f), attrs),
+            Data::Struct(data) => Data::Struct(data.map(f)),
+            Data::Enum(data) => Data::Enum(data.map(f)),
         }
     }
 }
@@ -46,6 +46,7 @@ impl<T> TupleStruct<T> {
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
+            attrs: self.attrs,
         }
     }
 }
@@ -61,6 +62,7 @@ impl<T> StructStruct<T> {
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
+            attrs: self.attrs,
         }
     }
 }
@@ -88,6 +90,7 @@ impl<T> Enum<T> {
     {
         Enum {
             variants: self.variants.into_iter().map(|v| v.map(&mut f)).collect(),
+            attrs: self.attrs,
         }
     }
 }

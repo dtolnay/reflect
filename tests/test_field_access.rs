@@ -14,7 +14,7 @@ fn derive(ex: Execution) {
         block.make_function(RUNTIME::base::Trait::trivial, |make_function| {
             let receiver = make_function.arg(0);
             match receiver.data() {
-                Data::Struct(Struct::Struct(receiver), ..) => {
+                Data::Struct(Struct::Struct(receiver)) => {
                     for field in receiver.fields() {
                         if should_skip(&field) {
                             continue;

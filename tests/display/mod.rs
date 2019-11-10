@@ -28,12 +28,17 @@ fn display_fmt(f: MakeFunction) -> Value {
 
     let type_name = receiver.get_type_name();
     match receiver.data() {
-        Data::Struct(receiver, attrs) => match receiver {
+        Data::Struct(receiver) => match receiver {
             Struct::Unit(_receiver) => unimplemented!(),
             Struct::Tuple(_receiver) => unimplemented!(),
             Struct::Struct(receiver) => {
                 let num_fields = receiver.fields().count();
-                let attrs = attrs.into_iter().map(|a| a.0).collect::<Vec<_>>();
+                let attrs = receiver
+                    .attrs()
+                    .iter()
+                    .cloned()
+                    .map(|a| a.0)
+                    .collect::<Vec<_>>();
                 let doc_comment = extract_doc_comment(&attrs);
                 let fmt_string = format!("{} ", doc_comment.unwrap_or("{}".to_owned()));
 
@@ -62,7 +67,7 @@ fn display_fmt(f: MakeFunction) -> Value {
                 last_write
             }
         },
-        Data::Enum(receiver, ..) => receiver.match_variant(|variant| match variant {
+        Data::Enum(receiver) => receiver.match_variant(|variant| match variant {
             Variant::Unit(_variant) => unimplemented!(),
             Variant::Tuple(_variant) => unimplemented!(),
             Variant::Struct(_variant) => unimplemented!(),
