@@ -17,7 +17,7 @@ travis-ci = { repository = "dtolnay/reflect" }
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-ref-cast = "0.2"
+ref-cast = "1.0"
 reflect-internal = { version = "0.0.4", path = "macros" }
 syn = "1.0"
 
