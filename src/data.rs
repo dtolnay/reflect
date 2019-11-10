@@ -2,13 +2,25 @@ use crate::Field;
 use crate::Fields;
 use crate::Value;
 
-use crate::ty::AttributeWrapper;
+use std::fmt;
+use std::fmt::Debug;
 use std::marker::PhantomData;
+
+use quote::ToTokens;
 
 #[derive(Debug, Clone)]
 pub enum Data<T> {
     Struct(Struct<T>),
     Enum(Enum<T>),
+}
+
+impl<T> Data<T> {
+    pub fn attrs(&self) -> &[syn::Attribute] {
+        match &self {
+            Data::Struct(s) => &s.attrs(),
+            Data::Enum(e) => &e.attrs,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -18,22 +30,95 @@ pub enum Struct<T> {
     Struct(StructStruct<T>),
 }
 
-#[derive(Debug, Clone)]
+impl<T> Struct<T> {
+    pub fn attrs(&self) -> &[syn::Attribute] {
+        match &self {
+            Struct::Unit(us) => &us.attrs,
+            Struct::Tuple(ts) => &ts.attrs,
+            Struct::Struct(ss) => &ss.attrs,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct UnitStruct {
     pub(crate) private: (),
-    pub(crate) attrs: Vec<AttributeWrapper>,
+    pub(crate) attrs: Vec<syn::Attribute>,
 }
 
-#[derive(Debug, Clone)]
+impl Debug for UnitStruct {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct UnitStructDebug {
+            private: (),
+            attrs: Vec<String>,
+        }
+
+        let view = UnitStructDebug {
+            private: self.private,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
+}
+
+#[derive(Clone)]
 pub struct TupleStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
-    pub(crate) attrs: Vec<AttributeWrapper>,
+    pub(crate) attrs: Vec<syn::Attribute>,
 }
 
-#[derive(Debug, Clone)]
+impl<T: Debug> Debug for TupleStruct<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct TupleStructDebug<'a, T> {
+            fields: &'a Vec<Field<T>>,
+            attrs: Vec<String>,
+        }
+
+        let view = TupleStructDebug {
+            fields: &self.fields,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
+}
+
+#[derive(Clone)]
 pub struct StructStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
-    pub(crate) attrs: Vec<AttributeWrapper>,
+    pub(crate) attrs: Vec<syn::Attribute>,
+}
+
+impl<T: Debug> Debug for StructStruct<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct StructStructDebug<'a, T> {
+            fields: &'a Vec<Field<T>>,
+            attrs: Vec<String>,
+        }
+
+        let view = StructStructDebug {
+            fields: &self.fields,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
 }
 
 impl<T> Struct<T> {
@@ -62,7 +147,7 @@ impl<T> TupleStruct<T> {
         }
     }
 
-    pub fn attrs(&self) -> &[AttributeWrapper] {
+    pub fn attrs(&self) -> &[syn::Attribute] {
         &self.attrs
     }
 }
@@ -77,15 +162,36 @@ impl<T> StructStruct<T> {
         }
     }
 
-    pub fn attrs(&self) -> &[AttributeWrapper] {
+    pub fn attrs(&self) -> &[syn::Attribute] {
         &self.attrs
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Enum<T> {
     pub(crate) variants: Vec<Variant<T>>,
-    pub(crate) attrs: Vec<AttributeWrapper>,
+    pub(crate) attrs: Vec<syn::Attribute>,
+}
+
+impl<T: Debug> Debug for Enum<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct EnumDebug<'a, T> {
+            variants: &'a Vec<Variant<T>>,
+            attrs: Vec<String>,
+        }
+
+        let view = EnumDebug {
+            variants: &self.variants,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
 }
 
 impl Enum<Value> {
@@ -101,7 +207,7 @@ impl Enum<Value> {
         unimplemented!()
     }
 
-    pub fn attrs(&self) -> &[AttributeWrapper] {
+    pub fn attrs(&self) -> &[syn::Attribute] {
         &self.attrs
     }
 }
@@ -113,17 +219,93 @@ pub enum Variant<T> {
     Struct(StructVariant<T>),
 }
 
-#[derive(Debug, Clone)]
+impl<T> Variant<T> {
+    pub fn attrs(&self) -> &[syn::Attribute] {
+        match &self {
+            Variant::Unit(uv) => &uv.attrs,
+            Variant::Tuple(tv) => &tv.attrs,
+            Variant::Struct(sv) => &sv.attrs,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct UnitVariant {
     pub(crate) private: (),
+    pub(crate) attrs: Vec<syn::Attribute>,
 }
 
-#[derive(Debug, Clone)]
+impl Debug for UnitVariant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct UnitVariantDebug {
+            private: (),
+            attrs: Vec<String>,
+        }
+
+        let view = UnitVariantDebug {
+            private: self.private,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
+}
+
+#[derive(Clone)]
 pub struct TupleVariant<T> {
     pub(crate) phantom: PhantomData<T>,
+    pub(crate) attrs: Vec<syn::Attribute>,
 }
 
-#[derive(Debug, Clone)]
+impl<T: Debug> Debug for TupleVariant<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct TupleVariantDebug<T> {
+            phantom: PhantomData<T>,
+            attrs: Vec<String>,
+        }
+
+        let view = TupleVariantDebug {
+            phantom: PhantomData::<T>,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
+}
+
+#[derive(Clone)]
 pub struct StructVariant<T> {
     pub(crate) phantom: PhantomData<T>,
+    pub(crate) attrs: Vec<syn::Attribute>,
+}
+
+impl<T: Debug> Debug for StructVariant<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct StructVariantDebug<T> {
+            phantom: PhantomData<T>,
+            attrs: Vec<String>,
+        }
+
+        let view = StructVariantDebug {
+            phantom: PhantomData::<T>,
+            attrs: self
+                .attrs
+                .iter()
+                .map(|a| a.to_token_stream().to_string())
+                .collect(),
+        };
+
+        Debug::fmt(&view, f)
+    }
 }

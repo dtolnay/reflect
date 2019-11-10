@@ -114,6 +114,7 @@ impl<T> TupleVariant<T> {
         F: FnMut(Field<T>) -> R,
     {
         TupleVariant {
+            attrs: self.attrs,
             phantom: PhantomData,
         }
     }
@@ -125,6 +126,7 @@ impl<T> StructVariant<T> {
         F: FnMut(Field<T>) -> R,
     {
         StructVariant {
+            attrs: self.attrs,
             phantom: PhantomData,
         }
     }

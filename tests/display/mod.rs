@@ -33,13 +33,8 @@ fn display_fmt(f: MakeFunction) -> Value {
             Struct::Tuple(_receiver) => unimplemented!(),
             Struct::Struct(receiver) => {
                 let num_fields = receiver.fields().count();
-                let attrs = receiver
-                    .attrs()
-                    .iter()
-                    .cloned()
-                    .map(|a| a.0)
-                    .collect::<Vec<_>>();
-                let doc_comment = extract_doc_comment(&attrs);
+                let attrs = receiver.attrs();
+                let doc_comment = extract_doc_comment(attrs);
                 let fmt_string = format!("{} ", doc_comment.unwrap_or("{}".to_owned()));
 
                 let mut last_write = if !fmt_string.contains("{") {
