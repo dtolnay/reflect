@@ -2,6 +2,7 @@ use crate::Accessor;
 use crate::Data;
 use crate::Ident;
 use crate::InvokeRef;
+use crate::MacroInvokeRef;
 use crate::Type;
 use crate::ValueRef;
 
@@ -26,7 +27,7 @@ pub(crate) enum ValueNode {
         accessor: Accessor,
         ty: Type,
     },
-    MacroInvocation(InvokeRef),
+    MacroInvocation(MacroInvokeRef),
 }
 
 impl ValueNode {

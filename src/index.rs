@@ -46,10 +46,13 @@ impl TypedIndex for Invoke {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MacroInvokeRef(pub usize);
+
 impl TypedIndex for MacroInvoke {
-    type Index = InvokeRef;
+    type Index = MacroInvokeRef;
 
     fn index(i: usize) -> Self::Index {
-        InvokeRef(i)
+        MacroInvokeRef(i)
     }
 }

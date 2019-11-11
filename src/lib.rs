@@ -368,7 +368,7 @@ use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParamBound,
 };
 use crate::ident::Ident;
-use crate::index::{InvokeRef, Push, ValueRef};
+use crate::index::{InvokeRef, MacroInvokeRef, Push, ValueRef};
 use crate::node::ValueNode;
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeType};
