@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use quote::ToTokens;
+use syn::Attribute;
 
 #[derive(Debug, Clone)]
 pub enum Data<T> {
@@ -15,7 +16,7 @@ pub enum Data<T> {
 }
 
 impl<T> Data<T> {
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         match &self {
             Data::Struct(s) => &s.attrs(),
             Data::Enum(e) => &e.attrs,
@@ -31,7 +32,7 @@ pub enum Struct<T> {
 }
 
 impl<T> Struct<T> {
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         match &self {
             Struct::Unit(us) => &us.attrs,
             Struct::Tuple(ts) => &ts.attrs,
@@ -42,7 +43,7 @@ impl<T> Struct<T> {
 
 #[derive(Clone)]
 pub struct UnitStruct {
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl Debug for UnitStruct {
@@ -67,7 +68,7 @@ impl Debug for UnitStruct {
 #[derive(Clone)]
 pub struct TupleStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for TupleStruct<T> {
@@ -94,7 +95,7 @@ impl<T: Debug> Debug for TupleStruct<T> {
 #[derive(Clone)]
 pub struct StructStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for StructStruct<T> {
@@ -144,7 +145,7 @@ impl<T> TupleStruct<T> {
         }
     }
 
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         &self.attrs
     }
 }
@@ -159,7 +160,7 @@ impl<T> StructStruct<T> {
         }
     }
 
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         &self.attrs
     }
 }
@@ -167,7 +168,7 @@ impl<T> StructStruct<T> {
 #[derive(Clone)]
 pub struct Enum<T> {
     pub(crate) variants: Vec<Variant<T>>,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for Enum<T> {
@@ -204,7 +205,7 @@ impl Enum<Value> {
         unimplemented!()
     }
 
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         &self.attrs
     }
 }
@@ -217,7 +218,7 @@ pub enum Variant<T> {
 }
 
 impl<T> Variant<T> {
-    pub fn attrs(&self) -> &[syn::Attribute] {
+    pub fn attrs(&self) -> &[Attribute] {
         match &self {
             Variant::Unit(uv) => &uv.attrs,
             Variant::Tuple(tv) => &tv.attrs,
@@ -228,7 +229,7 @@ impl<T> Variant<T> {
 
 #[derive(Clone)]
 pub struct UnitVariant {
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl Debug for UnitVariant {
@@ -253,7 +254,7 @@ impl Debug for UnitVariant {
 #[derive(Clone)]
 pub struct TupleVariant<T> {
     pub(crate) phantom: PhantomData<T>,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for TupleVariant<T> {
@@ -280,7 +281,7 @@ impl<T: Debug> Debug for TupleVariant<T> {
 #[derive(Clone)]
 pub struct StructVariant<T> {
     pub(crate) phantom: PhantomData<T>,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for StructVariant<T> {

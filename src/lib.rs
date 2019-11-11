@@ -255,7 +255,7 @@
 //! # }
 //! #
 //! # ignore! {
-//! let input: syn::DeriveInput = syn::parse(...).unwrap();
+//! let input: DeriveInput = syn::parse(...).unwrap();
 //!
 //! // Pull out one of the field types.
 //! let type_of_field_x: syn::Type = /* ... */;

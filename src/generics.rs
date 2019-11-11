@@ -2,6 +2,7 @@ use crate::Ident;
 use crate::Path;
 use crate::Type;
 use crate::TypeNode;
+use syn::{BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
 
 #[derive(Debug, Clone)]
 pub struct Generics {
@@ -112,7 +113,7 @@ impl Generics {
     }
 }
 
-fn syn_to_bound_lifetimes(lifetimes: Option<syn::BoundLifetimes>) -> Vec<Lifetime> {
+fn syn_to_bound_lifetimes(lifetimes: Option<BoundLifetimes>) -> Vec<Lifetime> {
     lifetimes.map_or_else(Vec::new, |lifetimes| {
         lifetimes
             .lifetimes
@@ -130,13 +131,13 @@ fn syn_to_bound_lifetimes(lifetimes: Option<syn::BoundLifetimes>) -> Vec<Lifetim
 }
 
 fn syn_to_generic_constraints(
-    where_clause: syn::WhereClause,
+    where_clause: WhereClause,
 ) -> impl Iterator<Item = GenericConstraint> {
     where_clause
         .predicates
         .into_iter()
         .map(|predicate| match predicate {
-            syn::WherePredicate::Type(syn::PredicateType {
+            WherePredicate::Type(syn::PredicateType {
                 lifetimes,
                 bounded_ty,
                 bounds,
@@ -146,7 +147,7 @@ fn syn_to_generic_constraints(
                 bounded_ty: Type::syn_to_type(bounded_ty),
                 bounds: syn_to_type_param_bounds(bounds),
             }),
-            syn::WherePredicate::Lifetime(syn::PredicateLifetime {
+            WherePredicate::Lifetime(PredicateLifetime {
                 lifetime: syn::Lifetime { ident, .. },
                 bounds,
                 ..
@@ -159,7 +160,7 @@ fn syn_to_generic_constraints(
                     })
                     .collect(),
             }),
-            syn::WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
+            WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
         })
 }
 

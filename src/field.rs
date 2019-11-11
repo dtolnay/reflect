@@ -9,6 +9,7 @@ use crate::WIP;
 use quote::ToTokens;
 use std::fmt::{self, Debug, Display};
 use std::vec;
+use syn::Attribute;
 
 #[derive(Debug, Clone)]
 pub struct Fields<T> {
@@ -33,7 +34,7 @@ pub(crate) enum Accessor {
 pub struct Field<T> {
     pub(crate) accessor: Accessor,
     pub(crate) element: T,
-    pub(crate) attrs: Vec<syn::Attribute>,
+    pub(crate) attrs: Vec<Attribute>,
 }
 
 impl<T: Debug> Debug for Field<T> {
@@ -77,7 +78,7 @@ impl Field<Value> {
         }
     }
 
-    pub fn get_attrs(&self) -> &[syn::Attribute] {
+    pub fn get_attrs(&self) -> &[Attribute] {
         &self.attrs
     }
 }

@@ -16,6 +16,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
 use std::fmt::Debug;
+use syn::TypePath;
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -122,7 +123,7 @@ impl Type {
 
     pub(crate) fn syn_to_type(ty: syn::Type) -> Self {
         match ty {
-            syn::Type::Path(syn::TypePath {
+            syn::Type::Path(TypePath {
                 //FIXME: add qself to Path
                 qself: None,
                 path,

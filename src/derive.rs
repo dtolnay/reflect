@@ -18,7 +18,7 @@ use crate::UnitStruct;
 use crate::WipFunction;
 
 use proc_macro2::{self, TokenStream};
-use syn;
+use syn::DeriveInput;
 
 pub fn derive<TokenStream>(input: TokenStream, run: fn(Execution)) -> TokenStream
 where
@@ -43,7 +43,7 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
     program.compile()
 }
 
-fn syn_to_type(input: syn::DeriveInput) -> Type {
+fn syn_to_type(input: DeriveInput) -> Type {
     let attrs: Vec<_> = input
         .attrs
         .into_iter()

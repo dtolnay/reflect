@@ -2,6 +2,7 @@ use crate::GenericArgument;
 use crate::GenericArguments;
 use crate::Ident;
 use crate::Type;
+use syn::ReturnType;
 
 #[derive(Debug, Clone)]
 // Consider just using syn::Path
@@ -100,10 +101,8 @@ impl Path {
                                         .map(Type::syn_to_type)
                                         .collect(),
                                     output: match parenthesized.output {
-                                        syn::ReturnType::Default => None,
-                                        syn::ReturnType::Type(_, ty) => {
-                                            Some(Type::syn_to_type(*ty))
-                                        }
+                                        ReturnType::Default => None,
+                                        ReturnType::Type(_, ty) => Some(Type::syn_to_type(*ty)),
                                     },
                                 }),
                             },

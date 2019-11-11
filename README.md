@@ -254,7 +254,7 @@ wrapping it in a new struct. This is a real life use case drawn from how
 `serde_derive` handles `serialize_with` attributes. Conceptually:
 
 ```rust
-let input: syn::DeriveInput = syn::parse(...).unwrap();
+let input: DeriveInput = syn::parse(...).unwrap();
 
 // Pull out one of the field types.
 let type_of_field_x: syn::Type = /* ... */;

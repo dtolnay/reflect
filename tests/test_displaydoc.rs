@@ -3,7 +3,7 @@
 
 use quote::quote;
 use reflect::*;
-use syn::Meta;
+use syn::{Attribute, Lit, Meta, MetaNameValue};
 
 reflect::library! {
     extern crate std {
@@ -74,13 +74,12 @@ fn display_fmt(f: MakeFunction) -> Value {
     }
 }
 
-fn extract_doc_comment(attrs: &[syn::Attribute]) -> Option<String> {
+fn extract_doc_comment(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
         if attr.path.is_ident("doc") {
             if let Ok(meta) = attr.parse_meta() {
-                if let Meta::NameValue(syn::MetaNameValue {
-                    lit: syn::Lit::Str(lit),
-                    ..
+                if let Meta::NameValue(MetaNameValue {
+                    lit: Lit::Str(lit), ..
                 }) = meta
                 {
                     return Some(lit.value().trim().to_owned());
