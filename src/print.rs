@@ -1,5 +1,5 @@
 use crate::generics::*;
-use crate::{path, Accessor, Ident, Type, TypeNode};
+use crate::{path, Accessor, Type, TypeNode};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
@@ -60,7 +60,6 @@ impl ToTokens for Print<TypeNode> {
             Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { ref name, .. } => {
                 //FIXME: generics
-                let name = Ident::from(name.clone());
                 quote!(#name)
             }
             TraitObject(ref bounds) => {
@@ -179,7 +178,7 @@ impl ToTokens for Print<LifetimeDef> {
 
 impl ToTokens for Print<Binding> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::from(self.0.ident.clone());
+        let ident = &self.0.ident;
         let ty = Print::ref_cast(&self.0.ty);
         tokens.append_all(quote!(#ident : ty))
     }
@@ -187,7 +186,7 @@ impl ToTokens for Print<Binding> {
 
 impl ToTokens for Print<Constraint> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = Ident::from(self.0.ident.clone());
+        let ident = &self.0.ident;
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None

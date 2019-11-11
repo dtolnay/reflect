@@ -60,7 +60,7 @@ impl Value {
                 let node = ValueNode::Destructure {
                     parent: self.index,
                     accessor: field.accessor.clone(),
-                    ty: field.element.clone(),
+                    ty: field.element,
                 };
                 Value {
                     index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),

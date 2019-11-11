@@ -39,9 +39,12 @@ fn display_fmt(f: MakeFunction) -> Value {
                 let num_fields = receiver.fields().count();
                 let attrs = receiver.attrs();
                 let doc_comment = extract_doc_comment(attrs);
-                let fmt_string = format!("{} ", doc_comment.unwrap_or("{}".to_owned()));
+                let fmt_string = format!(
+                    "{} ",
+                    doc_comment.as_ref().map(String::as_str).unwrap_or("{}")
+                );
 
-                let mut last_write = if !fmt_string.contains("{") {
+                let mut last_write = if !fmt_string.contains('{') {
                     RUNTIME::std::write.INVOKE(&[formatter, f.string(&fmt_string)])
                 } else {
                     RUNTIME::std::write.INVOKE(&[formatter, f.string(&fmt_string), type_name])
@@ -49,11 +52,11 @@ fn display_fmt(f: MakeFunction) -> Value {
 
                 for (i, field) in receiver.fields().enumerate() {
                     let doc_comment = extract_doc_comment(field.get_attrs());
-                    let mut fmt_string = doc_comment.unwrap_or("{}".to_owned());
+                    let mut fmt_string = doc_comment.unwrap_or_else(|| "{}".to_owned());
 
                     // Add space after field display string, except for the last one
                     if i + 1 != num_fields {
-                        fmt_string = format!("{} ", fmt_string);
+                        fmt_string.push(' ');
                     }
 
                     last_write = RUNTIME::std::write.INVOKE(&[

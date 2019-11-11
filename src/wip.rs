@@ -102,10 +102,9 @@ impl MakeFunction {
                 ty: wip.f.sig.inputs[index].clone(),
             },
         };
-        let value = Value {
+        Value {
             index: wip.values.index_push(node),
-        };
-        value
+        }
     }
 }
 

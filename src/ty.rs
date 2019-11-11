@@ -87,7 +87,7 @@ impl Type {
             } => Type((**inner).clone()).data().map(|field| {
                 Type(TypeNode::Reference {
                     lifetime: lifetime.clone(),
-                    inner: Box::new(field.element.0.clone()),
+                    inner: Box::new(field.element.0),
                 })
             }),
             TypeNode::ReferenceMut {
@@ -96,7 +96,7 @@ impl Type {
             } => Type((**inner).clone()).data().map(|field| {
                 Type(TypeNode::ReferenceMut {
                     lifetime: lifetime.clone(),
-                    inner: Box::new(field.element.0.clone()),
+                    inner: Box::new(field.element.0),
                 })
             }),
             _ => panic!("Type::data"),

@@ -38,13 +38,12 @@ impl Module {
 
         let invoke = wip.macros.index_push(MacroInvoke {
             macro_name: name.to_owned(),
-            args: values.into_iter().map(|value| value.index).collect(),
+            args: values.iter().map(|value| value.index).collect(),
         });
 
         let node = ValueNode::MacroInvocation(invoke);
-        let value = Value {
+        Value {
             index: wip.values.index_push(node),
-        };
-        value
+        }
     }
 }

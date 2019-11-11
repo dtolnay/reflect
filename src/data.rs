@@ -13,7 +13,7 @@ pub enum Data<T> {
 
 impl<T> Data<T> {
     pub fn attrs(&self) -> &[Attribute] {
-        match &self {
+        match self {
             Data::Struct(s) => &s.attrs(),
             Data::Enum(e) => &e.attrs,
         }
@@ -29,7 +29,7 @@ pub enum Struct<T> {
 
 impl<T> Struct<T> {
     pub fn attrs(&self) -> &[Attribute] {
-        match &self {
+        match self {
             Struct::Unit(us) => &us.attrs,
             Struct::Tuple(ts) => &ts.attrs,
             Struct::Struct(ss) => &ss.attrs,
@@ -215,7 +215,7 @@ pub enum Variant<T> {
 
 impl<T> Variant<T> {
     pub fn attrs(&self) -> &[Attribute] {
-        match &self {
+        match self {
             Variant::Unit(uv) => &uv.attrs,
             Variant::Tuple(tv) => &tv.attrs,
             Variant::Struct(sv) => &sv.attrs,

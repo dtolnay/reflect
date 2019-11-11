@@ -16,12 +16,11 @@ impl Function {
 
         let invoke = wip.invokes.index_push(Invoke {
             function: self.clone(),
-            args: args.into_iter().map(|value| value.index).collect(),
+            args: args.iter().map(|value| value.index).collect(),
         });
         let node = ValueNode::Invoke(invoke);
-        let value = Value {
+        Value {
             index: wip.values.index_push(node),
-        };
-        value
+        }
     }
 }
