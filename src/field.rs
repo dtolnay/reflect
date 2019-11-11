@@ -1,5 +1,4 @@
-use crate::{Ident, Push, StaticBorrow, Type, Value, ValueNode, WIP};
-use quote::ToTokens;
+use crate::{attr, Ident, Push, StaticBorrow, Type, Value, ValueNode, WIP};
 use std::fmt::{self, Debug, Display};
 use std::vec;
 use syn::Attribute;
@@ -32,24 +31,11 @@ pub struct Field<T> {
 
 impl<T: Debug> Debug for Field<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct FieldDebug<'a, T> {
-            accessor: &'a Accessor,
-            element: &'a T,
-            attrs: Vec<String>,
-        }
-
-        let view = FieldDebug {
-            accessor: &self.accessor,
-            element: &self.element,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("Field")
+            .field("accessor", &self.accessor)
+            .field("element", &self.element)
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 

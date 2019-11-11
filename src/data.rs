@@ -1,5 +1,4 @@
-use crate::{Field, Fields, Value};
-use quote::ToTokens;
+use crate::{attr, Field, Fields, Value};
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -44,20 +43,9 @@ pub struct UnitStruct {
 
 impl Debug for UnitStruct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct UnitStructDebug {
-            attrs: Vec<String>,
-        }
-
-        let view = UnitStructDebug {
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("UnitStruct")
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -69,22 +57,10 @@ pub struct TupleStruct<T> {
 
 impl<T: Debug> Debug for TupleStruct<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct TupleStructDebug<'a, T> {
-            fields: &'a Vec<Field<T>>,
-            attrs: Vec<String>,
-        }
-
-        let view = TupleStructDebug {
-            fields: &self.fields,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("TupleStruct")
+            .field("fields", &self.fields)
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -96,22 +72,10 @@ pub struct StructStruct<T> {
 
 impl<T: Debug> Debug for StructStruct<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct StructStructDebug<'a, T> {
-            fields: &'a Vec<Field<T>>,
-            attrs: Vec<String>,
-        }
-
-        let view = StructStructDebug {
-            fields: &self.fields,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("StructStruct")
+            .field("fields", &self.fields)
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -169,22 +133,10 @@ pub struct Enum<T> {
 
 impl<T: Debug> Debug for Enum<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct EnumDebug<'a, T> {
-            variants: &'a Vec<Variant<T>>,
-            attrs: Vec<String>,
-        }
-
-        let view = EnumDebug {
-            variants: &self.variants,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("Enum")
+            .field("variants", &self.variants)
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -230,20 +182,9 @@ pub struct UnitVariant {
 
 impl Debug for UnitVariant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct UnitVariantDebug {
-            attrs: Vec<String>,
-        }
-
-        let view = UnitVariantDebug {
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("UnitVariant")
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -255,22 +196,9 @@ pub struct TupleVariant<T> {
 
 impl<T: Debug> Debug for TupleVariant<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct TupleVariantDebug<T> {
-            phantom: PhantomData<T>,
-            attrs: Vec<String>,
-        }
-
-        let view = TupleVariantDebug {
-            phantom: PhantomData::<T>,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("TupleVariant")
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }
 
@@ -282,21 +210,8 @@ pub struct StructVariant<T> {
 
 impl<T: Debug> Debug for StructVariant<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        #[derive(Debug)]
-        struct StructVariantDebug<T> {
-            phantom: PhantomData<T>,
-            attrs: Vec<String>,
-        }
-
-        let view = StructVariantDebug {
-            phantom: PhantomData::<T>,
-            attrs: self
-                .attrs
-                .iter()
-                .map(|a| a.to_token_stream().to_string())
-                .collect(),
-        };
-
-        Debug::fmt(&view, f)
+        f.debug_struct("StructVariant")
+            .field("attrs", attr::debug(&self.attrs))
+            .finish()
     }
 }

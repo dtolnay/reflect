@@ -328,6 +328,7 @@ pub use reflect_internal::*;
 
 pub mod runtime;
 
+mod attr;
 mod compiler;
 mod data;
 mod derive;
