@@ -42,7 +42,6 @@ impl<T> Struct<T> {
 
 #[derive(Clone)]
 pub struct UnitStruct {
-    pub(crate) private: (),
     pub(crate) attrs: Vec<syn::Attribute>,
 }
 
@@ -50,12 +49,10 @@ impl Debug for UnitStruct {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[derive(Debug)]
         struct UnitStructDebug {
-            private: (),
             attrs: Vec<String>,
         }
 
         let view = UnitStructDebug {
-            private: self.private,
             attrs: self
                 .attrs
                 .iter()
@@ -231,7 +228,6 @@ impl<T> Variant<T> {
 
 #[derive(Clone)]
 pub struct UnitVariant {
-    pub(crate) private: (),
     pub(crate) attrs: Vec<syn::Attribute>,
 }
 
@@ -239,12 +235,10 @@ impl Debug for UnitVariant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[derive(Debug)]
         struct UnitVariantDebug {
-            private: (),
             attrs: Vec<String>,
         }
 
         let view = UnitVariantDebug {
-            private: self.private,
             attrs: self
                 .attrs
                 .iter()

@@ -80,7 +80,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                         .collect(),
                     attrs,
                 })),
-                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: (), attrs })),
+                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { attrs })),
             },
             syn::Data::Enum(data) => {
                 // FIXME convert enum variants
