@@ -1,10 +1,4 @@
-use crate::Accessor;
-use crate::Data;
-use crate::Ident;
-use crate::InvokeRef;
-use crate::MacroInvokeRef;
-use crate::Type;
-use crate::ValueRef;
+use crate::{Accessor, Data, Ident, InvokeRef, MacroInvokeRef, Type, ValueRef};
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {

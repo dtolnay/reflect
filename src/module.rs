@@ -1,10 +1,5 @@
 use crate::index::Push;
-use crate::Path;
-use crate::Type;
-use crate::TypeNode;
-use crate::WIP;
-use crate::{MacroInvoke, Value, ValueNode};
-
+use crate::{MacroInvoke, Path, Type, TypeNode, Value, ValueNode, WIP};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]

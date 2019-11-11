@@ -1,12 +1,4 @@
-use crate::Ident;
-use crate::MakeImpl;
-use crate::Module;
-use crate::Path;
-use crate::RuntimeType;
-use crate::Type;
-use crate::WipFunction;
-use crate::WipImpl;
-
+use crate::{Ident, MakeImpl, Module, Path, RuntimeType, Type, WipFunction, WipImpl};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::thread::LocalKey;

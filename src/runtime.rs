@@ -1,9 +1,4 @@
-use crate::Function;
-use crate::Path;
-use crate::TraitBound;
-use crate::Type;
-use crate::TypeNode;
-use crate::TypeParamBound;
+use crate::{Function, Path, TraitBound, Type, TypeNode, TypeParamBound};
 
 pub trait RuntimeType {
     #[allow(non_snake_case)]

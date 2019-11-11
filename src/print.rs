@@ -1,10 +1,5 @@
 use crate::generics::*;
-use crate::path;
-use crate::Accessor;
-use crate::Ident;
-use crate::Type;
-use crate::TypeNode;
-
+use crate::{path, Accessor, Ident, Type, TypeNode};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;

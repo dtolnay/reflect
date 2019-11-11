@@ -1,20 +1,10 @@
-use crate::generics;
-use crate::Data;
-use crate::Function;
-use crate::GenericConstraint;
-use crate::GenericParam;
-use crate::Generics;
-use crate::Ident;
-use crate::Lifetime;
-use crate::Path;
-use crate::Print;
-use crate::Signature;
-use crate::TypeParamBound;
-use ref_cast::RefCast;
-
+use crate::{
+    generics, Data, Function, GenericConstraint, GenericParam, Generics, Ident, Lifetime, Path,
+    Print, Signature, TypeParamBound,
+};
 use proc_macro2::TokenStream;
-use quote::quote;
-use quote::ToTokens;
+use quote::{quote, ToTokens};
+use ref_cast::RefCast;
 use std::fmt::Debug;
 use syn::TypePath;
 

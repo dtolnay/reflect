@@ -1,13 +1,5 @@
 use crate::ident::Ident;
-use crate::Function;
-use crate::Invoke;
-use crate::MacroInvoke;
-use crate::Print;
-use crate::Receiver;
-use crate::Type;
-use crate::TypeNode;
-use crate::ValueNode;
-use crate::ValueRef;
+use crate::{Function, Invoke, MacroInvoke, Print, Receiver, Type, TypeNode, ValueNode, ValueRef};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;

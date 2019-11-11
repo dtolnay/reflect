@@ -1,7 +1,4 @@
-use crate::GenericArgument;
-use crate::GenericArguments;
-use crate::Ident;
-use crate::Type;
+use crate::{GenericArgument, GenericArguments, Ident, Type};
 use syn::ReturnType;
 
 #[derive(Debug, Clone)]

@@ -1,12 +1,4 @@
-use crate::Accessor;
-use crate::Data;
-use crate::Push;
-use crate::StaticBorrow;
-use crate::Type;
-use crate::TypeNode;
-use crate::ValueNode;
-use crate::ValueRef;
-use crate::WIP;
+use crate::{Accessor, Data, Push, StaticBorrow, Type, TypeNode, ValueNode, ValueRef, WIP};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Value {

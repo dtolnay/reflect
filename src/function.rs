@@ -1,10 +1,4 @@
-use crate::Invoke;
-use crate::Push;
-use crate::Signature;
-use crate::Type;
-use crate::Value;
-use crate::ValueNode;
-use crate::WIP;
+use crate::{Invoke, Push, Signature, Type, Value, ValueNode, WIP};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]

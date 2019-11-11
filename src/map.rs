@@ -1,13 +1,6 @@
-use crate::Data;
-use crate::Enum;
-use crate::Field;
-use crate::Struct;
-use crate::StructStruct;
-use crate::StructVariant;
-use crate::TupleStruct;
-use crate::TupleVariant;
-use crate::Variant;
-
+use crate::{
+    Data, Enum, Field, Struct, StructStruct, StructVariant, TupleStruct, TupleVariant, Variant,
+};
 use std::marker::PhantomData;
 
 impl<T> Data<T> {

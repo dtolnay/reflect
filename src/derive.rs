@@ -1,23 +1,8 @@
-use crate::Accessor;
-use crate::CompleteFunction;
-use crate::CompleteImpl;
-use crate::Data;
-use crate::Enum;
-use crate::Execution;
-use crate::Field;
-use crate::Generics;
-use crate::Ident;
-use crate::Program;
-use crate::Struct;
-use crate::StructStruct;
-use crate::Tracker;
-use crate::TupleStruct;
-use crate::Type;
-use crate::TypeNode;
-use crate::UnitStruct;
-use crate::WipFunction;
-
-use proc_macro2::{self, TokenStream};
+use crate::{
+    Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics, Ident,
+    Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct, WipFunction,
+};
+use proc_macro2::TokenStream;
 use syn::DeriveInput;
 
 pub fn derive<TokenStream>(input: TokenStream, run: fn(Execution)) -> TokenStream

@@ -1,4 +1,4 @@
-use proc_macro2::{self, Span, TokenStream};
+use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::fmt::{self, Display};
 

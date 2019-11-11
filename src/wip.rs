@@ -1,14 +1,6 @@
-use crate::Function;
-use crate::Ident;
-use crate::Push;
-use crate::RuntimeFunction;
-use crate::StaticBorrow;
-use crate::Type;
-use crate::Value;
-use crate::ValueNode;
-use crate::ValueRef;
-use crate::WIP;
-
+use crate::{
+    Function, Ident, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode, ValueRef, WIP,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 

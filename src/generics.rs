@@ -1,7 +1,4 @@
-use crate::Ident;
-use crate::Path;
-use crate::Type;
-use crate::TypeNode;
+use crate::{Ident, Path, Type, TypeNode};
 use syn::{BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
 
 #[derive(Debug, Clone)]

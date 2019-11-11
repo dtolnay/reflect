@@ -1,11 +1,4 @@
-use crate::Ident;
-use crate::Push;
-use crate::StaticBorrow;
-use crate::Type;
-use crate::Value;
-use crate::ValueNode;
-use crate::WIP;
-
+use crate::{Ident, Push, StaticBorrow, Type, Value, ValueNode, WIP};
 use quote::ToTokens;
 use std::fmt::{self, Debug, Display};
 use std::vec;

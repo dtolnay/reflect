@@ -1,12 +1,8 @@
-use crate::Field;
-use crate::Fields;
-use crate::Value;
-
+use crate::{Field, Fields, Value};
+use quote::ToTokens;
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-
-use quote::ToTokens;
 use syn::Attribute;
 
 #[derive(Debug, Clone)]
