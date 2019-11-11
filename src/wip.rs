@@ -36,12 +36,19 @@ pub(crate) struct WipFunction {
     pub(crate) f: Function,
     pub(crate) values: Vec<ValueNode>,
     pub(crate) invokes: Vec<Invoke>,
+    pub(crate) macros: Vec<MacroInvoke>,
     pub(crate) ret: Option<ValueRef>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Invoke {
     pub(crate) function: Function,
+    pub(crate) args: Vec<ValueRef>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MacroInvoke {
+    pub(crate) macro_name: String,
     pub(crate) args: Vec<ValueRef>,
 }
 
@@ -56,6 +63,7 @@ impl<'a> MakeImpl<'a> {
                 f: f.SELF(),
                 values: Vec::new(),
                 invokes: Vec::new(),
+                macros: Vec::new(),
                 ret: None,
             })
         });

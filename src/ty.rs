@@ -15,6 +15,7 @@ use ref_cast::RefCast;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
 #[repr(C)]

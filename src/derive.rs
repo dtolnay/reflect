@@ -44,6 +44,12 @@ fn derive2(input: TokenStream, run: fn(Execution)) -> TokenStream {
 }
 
 fn syn_to_type(input: syn::DeriveInput) -> Type {
+    let attrs: Vec<_> = input
+        .attrs
+        .into_iter()
+        .map(std::convert::Into::into)
+        .collect();
+
     Type(TypeNode::DataStructure {
         name: Ident::from(input.ident),
         generics: Generics::syn_to_generics(input.generics),
@@ -59,6 +65,7 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                             element: Type::syn_to_type(field.ty),
                         })
                         .collect(),
+                    attrs,
                 })),
                 syn::Fields::Unnamed(fields) => Data::Struct(Struct::Tuple(TupleStruct {
                     fields: fields
@@ -71,13 +78,15 @@ fn syn_to_type(input: syn::DeriveInput) -> Type {
                             element: Type::syn_to_type(field.ty),
                         })
                         .collect(),
+                    attrs,
                 })),
-                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: () })),
+                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { private: (), attrs })),
             },
             syn::Data::Enum(data) => {
                 // FIXME convert enum variants
                 Data::Enum(Enum {
                     variants: Vec::new(),
+                    attrs,
                 })
             }
             syn::Data::Union(_) => unimplemented!("union"),
@@ -103,11 +112,13 @@ fn tracker_to_program(tracker: Tracker) -> Program {
                         let function: WipFunction = function;
                         let values = function.values;
                         let invokes = function.invokes;
+                        let macros = function.macros;
                         CompleteFunction {
                             self_ty: function.self_ty,
                             f: function.f,
                             values,
                             invokes,
+                            macros,
                             ret: function.ret,
                         }
                     })

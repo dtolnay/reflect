@@ -1,6 +1,7 @@
 use crate::ident::Ident;
 use crate::Function;
 use crate::Invoke;
+use crate::MacroInvoke;
 use crate::Print;
 use crate::Receiver;
 use crate::Type;
@@ -31,6 +32,7 @@ pub(crate) struct CompleteFunction {
     pub f: Function,
     pub values: Vec<ValueNode>,
     pub invokes: Vec<Invoke>,
+    pub macros: Vec<MacroInvoke>,
     pub ret: Option<ValueRef>,
 }
 
@@ -178,6 +180,13 @@ impl CompleteFunction {
                         }
                     }
                 }
+                MacroInvocation(invoke) => {
+                    for &v in &self.macros[invoke.0].args {
+                        if reachable.insert(v) {
+                            stack.push(v);
+                        }
+                    }
+                }
                 Destructure { parent, .. } => {
                     if reachable.insert(parent) {
                         stack.push(parent);
@@ -203,7 +212,7 @@ impl CompleteFunction {
     }
 
     fn is_important(&self, v: ValueRef) -> bool {
-        if let ValueNode::Invoke(_) = self.values[v.0] {
+        if let ValueNode::Invoke(_) | ValueNode::MacroInvocation(_) = self.values[v.0] {
             return true;
         }
         false
@@ -261,6 +270,17 @@ impl CompleteFunction {
                 }
             }
             ValueNode::DataStructure { .. } => unimplemented!(),
+            ValueNode::MacroInvocation(invoke) => {
+                let invoke = &self.macros[invoke.0];
+                let name = Ident::new(&invoke.macro_name);
+                let args = self.make_values_list(&invoke.args);
+
+                let tokens = quote! {
+                    #name ! ( #args )
+                };
+
+                tokens
+            }
         }
     }
 

@@ -46,6 +46,7 @@ impl<T> TupleStruct<T> {
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
+            attrs: self.attrs,
         }
     }
 }
@@ -61,6 +62,7 @@ impl<T> StructStruct<T> {
                 .into_iter()
                 .map(|field| field.map(&mut f))
                 .collect(),
+            attrs: self.attrs,
         }
     }
 }
@@ -88,6 +90,7 @@ impl<T> Enum<T> {
     {
         Enum {
             variants: self.variants.into_iter().map(|v| v.map(&mut f)).collect(),
+            attrs: self.attrs,
         }
     }
 }
@@ -111,6 +114,7 @@ impl<T> TupleVariant<T> {
         F: FnMut(Field<T>) -> R,
     {
         TupleVariant {
+            attrs: self.attrs,
             phantom: PhantomData,
         }
     }
@@ -122,6 +126,7 @@ impl<T> StructVariant<T> {
         F: FnMut(Field<T>) -> R,
     {
         StructVariant {
+            attrs: self.attrs,
             phantom: PhantomData,
         }
     }

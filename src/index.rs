@@ -1,4 +1,5 @@
 use crate::Invoke;
+use crate::MacroInvoke;
 use crate::ValueNode;
 
 pub(crate) trait Push {
@@ -38,6 +39,14 @@ impl TypedIndex for ValueNode {
 pub(crate) struct InvokeRef(pub usize);
 
 impl TypedIndex for Invoke {
+    type Index = InvokeRef;
+
+    fn index(i: usize) -> Self::Index {
+        InvokeRef(i)
+    }
+}
+
+impl TypedIndex for MacroInvoke {
     type Index = InvokeRef;
 
     fn index(i: usize) -> Self::Index {
