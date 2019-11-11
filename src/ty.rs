@@ -44,21 +44,6 @@ pub(crate) enum TypeNode {
     Path(Path),
 }
 
-#[derive(Clone)]
-pub struct AttributeWrapper(pub syn::Attribute);
-
-impl Debug for AttributeWrapper {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", self.0.to_token_stream())
-    }
-}
-
-impl std::convert::From<syn::Attribute> for AttributeWrapper {
-    fn from(attr: syn::Attribute) -> Self {
-        Self(attr)
-    }
-}
-
 impl Type {
     pub fn unit() -> Self {
         Type(TypeNode::Tuple(Vec::new()))
