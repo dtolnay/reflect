@@ -1,4 +1,4 @@
-use crate::{GenericArgument, GenericArguments, Ident, Type};
+use crate::{GenericArgument, GenericArguments, GenericParam, Ident, Type};
 use syn::ReturnType;
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ impl Path {
         path
     }
 
-    pub(crate) fn syn_to_path(path: syn::Path) -> Self {
+    pub(crate) fn syn_to_path(path: syn::Path, params: &[GenericParam]) -> Self {
         match path {
             syn::Path {
                 leading_colon,
@@ -82,7 +82,11 @@ impl Path {
                                             args: generic_args
                                                 .args
                                                 .into_iter()
-                                                .map(GenericArgument::syn_to_generic_argument)
+                                                .map(|arg| {
+                                                    GenericArgument::syn_to_generic_argument(
+                                                        arg, params,
+                                                    )
+                                                })
                                                 .collect(),
                                         },
                                     },
@@ -95,11 +99,13 @@ impl Path {
                                     inputs: parenthesized
                                         .inputs
                                         .into_iter()
-                                        .map(Type::syn_to_type)
+                                        .map(|ty| Type::syn_to_type(ty, params))
                                         .collect(),
                                     output: match parenthesized.output {
                                         ReturnType::Default => None,
-                                        ReturnType::Type(_, ty) => Some(Type::syn_to_type(*ty)),
+                                        ReturnType::Type(_, ty) => {
+                                            Some(Type::syn_to_type(*ty, params))
+                                        }
                                     },
                                 }),
                             },

@@ -101,7 +101,7 @@ impl Generics {
     pub(crate) fn syn_to_generics(generics: syn::Generics) -> Self {
         let (params, mut constraints) = syn_to_generic_params(generics.params);
         if let Some(where_clause) = generics.where_clause {
-            constraints.extend(syn_to_generic_constraints(where_clause));
+            constraints.extend(syn_to_generic_constraints(where_clause, &params));
         };
         Generics {
             params,
@@ -129,7 +129,8 @@ fn syn_to_bound_lifetimes(lifetimes: Option<BoundLifetimes>) -> Vec<Lifetime> {
 
 fn syn_to_generic_constraints(
     where_clause: WhereClause,
-) -> impl Iterator<Item = GenericConstraint> {
+    params: &[GenericParam],
+) -> Vec<GenericConstraint> {
     where_clause
         .predicates
         .into_iter()
@@ -141,8 +142,8 @@ fn syn_to_generic_constraints(
                 ..
             }) => GenericConstraint::Type(PredicateType {
                 lifetimes: syn_to_bound_lifetimes(lifetimes),
-                bounded_ty: Type::syn_to_type(bounded_ty),
-                bounds: syn_to_type_param_bounds(bounds),
+                bounded_ty: Type::syn_to_type(bounded_ty, params),
+                bounds: syn_to_type_param_bounds(bounds, params),
             }),
             WherePredicate::Lifetime(PredicateLifetime {
                 lifetime: syn::Lifetime { ident, .. },
@@ -159,6 +160,7 @@ fn syn_to_generic_constraints(
             }),
             WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
         })
+        .collect()
 }
 
 fn syn_to_generic_params<T>(params: T) -> (Vec<GenericParam>, Vec<GenericConstraint>)
@@ -175,7 +177,7 @@ where
                     constraints.push(GenericConstraint::Type(PredicateType {
                         lifetimes: Vec::new(),
                         bounded_ty: Type(TypeNode::Path(Path::ident_to_path(ident.clone()))),
-                        bounds: syn_to_type_param_bounds(bounds),
+                        bounds: syn_to_type_param_bounds(bounds, &Vec::new()),
                     }));
                 }
 
@@ -206,7 +208,7 @@ where
     (params, constraints)
 }
 
-pub(crate) fn syn_to_type_param_bounds<T>(bounds: T) -> Vec<TypeParamBound>
+pub(crate) fn syn_to_type_param_bounds<T>(bounds: T, params: &[GenericParam]) -> Vec<TypeParamBound>
 where
     T: IntoIterator<Item = syn::TypeParamBound>,
 {
@@ -217,7 +219,7 @@ where
                 lifetimes, path, ..
             }) => TypeParamBound::Trait(TraitBound {
                 lifetimes: syn_to_bound_lifetimes(lifetimes),
-                path: Path::syn_to_path(path),
+                path: Path::syn_to_path(path, params),
             }),
             syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(Lifetime {
                 ident: Ident::from(lifetime.ident),
@@ -227,9 +229,12 @@ where
 }
 
 impl GenericArgument {
-    pub(crate) fn syn_to_generic_argument(arg: syn::GenericArgument) -> Self {
+    pub(crate) fn syn_to_generic_argument(
+        arg: syn::GenericArgument,
+        params: &[GenericParam],
+    ) -> Self {
         match arg {
-            syn::GenericArgument::Type(ty) => GenericArgument::Type(Type::syn_to_type(ty)),
+            syn::GenericArgument::Type(ty) => GenericArgument::Type(Type::syn_to_type(ty, params)),
 
             syn::GenericArgument::Lifetime(lifetime) => GenericArgument::Lifetime(Lifetime {
                 ident: Ident::from(lifetime.ident),
@@ -237,13 +242,13 @@ impl GenericArgument {
 
             syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {
                 ident: Ident::from(binding.ident),
-                ty: Type::syn_to_type(binding.ty),
+                ty: Type::syn_to_type(binding.ty, params),
             }),
 
             syn::GenericArgument::Constraint(constraint) => {
                 GenericArgument::Constraint(Constraint {
                     ident: Ident::from(constraint.ident),
-                    bounds: syn_to_type_param_bounds(constraint.bounds),
+                    bounds: syn_to_type_param_bounds(constraint.bounds, params),
                 })
             }
 
