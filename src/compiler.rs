@@ -264,11 +264,11 @@ impl CompleteFunction {
             ValueNode::DataStructure { .. } => unimplemented!(),
             ValueNode::MacroInvocation(invoke) => {
                 let invoke = &self.macros[invoke.0];
-                let name = Ident::new(&invoke.macro_name);
+                let path = Print::ref_cast(&invoke.macro_path);
                 let args = self.make_values_list(&invoke.args);
 
                 let tokens = quote! {
-                    #name ! ( #args )
+                    #path ! ( #args )
                 };
 
                 tokens

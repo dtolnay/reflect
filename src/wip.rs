@@ -1,5 +1,6 @@
 use crate::{
-    Function, Ident, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode, ValueRef, WIP,
+    Function, Ident, Path, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode, ValueRef,
+    WIP,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,7 +41,7 @@ pub(crate) struct Invoke {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MacroInvoke {
-    pub(crate) macro_name: String,
+    pub(crate) macro_path: Path,
     pub(crate) args: Vec<ValueRef>,
 }
 

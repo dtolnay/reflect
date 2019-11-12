@@ -37,7 +37,7 @@ impl Module {
         let wip = wip.as_mut().unwrap();
 
         let invoke = wip.macros.index_push(MacroInvoke {
-            macro_name: name.to_owned(),
+            macro_path: self.path.get_path(name),
             args: values.iter().map(|value| value.index).collect(),
         });
 

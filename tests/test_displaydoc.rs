@@ -114,9 +114,9 @@ fn test_displaydoc() {
                 let __v1 = __arg0;
                 let __v3 = &__v0.x;
                 let __v4 = &__v0.y;
-                let _ = write!(__v1, "Point in space: ");
-                let _ = write!(__v1, "x: {}, ", __v3);
-                let __v10 = write!(__v1, "y: {}", __v4);
+                let _ = ::std::write!(__v1, "Point in space: ");
+                let _ = ::std::write!(__v1, "x: {}, ", __v3);
+                let __v10 = ::std::write!(__v1, "y: {}", __v4);
                 __v10
             }
         }

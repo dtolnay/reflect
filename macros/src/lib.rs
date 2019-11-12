@@ -480,7 +480,7 @@ fn declare_macro(item: &ItemMacro) -> TokenStream2 {
                 self,
                 values: &[_reflect::Value],
             ) -> _reflect::Value {
-                _reflect::Module::root().invoke_macro(#macro_name, values)
+                MODULE().invoke_macro(#macro_name, values)
             }
         }
     }
