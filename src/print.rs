@@ -70,10 +70,6 @@ impl ToTokens for Print<TypeNode> {
                 let path = Print::ref_cast(path);
                 quote!(#path)
             }
-            TypeParam(ref type_param) => {
-                let ident = &type_param.ident;
-                quote!(#ident)
-            }
         });
     }
 }

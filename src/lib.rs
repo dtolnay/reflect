@@ -368,8 +368,7 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParam,
-    TypeParamBound,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParamBound,
 };
 use crate::ident::Ident;
 use crate::index::{InvokeRef, MacroInvokeRef, Push, ValueRef};

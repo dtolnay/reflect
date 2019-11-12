@@ -1,6 +1,6 @@
 use crate::{
     generics, Data, Function, GenericConstraint, GenericParam, Generics, Ident, Lifetime, Path,
-    Print, Signature, TypeParam, TypeParamBound,
+    Print, Signature, TypeParamBound,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -33,7 +33,6 @@ pub(crate) enum TypeNode {
         data: Data<Type>,
     },
     Path(Path),
-    TypeParam(TypeParam),
 }
 
 impl Type {
@@ -112,29 +111,16 @@ impl Type {
         }
     }
 
-    pub(crate) fn syn_to_type(ty: syn::Type, params: &[GenericParam]) -> Self {
+    pub(crate) fn syn_to_type(ty: syn::Type) -> Self {
         match ty {
             syn::Type::Path(TypePath {
                 //FIXME: add qself to Path
                 qself: None,
                 path,
-            }) => {
-                if let Some(ident) = path.get_ident() {
-                    for param in params.iter() {
-                        if let GenericParam::Type(ty) = param {
-                            if &ty.ident.0 == ident {
-                                return Type(TypeNode::TypeParam(TypeParam {
-                                    ident: Ident::from(ident.clone()),
-                                }));
-                            }
-                        }
-                    }
-                }
-                Type(TypeNode::Path(Path::syn_to_path(path, params)))
-            }
+            }) => Type(TypeNode::Path(Path::syn_to_path(path))),
 
             syn::Type::Reference(reference) => {
-                let inner = Box::new(Type::syn_to_type(*reference.elem, params).0);
+                let inner = Box::new(Type::syn_to_type(*reference.elem).0);
                 let lifetime = reference.lifetime.map(|lifetime| Lifetime {
                     ident: Ident::from(lifetime.ident),
                 });
@@ -146,7 +132,7 @@ impl Type {
             }
             //FIXME: TraitObject
             syn::Type::TraitObject(type_trait_object) => Type(TypeNode::TraitObject(
-                generics::syn_to_type_param_bounds(type_trait_object.bounds, params),
+                generics::syn_to_type_param_bounds(type_trait_object.bounds),
             )),
 
             syn::Type::Tuple(type_tuple) => {
@@ -155,13 +141,13 @@ impl Type {
                 } else if type_tuple.elems.len() == 1 && !type_tuple.elems.trailing_punct() {
                     // It is not a tuple. The parentheses were just used to
                     // disambiguate the type.
-                    Self::syn_to_type(type_tuple.elems.into_iter().next().unwrap(), params)
+                    Self::syn_to_type(type_tuple.elems.into_iter().next().unwrap())
                 } else {
                     Type(TypeNode::Tuple(
                         type_tuple
                             .elems
                             .into_iter()
-                            .map(|ty| Self::syn_to_type(ty, params))
+                            .map(Self::syn_to_type)
                             .collect(),
                     ))
                 }
@@ -249,12 +235,6 @@ impl TypeNode {
                 let path = Print::ref_cast(path);
                 (quote!(path), Vec::new(), Vec::new())
             }
-
-            TypeParam(ref type_param) => (
-                TokenStream::new(),
-                vec![GenericParam::Type(type_param.clone())],
-                Vec::new(),
-            ),
         }
     }
 }
