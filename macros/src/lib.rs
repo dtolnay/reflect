@@ -3,10 +3,12 @@
 extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
+use syn::{
+    braced, parenthesized, parse_macro_input, token, Ident, Path, PathArguments, PathSegment, Token,
+};
 
 use self::proc_macro::TokenStream;
 
@@ -28,7 +30,7 @@ struct ItemMod {
 }
 
 struct ItemType {
-    name: Ident,
+    segment: PathSegment,
 }
 
 struct ItemImpl {
@@ -61,8 +63,8 @@ enum Receiver {
 
 enum Type {
     Tuple(Vec<Type>),
-    Ident(Ident),
-    TraitObject(Vec<Ident>),
+    Path(Path),
+    TraitObject(Vec<Path>),
     Reference(Box<Type>),
     ReferenceMut(Box<Type>),
 }
@@ -79,24 +81,33 @@ impl Parse for Input {
                 input.parse::<Token![crate]>()?;
             }
             let name: Ident = input.parse()?;
-            let items = ItemMod::parse_items(input)?;
+            let mut segments = Punctuated::new();
+            segments.push(PathSegment {
+                ident: name.clone(),
+                arguments: PathArguments::None,
+            });
+            let path = &Path {
+                leading_colon: None,
+                segments,
+            };
+            let items = ItemMod::parse_items(input, path)?;
             crates.push(ItemMod { name, items });
         }
         Ok(Input { crates })
     }
 }
 
-impl Parse for Item {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl Item {
+    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![mod]) {
-            input.parse().map(Item::Mod)
+            ItemMod::parse(&input, path).map(Item::Mod)
         } else if lookahead.peek(Token![type]) {
             input.parse().map(Item::Type)
         } else if lookahead.peek(Token![impl]) {
-            input.parse().map(Item::Impl)
+            ItemImpl::parse(&input, path).map(Item::Impl)
         } else if lookahead.peek(Token![trait]) {
-            input.parse().map(Item::Trait)
+            ItemTrait::parse(&input, path).map(Item::Trait)
         } else if lookahead.peek(Token![macro]) {
             input.parse().map(Item::Macro)
         } else {
@@ -106,22 +117,27 @@ impl Parse for Item {
 }
 
 impl ItemMod {
-    fn parse_items(input: ParseStream) -> Result<Vec<Item>> {
+    fn parse_items(input: ParseStream, path: &Path) -> Result<Vec<Item>> {
         let content;
         braced!(content in input);
         let mut items = Vec::new();
         while !content.is_empty() {
-            items.push(content.parse()?);
+            items.push(Item::parse(&content, path)?);
         }
         Ok(items)
     }
 }
 
-impl Parse for ItemMod {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl ItemMod {
+    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
         input.parse::<Token![mod]>()?;
         let name: Ident = input.parse()?;
-        let items = ItemMod::parse_items(input)?;
+        let mut path = path.clone();
+        path.segments.push(PathSegment {
+            ident: name.clone(),
+            arguments: PathArguments::None,
+        });
+        let items = ItemMod::parse_items(input, &path)?;
         Ok(ItemMod { name, items })
     }
 }
@@ -129,46 +145,48 @@ impl Parse for ItemMod {
 impl Parse for ItemType {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![type]>()?;
-        let name: Ident = input.parse()?;
+        let segment = input.parse()?;
         input.parse::<Token![;]>()?;
-        Ok(ItemType { name })
+        Ok(ItemType { segment })
     }
 }
 
-impl Parse for ItemImpl {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl ItemImpl {
+    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
         input.parse::<Token![impl]>()?;
+        // FIXME: Add generic params
         let name: Ident = input.parse()?;
 
         let content;
         braced!(content in input);
         let mut functions = Vec::new();
         while !content.is_empty() {
-            functions.push(content.parse()?);
+            functions.push(Function::parse(&content, path)?);
         }
 
         Ok(ItemImpl { name, functions })
     }
 }
 
-impl Parse for ItemTrait {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl ItemTrait {
+    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
         input.parse::<Token![trait]>()?;
+        // FIXME: Add generic params
         let name: Ident = input.parse()?;
 
         let content;
         braced!(content in input);
         let mut functions = Vec::new();
         while !content.is_empty() {
-            functions.push(content.parse()?);
+            functions.push(Function::parse(&content, path)?);
         }
 
         Ok(ItemTrait { name, functions })
     }
 }
 
-impl Parse for Function {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl Function {
+    fn parse(input: ParseStream, _path: &Path) -> Result<Self> {
         input.parse::<Token![fn]>()?;
         let name: Ident = input.parse()?;
 
@@ -252,10 +270,10 @@ impl Parse for Type {
             }
         } else if lookahead.peek(Token![dyn]) {
             let _: Token![dyn] = input.parse()?;
-            let bounds: Punctuated<Ident, Token![+]> = Punctuated::parse_terminated(&input)?;
+            let bounds: Punctuated<Path, Token![+]> = Punctuated::parse_terminated(&input)?;
             Ok(Type::TraitObject(bounds.into_iter().collect()))
-        } else if lookahead.peek(Ident) {
-            input.parse().map(Type::Ident)
+        } else if lookahead.peek(Ident) || lookahead.peek(Token![::]) {
+            input.parse().map(Type::Path)
         } else {
             Err(lookahead.error())
         }
@@ -343,7 +361,8 @@ fn declare_item(item: &Item) -> TokenStream2 {
 }
 
 fn declare_type(item: &ItemType) -> TokenStream2 {
-    let name = &item.name;
+    // FIXME: generics
+    let name = &item.segment.ident;
     let name_str = name.to_string();
 
     quote! {
@@ -372,7 +391,11 @@ fn declare_impl(item: &ItemImpl) -> TokenStream2 {
 
 fn declare_trait(item: &ItemTrait) -> TokenStream2 {
     let d_type = declare_type(&ItemType {
-        name: item.name.clone(),
+        segment: {
+            // FIXME: generics
+            let name = &item.name;
+            syn::parse2(quote!(#name)).unwrap()
+        },
     });
     let name = &item.name;
     let name_str = name.to_string();
@@ -494,9 +517,20 @@ fn to_runtime_type(ty: &Type) -> TokenStream2 {
                 _reflect::Type::tuple(&[#(#types),*])
             }
         }
-        Type::Ident(ident) => quote! {
-            _reflect::runtime::RuntimeType::SELF(#ident)
+        Type::Path(
+            path @ Path {
+                leading_colon: None,
+                ..
+            },
+        ) if path.segments.len() == 1 => quote! {
+            _reflect::runtime::RuntimeType::SELF(#path)
         },
+        Type::Path(path) => {
+            let path_str: String = path.to_token_stream().to_string();
+            quote! {
+                _reflect::module::from_str(#path_str).get_type()
+            }
+        }
         Type::TraitObject(bounds) => {
             quote! {
                 _reflect::runtime::RuntimeTraitObject::SELF(&[
