@@ -54,9 +54,9 @@ fn test_debug() {
 
     let actual = format!("{:#?}", debug(&attrs));
     let expected = "[\
-        \n    #[derive (Debug)],\
-        \n    #[doc = \"...\"],\
-        \n    #[rustfmt::skip],\
-        \n]";
+                    \n    #[derive (Debug)],\
+                    \n    #[doc = \"...\"],\
+                    \n    #[rustfmt::skip],\
+                    \n]";
     assert_eq!(actual, expected);
 }
