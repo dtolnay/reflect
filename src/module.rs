@@ -31,7 +31,7 @@ impl Module {
     }
 
     pub fn get_type(&self, name: &str) -> Type {
-        Type(TypeNode::Path(self.path.get_path(name)))
+        Type(TypeNode::Path(self.get_path(name)))
     }
 
     pub fn invoke_macro(&self, name: &str, values: &[Value]) -> Value {

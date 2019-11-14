@@ -4,10 +4,12 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
+use std::iter::once;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
-    braced, parenthesized, parse_macro_input, token, Ident, Path, PathArguments, PathSegment, Token,
+    braced, parenthesized, parse_macro_input, token, GenericArgument, GenericParam, Generics,
+    Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
 };
 
 use self::proc_macro::TokenStream;
@@ -25,7 +27,7 @@ enum Item {
 }
 
 struct ItemMod {
-    name: Ident,
+    path: Path,
     items: Vec<Item>,
 }
 
@@ -34,17 +36,20 @@ struct ItemType {
 }
 
 struct ItemImpl {
-    name: Ident,
+    segment: PathSegment,
+    generics: Generics,
     functions: Vec<Function>,
 }
 
 struct ItemTrait {
-    name: Ident,
+    segment: PathSegment,
+    generics: Generics,
     functions: Vec<Function>,
 }
 
 struct Function {
     name: Ident,
+    generics: Generics,
     receiver: Receiver,
     args: Vec<Type>,
     ret: Option<Type>,
@@ -86,28 +91,28 @@ impl Parse for Input {
                 ident: name.clone(),
                 arguments: PathArguments::None,
             });
-            let path = &Path {
-                leading_colon: None,
+            let path = Path {
+                leading_colon: Some(Token![::](Span::call_site())),
                 segments,
             };
-            let items = ItemMod::parse_items(input, path)?;
-            crates.push(ItemMod { name, items });
+            let items = ItemMod::parse_items(input, &path.clone())?;
+            crates.push(ItemMod { path, items });
         }
         Ok(Input { crates })
     }
 }
 
 impl Item {
-    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
+    fn parse(input: ParseStream, mod_path: &Path) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![mod]) {
-            ItemMod::parse(&input, path).map(Item::Mod)
+            ItemMod::parse(&input, mod_path).map(Item::Mod)
         } else if lookahead.peek(Token![type]) {
             input.parse().map(Item::Type)
         } else if lookahead.peek(Token![impl]) {
-            ItemImpl::parse(&input, path).map(Item::Impl)
+            input.parse().map(Item::Impl)
         } else if lookahead.peek(Token![trait]) {
-            ItemTrait::parse(&input, path).map(Item::Trait)
+            input.parse().map(Item::Trait)
         } else if lookahead.peek(Token![macro]) {
             input.parse().map(Item::Macro)
         } else {
@@ -117,28 +122,28 @@ impl Item {
 }
 
 impl ItemMod {
-    fn parse_items(input: ParseStream, path: &Path) -> Result<Vec<Item>> {
+    fn parse_items(input: ParseStream, mod_path: &Path) -> Result<Vec<Item>> {
         let content;
         braced!(content in input);
         let mut items = Vec::new();
         while !content.is_empty() {
-            items.push(Item::parse(&content, path)?);
+            items.push(Item::parse(&content, mod_path)?);
         }
         Ok(items)
     }
 }
 
 impl ItemMod {
-    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
+    fn parse(input: ParseStream, mod_path: &Path) -> Result<Self> {
         input.parse::<Token![mod]>()?;
         let name: Ident = input.parse()?;
-        let mut path = path.clone();
+        let mut path = mod_path.clone();
         path.segments.push(PathSegment {
             ident: name.clone(),
             arguments: PathArguments::None,
         });
-        let items = ItemMod::parse_items(input, &path)?;
-        Ok(ItemMod { name, items })
+        let items = ItemMod::parse_items(input, &path.clone())?;
+        Ok(ItemMod { path, items })
     }
 }
 
@@ -151,44 +156,78 @@ impl Parse for ItemType {
     }
 }
 
-impl ItemImpl {
-    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
+fn has_generics(input: ParseStream) -> bool {
+    input.peek(Token![<])
+        && (input.peek2(Token![>])
+            || input.peek2(Token![#])
+            || (input.peek2(Ident) || input.peek2(Lifetime))
+                && (input.peek3(Token![:]) || input.peek3(Token![,]) || input.peek3(Token![>])))
+}
+
+impl Parse for ItemImpl {
+    fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![impl]>()?;
-        // FIXME: Add generic params
-        let name: Ident = input.parse()?;
+
+        let mut generics = if has_generics(input) {
+            input.parse()?
+        } else {
+            Generics::default()
+        };
+        let segment = input.parse()?;
+        generics.where_clause = input.parse()?;
 
         let content;
         braced!(content in input);
         let mut functions = Vec::new();
         while !content.is_empty() {
-            functions.push(Function::parse(&content, path)?);
+            functions.push(content.parse()?);
         }
 
-        Ok(ItemImpl { name, functions })
+        Ok(ItemImpl {
+            segment,
+            generics,
+            functions,
+        })
     }
 }
 
-impl ItemTrait {
-    fn parse(input: ParseStream, path: &Path) -> Result<Self> {
+impl Parse for ItemTrait {
+    fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![trait]>()?;
-        // FIXME: Add generic params
-        let name: Ident = input.parse()?;
+
+        let mut generics = if has_generics(input) {
+            input.parse()?
+        } else {
+            Generics::default()
+        };
+        let segment = input.parse()?;
+        generics.where_clause = input.parse()?;
 
         let content;
         braced!(content in input);
         let mut functions = Vec::new();
         while !content.is_empty() {
-            functions.push(Function::parse(&content, path)?);
+            functions.push(content.parse()?);
         }
 
-        Ok(ItemTrait { name, functions })
+        Ok(ItemTrait {
+            segment,
+            generics,
+            functions,
+        })
     }
 }
 
-impl Function {
-    fn parse(input: ParseStream, _path: &Path) -> Result<Self> {
+impl Parse for Function {
+    fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![fn]>()?;
         let name: Ident = input.parse()?;
+
+        let mut generics = if has_generics(input) {
+            input.parse()?
+        } else {
+            Generics::default()
+        };
 
         let argument_list;
         parenthesized!(argument_list in input);
@@ -214,10 +253,13 @@ impl Function {
             None
         };
 
+        generics.where_clause = input.parse()?;
+
         input.parse::<Token![;]>()?;
 
         Ok(Function {
             name,
+            generics,
             receiver,
             args,
             ret,
@@ -325,9 +367,13 @@ pub fn library(input: TokenStream) -> TokenStream {
 }
 
 fn declare_mod(module: &ItemMod) -> TokenStream2 {
-    let name = &module.name;
-    let name_str = name.to_string();
-    let items = module.items.iter().map(declare_item);
+    let path = &module.path;
+    let name = path.segments.last();
+    let name_str = name.map(|segment| segment.ident.to_string());
+    let items = module
+        .items
+        .iter()
+        .map(|item| declare_item(item, &module.path));
 
     quote! {
         pub mod #name {
@@ -350,18 +396,17 @@ fn declare_mod(module: &ItemMod) -> TokenStream2 {
     }
 }
 
-fn declare_item(item: &Item) -> TokenStream2 {
+fn declare_item(item: &Item, mod_path: &Path) -> TokenStream2 {
     match item {
         Item::Mod(item) => declare_mod(item),
         Item::Type(item) => declare_type(item),
-        Item::Impl(item) => declare_impl(item),
-        Item::Trait(item) => declare_trait(item),
+        Item::Impl(item) => declare_impl(item, mod_path),
+        Item::Trait(item) => declare_trait(item, mod_path),
         Item::Macro(item) => declare_macro(item),
     }
 }
 
 fn declare_type(item: &ItemType) -> TokenStream2 {
-    // FIXME: generics
     let name = &item.segment.ident;
     let name_str = name.to_string();
 
@@ -378,9 +423,25 @@ fn declare_type(item: &ItemType) -> TokenStream2 {
     }
 }
 
-fn declare_impl(item: &ItemImpl) -> TokenStream2 {
-    let parent = &item.name;
-    let functions = item.functions.iter().map(|f| declare_function(parent, f));
+fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
+    let parent = &item.segment.ident;
+    let type_params = &item
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| {
+            if let GenericParam::Type(type_param) = param {
+                Some(&type_param.ident)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, f, mod_path, type_params));
 
     quote! {
         #(
@@ -389,19 +450,31 @@ fn declare_impl(item: &ItemImpl) -> TokenStream2 {
     }
 }
 
-fn declare_trait(item: &ItemTrait) -> TokenStream2 {
+fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     let d_type = declare_type(&ItemType {
-        segment: {
-            // FIXME: generics
-            let name = &item.name;
-            syn::parse2(quote!(#name)).unwrap()
-        },
+        segment: item.segment.clone(),
     });
-    let name = &item.name;
-    let name_str = name.to_string();
+    let name = &item.segment.ident;
+    let name_str = item.segment.to_token_stream().to_string();
+    let parent = name;
 
-    let parent = &item.name;
-    let functions = item.functions.iter().map(|f| declare_function(parent, f));
+    let type_params = &item
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| {
+            if let GenericParam::Type(type_param) = param {
+                Some(&type_param.ident)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, f, mod_path, type_params));
 
     quote! {
         #d_type
@@ -417,7 +490,12 @@ fn declare_trait(item: &ItemTrait) -> TokenStream2 {
     }
 }
 
-fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
+fn declare_function(
+    parent: &Ident,
+    function: &Function,
+    mod_path: &Path,
+    type_params: &Vec<&Ident>,
+) -> TokenStream2 {
     let name = &function.name;
     let name_str = name.to_string();
     let setup_receiver = match function.receiver {
@@ -432,14 +510,28 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
             sig.set_self_by_reference_mut();
         }),
     };
+    let type_params = &function
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| {
+            if let GenericParam::Type(type_param) = param {
+                Some(&type_param.ident)
+            } else {
+                None
+            }
+        })
+        .chain(type_params.iter().map(|ident| *ident))
+        .collect();
+
     let setup_inputs = function.args.iter().map(|arg| {
-        let ty = to_runtime_type(arg);
+        let ty = to_runtime_type(arg, mod_path, type_params);
         quote! {
             sig.add_input(#ty);
         }
     });
     let set_output = function.ret.as_ref().map(|ty| {
-        let ty = to_runtime_type(&ty);
+        let ty = to_runtime_type(&ty, mod_path, type_params);
         quote!(sig.set_output(#ty);)
     });
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
@@ -509,10 +601,12 @@ fn declare_macro(item: &ItemMacro) -> TokenStream2 {
     }
 }
 
-fn to_runtime_type(ty: &Type) -> TokenStream2 {
+fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
     match ty {
         Type::Tuple(types) => {
-            let types = types.iter().map(to_runtime_type);
+            let types = types
+                .iter()
+                .map(|ty| to_runtime_type(ty, mod_path, type_params));
             quote! {
                 _reflect::Type::tuple(&[#(#types),*])
             }
@@ -522,10 +616,21 @@ fn to_runtime_type(ty: &Type) -> TokenStream2 {
                 leading_colon: None,
                 ..
             },
-        ) if path.segments.len() == 1 => quote! {
-            _reflect::runtime::RuntimeType::SELF(#path)
-        },
+        ) if path.segments.len() == 1 => {
+            let mut path = path.clone();
+            expand_path_arguments(&mut path.segments[0].arguments, mod_path, type_params);
+            let path_str = path.to_token_stream().to_string();
+            quote! {
+                MODULE().get_type(#path_str)
+            }
+        }
         Type::Path(path) => {
+            let mut path = path.clone();
+            expand_path_arguments(
+                &mut path.segments.last_mut().unwrap().arguments,
+                mod_path,
+                type_params,
+            );
             let path_str: String = path.to_token_stream().to_string();
             quote! {
                 _reflect::module::from_str(#path_str).get_type()
@@ -539,16 +644,109 @@ fn to_runtime_type(ty: &Type) -> TokenStream2 {
             }
         }
         Type::Reference(inner) => {
-            let inner = to_runtime_type(inner);
+            let inner = to_runtime_type(inner, mod_path, type_params);
             quote! {
                 #inner.reference()
             }
         }
         Type::ReferenceMut(inner) => {
-            let inner = to_runtime_type(inner);
+            let inner = to_runtime_type(inner, mod_path, type_params);
             quote! {
                 #inner.reference_mut()
             }
+        }
+    }
+}
+
+/// Expand module defined types inside of a PathArgumet as fully qualified paths
+fn expand_path_arguments(
+    arguments: &mut PathArguments,
+    mod_path: &Path,
+    type_params: &Vec<&Ident>,
+) {
+    match arguments {
+        PathArguments::None => {}
+        PathArguments::AngleBracketed(generic_args) => {
+            generic_args.args.iter_mut().for_each(|arg| match arg {
+                GenericArgument::Type(ty) => expand_type(ty, mod_path, type_params),
+
+                GenericArgument::Binding(binding) => {
+                    expand_type(&mut binding.ty, mod_path, type_params)
+                }
+
+                GenericArgument::Constraint(constraint) => {
+                    constraint.bounds.iter_mut().for_each(|bound| {
+                        if let TypeParamBound::Trait(bound) = bound {
+                            expand_path(&mut bound.path, mod_path, type_params)
+                        }
+                    })
+                }
+                GenericArgument::Const(_expr) => unimplemented!(),
+                GenericArgument::Lifetime(_) => {}
+            })
+        }
+        PathArguments::Parenthesized(generic_args) => {
+            generic_args
+                .inputs
+                .iter_mut()
+                .for_each(|ty| expand_type(ty, mod_path, type_params));
+
+            if let ReturnType::Type(_, ref mut ty) = generic_args.output {
+                expand_type(ty, mod_path, type_params)
+            }
+        }
+    }
+}
+
+/// Expand module defined types inside of the PathArguments inside of a type
+fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &Vec<&Ident>) {
+    use syn::Type::*;
+    match ty {
+        Path(type_path) => expand_path(&mut type_path.path, mod_path, type_params),
+        Reference(reference) => expand_type(&mut reference.elem, mod_path, type_params),
+
+        TraitObject(type_trait_object) => type_trait_object.bounds.iter_mut().for_each(|bound| {
+            if let TypeParamBound::Trait(bound) = bound {
+                expand_path(&mut bound.path, mod_path, type_params)
+            }
+        }),
+
+        Tuple(type_tuple) => type_tuple
+            .elems
+            .iter_mut()
+            .for_each(|elem| expand_type(elem, mod_path, type_params)),
+
+        // TODO: maybe return syn::Error?
+        _ => unimplemented!("expand_type_arguments: Tried to expand unsupported type"),
+    }
+}
+
+/// If path is an type defined in the current module, make the fully qualified
+/// type for that path
+fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &Vec<&Ident>) {
+    if let path @ syn::Path {
+        leading_colon: None,
+        ..
+    } = path
+    {
+        if path.segments.len() == 1 {
+            type_params.iter().for_each(|&param| {
+                let ident = &path.segments[0].ident;
+                if ident != param {
+                    let mut segments = Punctuated::new();
+                    mod_path
+                        .segments
+                        .iter()
+                        .cloned()
+                        .chain(once(PathSegment {
+                            arguments: PathArguments::None,
+                            ident: ident.clone(),
+                        }))
+                        .for_each(|segment| segments.push(segment));
+                    path.segments = segments;
+                    path.leading_colon = Some(Token![::](Span::call_site()));
+                }
+            })
         }
     }
 }
