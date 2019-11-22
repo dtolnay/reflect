@@ -49,10 +49,8 @@ optimizations on shitty generated code. Literally the source code authored
 through the reflection API will be what a seasoned macro author would have
 produced simply using `syn` and `quote`.
 
-From the perspective of the person that ends up calling the macro, everything
-about how it is called is the same as if the macro were written the old
-fashioned way without reflection, and their code compiles exactly as fast and
-performs exactly as fast. The advantage is to the macro author for whom
+The macro is called as if it were written without reflection, and code compiles 
+and performs exactly as fast as usual. The advantage is to the macro author for whom
 developing and maintaining a robust macro is greatly simplified.
 
 [runtime reflection]: https://en.wikipedia.org/wiki/Reflection_(computer_programming)
