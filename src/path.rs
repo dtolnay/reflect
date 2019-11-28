@@ -59,6 +59,33 @@ impl Path {
         path
     }
 
+    pub(crate) fn set_params(&mut self, params: &[&str]) {
+        use PathArguments::*;
+        let last_index = self.path.len() - 1;
+        let mut last_segment = &mut self.path[last_index];
+
+        match last_segment.args {
+            None => {
+                last_segment.args = AngleBracketed(AngleBracketedGenericArguments {
+                    args: GenericArguments {
+                        args: params
+                            .iter()
+                            .map(|param| {
+                                GenericArgument::syn_to_generic_argument(parse_str(param).unwrap())
+                            })
+                            .collect(),
+                    },
+                })
+            }
+            AngleBracketed(AngleBracketedGenericArguments { ref mut args }) => {
+                args.args.extend(params.iter().map(|param| {
+                    GenericArgument::syn_to_generic_argument(parse_str(param).unwrap())
+                }))
+            }
+            _ => panic!("Path::add_params: ParenthesizedGenericArguments"),
+        }
+    }
+
     pub(crate) fn syn_to_path(path: syn::Path) -> Self {
         match path {
             syn::Path {

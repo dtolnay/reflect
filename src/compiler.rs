@@ -235,9 +235,9 @@ impl CompleteFunction {
             ValueNode::Binding { ref name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => {
                 let invoke = &self.invokes[invoke.0];
-                let parent = match invoke.function.parent {
+                let parent_type = match invoke.function.parent {
                     Some(ref parent) => {
-                        let print = Print::ref_cast(parent);
+                        let print = Print::ref_cast(&parent.ty);
                         Some(quote!(#print ::))
                     }
                     None => None,
@@ -246,7 +246,7 @@ impl CompleteFunction {
                 let args = self.make_values_list(&invoke.args);
 
                 quote! {
-                    #parent #name ( #args )
+                    #parent_type #name ( #args )
                 }
             }
             ValueNode::Destructure {

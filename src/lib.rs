@@ -367,6 +367,7 @@ pub use crate::wip::{MakeFunction, MakeImpl};
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
+use crate::function::ParentImpl;
 use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParamBound,
 };

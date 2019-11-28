@@ -1,11 +1,17 @@
-use crate::{Invoke, Push, Signature, Type, Value, ValueNode, WIP};
+use crate::{Generics, Invoke, Push, Signature, Type, Value, ValueNode, WIP};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) parent: Option<Type>,
+    pub(crate) parent: Option<Rc<ParentImpl>>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParentImpl {
+    pub(crate) ty: Type,
+    pub(crate) generics: Option<Generics>,
 }
 
 impl Function {
@@ -22,5 +28,33 @@ impl Function {
         Value {
             index: wip.values.index_push(node),
         }
+    }
+
+    pub fn set_parent(&mut self, parent: Rc<ParentImpl>) {
+        self.parent = Some(parent);
+    }
+}
+
+impl ParentImpl {
+    pub fn new(ty: Type) -> Self {
+        Self { ty, generics: None }
+    }
+
+    pub fn set_generic_params(&mut self, params: &[&str]) {
+        self.generics
+            .get_or_insert(Generics {
+                params: Vec::new(),
+                constraints: Vec::new(),
+            })
+            .set_generic_params(params);
+    }
+
+    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+        self.generics
+            .get_or_insert(Generics {
+                params: Vec::new(),
+                constraints: Vec::new(),
+            })
+            .set_generic_constraints(constraints);
     }
 }

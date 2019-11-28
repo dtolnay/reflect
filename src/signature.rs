@@ -1,7 +1,8 @@
-use crate::Type;
+use crate::{Generics, Type};
 
 #[derive(Debug, Clone)]
 pub struct Signature {
+    pub(crate) generics: Option<Generics>,
     pub(crate) receiver: Receiver,
     pub(crate) inputs: Vec<Type>,
     pub(crate) output: Type,
@@ -18,6 +19,7 @@ pub enum Receiver {
 impl Signature {
     pub fn new() -> Self {
         Signature {
+            generics: None,
             receiver: Receiver::NoSelf,
             inputs: Vec::new(),
             output: Type::unit(),
@@ -42,5 +44,23 @@ impl Signature {
 
     pub fn set_output(&mut self, output: Type) {
         self.output = output;
+    }
+
+    pub fn set_generic_params(&mut self, params: &[&str]) {
+        self.generics
+            .get_or_insert(Generics {
+                params: Vec::new(),
+                constraints: Vec::new(),
+            })
+            .set_generic_params(params);
+    }
+
+    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+        self.generics
+            .get_or_insert(Generics {
+                params: Vec::new(),
+                constraints: Vec::new(),
+            })
+            .set_generic_constraints(constraints);
     }
 }

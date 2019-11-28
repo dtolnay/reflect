@@ -1,5 +1,5 @@
 use crate::{Ident, Path, Type, TypeNode};
-use syn::{BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
+use syn::{parse_str, BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
 
 #[derive(Debug, Clone)]
 pub struct Generics {
@@ -98,10 +98,25 @@ pub(crate) struct Expr {
 }
 
 impl Generics {
+    pub(crate) fn set_generic_params(&mut self, params: &[&str]) {
+        let syn_params = params.iter().map(|param| parse_str(param).unwrap());
+        let (params, constraints) = syn_to_generic_params(syn_params);
+        self.params.extend(params);
+        self.constraints.extend(constraints);
+    }
+
+    pub(crate) fn set_generic_constraints(&mut self, constraints: &[&str]) {
+        let syn_constraints = constraints
+            .iter()
+            .map(|constraint| parse_str(constraint).unwrap());
+        let constraints = syn_where_predicates_to_generic_constraints(syn_constraints);
+        self.constraints.extend(constraints);
+    }
+
     pub(crate) fn syn_to_generics(generics: syn::Generics) -> Self {
         let (params, mut constraints) = syn_to_generic_params(generics.params);
         if let Some(where_clause) = generics.where_clause {
-            constraints.extend(syn_to_generic_constraints(where_clause));
+            constraints.extend(syn_where_clause_to_generic_constraints(where_clause));
         };
         Generics {
             params,
@@ -127,41 +142,47 @@ fn syn_to_bound_lifetimes(lifetimes: Option<BoundLifetimes>) -> Vec<Lifetime> {
     })
 }
 
-fn syn_to_generic_constraints(
+fn syn_where_clause_to_generic_constraints(
     where_clause: WhereClause,
 ) -> impl Iterator<Item = GenericConstraint> {
-    where_clause
-        .predicates
-        .into_iter()
-        .map(|predicate| match predicate {
-            WherePredicate::Type(syn::PredicateType {
-                lifetimes,
-                bounded_ty,
-                bounds,
-                ..
-            }) => GenericConstraint::Type(PredicateType {
-                lifetimes: syn_to_bound_lifetimes(lifetimes),
-                bounded_ty: Type::syn_to_type(bounded_ty),
-                bounds: syn_to_type_param_bounds(bounds),
-            }),
-            WherePredicate::Lifetime(PredicateLifetime {
-                lifetime: syn::Lifetime { ident, .. },
-                bounds,
-                ..
-            }) => GenericConstraint::Lifetime(LifetimeDef {
-                ident: Ident::from(ident),
-                bounds: bounds
-                    .into_iter()
-                    .map(|syn::Lifetime { ident, .. }| Lifetime {
-                        ident: Ident::from(ident),
-                    })
-                    .collect(),
-            }),
-            WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
-        })
+    syn_where_predicates_to_generic_constraints(where_clause.predicates.into_iter())
 }
 
-fn syn_to_generic_params<T>(params: T) -> (Vec<GenericParam>, Vec<GenericConstraint>)
+pub(crate) fn syn_where_predicates_to_generic_constraints<I>(
+    where_predicates: I,
+) -> impl Iterator<Item = GenericConstraint>
+where
+    I: Iterator<Item = WherePredicate>,
+{
+    where_predicates.map(|predicate| match predicate {
+        WherePredicate::Type(syn::PredicateType {
+            lifetimes,
+            bounded_ty,
+            bounds,
+            ..
+        }) => GenericConstraint::Type(PredicateType {
+            lifetimes: syn_to_bound_lifetimes(lifetimes),
+            bounded_ty: Type::syn_to_type(bounded_ty),
+            bounds: syn_to_type_param_bounds(bounds),
+        }),
+        WherePredicate::Lifetime(PredicateLifetime {
+            lifetime: syn::Lifetime { ident, .. },
+            bounds,
+            ..
+        }) => GenericConstraint::Lifetime(LifetimeDef {
+            ident: Ident::from(ident),
+            bounds: bounds
+                .into_iter()
+                .map(|syn::Lifetime { ident, .. }| Lifetime {
+                    ident: Ident::from(ident),
+                })
+                .collect(),
+        }),
+        WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
+    })
+}
+
+pub(crate) fn syn_to_generic_params<T>(params: T) -> (Vec<GenericParam>, Vec<GenericConstraint>)
 where
     T: IntoIterator<Item = syn::GenericParam>,
 {
