@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) parent: Option<Rc<ParentImpl>>,
+    pub(crate) parent: Option<ParentImpl>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
 }
@@ -30,7 +30,15 @@ impl Function {
         }
     }
 
-    pub fn set_parent(&mut self, parent: Rc<ParentImpl>) {
+    pub fn get_function(name: &str, sig: Signature) -> Function {
+        Function {
+            parent: None,
+            name: name.to_owned(),
+            sig,
+        }
+    }
+
+    pub fn set_parent(&mut self, parent: ParentImpl) {
         self.parent = Some(parent);
     }
 }

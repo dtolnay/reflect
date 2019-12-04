@@ -355,7 +355,7 @@ pub use crate::data::{
 pub use crate::derive::derive;
 pub use crate::execution::Execution;
 pub use crate::field::{Field, Fields};
-pub use crate::function::Function;
+pub use crate::function::{Function, ParentImpl};
 pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
 pub use crate::path::Path;
@@ -367,7 +367,6 @@ pub use crate::wip::{MakeFunction, MakeImpl};
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
-use crate::function::ParentImpl;
 use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, TraitBound, TypeParamBound,
 };

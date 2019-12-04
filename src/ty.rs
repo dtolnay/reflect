@@ -6,7 +6,6 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::fmt::Debug;
-use std::rc::Rc;
 use syn::TypePath;
 
 #[derive(Debug, Clone)]
@@ -73,13 +72,13 @@ impl Type {
 
     pub fn get_function(&self, name: &str, sig: Signature) -> Function {
         Function {
-            parent: Some(Rc::new(ParentImpl {
+            parent: Some(ParentImpl {
                 ty: self.clone(),
                 generics: match self.0 {
                     TypeNode::DataStructure { ref generics, .. } => Some(generics.clone()),
                     _ => None,
                 },
-            })),
+            }),
             name: name.to_owned(),
             sig,
         }
@@ -118,7 +117,7 @@ impl Type {
         }
     }
 
-    /// Add generic parameters to a path type
+    /// Set generic parameters to a path type
     pub fn set_params(&mut self, params: &[&str]) {
         match self.0 {
             TypeNode::Path(ref mut path) => path.set_params(params),

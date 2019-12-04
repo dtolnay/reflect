@@ -218,12 +218,31 @@ impl ToTokens for Print<GenericArgument> {
 impl ToTokens for Print<path::Path> {
     //FIXME generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        use path::PathArguments;
         let leading = if self.0.global {
             Some(quote!(::))
         } else {
             None
         };
-        let path = self.0.path.iter().map(|segment| &segment.ident);
+        let path = self.0.path.iter().map(|segment| {
+            let ident = &segment.ident;
+            let args = match &segment.args {
+                PathArguments::None => None,
+                PathArguments::AngleBracketed(args) => {
+                    let args = args.args.args.iter().map(Print::ref_cast);
+                    Some(quote!(<#(#args),*>))
+                }
+                PathArguments::Parenthesized(args) => {
+                    let inputs = args.inputs.iter().map(Print::ref_cast);
+                    let output = args.output.as_ref().map(|output| {
+                        let output = Print::ref_cast(output);
+                        quote! {-> output}
+                    });
+                    Some(quote! { (#(#inputs),*) #output})
+                }
+            };
+            quote!(#ident #args)
+        });
         tokens.append_all(quote!(#leading #(#path)::*));
     }
 }

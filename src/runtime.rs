@@ -26,6 +26,12 @@ impl RuntimeType for Type {
     }
 }
 
+impl RuntimeType for Path {
+    fn SELF(self) -> Type {
+        Type(TypeNode::Path(self))
+    }
+}
+
 impl RuntimeFunction for Function {
     fn SELF(self) -> Function {
         self

@@ -3,8 +3,10 @@ use reflect::*;
 
 library! {
     use simple {
-        trait Simple {
-            fn simple();
+        type Wrapper<T>;
+
+        trait Simple<T> {
+            fn simple<U>(T, Wrapper<U>);
         }
 
         trait Bound {}
@@ -33,7 +35,7 @@ fn test_generics() {
                 T: ::simple::Bound + Send,
                 'b: 'a,
         {
-            fn simple() {
+            fn simple(__arg0: T, __arg1: ::simple::Wrapper<U>) {
                 let __v0 = ();
                 __v0
             }

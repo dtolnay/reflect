@@ -8,8 +8,8 @@ use std::iter::once;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
-    braced, parenthesized, parse_macro_input, token, GenericArgument, GenericParam, Generics,
-    Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
+    braced, parenthesized, parse_macro_input, parse_str, token, GenericArgument, GenericParam,
+    Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
 };
 
 use self::proc_macro::TokenStream;
@@ -195,12 +195,29 @@ impl Parse for ItemTrait {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![trait]>()?;
 
-        let mut generics = if has_generics(input) {
-            input.parse()?
-        } else {
-            Generics::default()
+        let mut generics: Generics = Generics::default();
+        let segment: PathSegment = input.parse()?;
+
+        if let PathArguments::AngleBracketed(args) = &segment.arguments {
+            let args = args
+                .args
+                .iter()
+                .filter_map::<GenericParam, _>(|arg| match arg {
+                    GenericArgument::Type(syn::Type::Path(path)) => {
+                        if let Some(ident) = path.path.get_ident() {
+                            parse_str(&ident.to_string()).ok()
+                        } else {
+                            None
+                        }
+                    }
+                    GenericArgument::Constraint(constraint) => {
+                        parse_str(&constraint.ident.to_string()).ok()
+                    }
+                    _ => None,
+                })
+                .collect();
+            generics.params = args;
         };
-        let segment = input.parse()?;
         generics.where_clause = input.parse()?;
 
         let content;
@@ -438,10 +455,16 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let functions = item
-        .functions
-        .iter()
-        .map(|f| declare_function(parent, f, mod_path, type_params));
+    let functions = item.functions.iter().map(|f| {
+        declare_function(
+            parent,
+            &item.generics,
+            &item.segment,
+            f,
+            mod_path,
+            type_params,
+        )
+    });
 
     quote! {
         #(
@@ -471,10 +494,16 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let functions = item
-        .functions
-        .iter()
-        .map(|f| declare_function(parent, f, mod_path, type_params));
+    let functions = item.functions.iter().map(|f| {
+        declare_function(
+            parent,
+            &item.generics,
+            &item.segment,
+            f,
+            mod_path,
+            type_params,
+        )
+    });
 
     quote! {
         #d_type
@@ -492,6 +521,8 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
 
 fn declare_function(
     parent: &Ident,
+    parent_generics: &Generics,
+    parent_type: &PathSegment,
     function: &Function,
     mod_path: &Path,
     type_params: &Vec<&Ident>,
@@ -524,11 +555,76 @@ fn declare_function(
         .chain(type_params.iter().map(|ident| *ident))
         .collect();
 
+    let set_parent_type_params = if let PathArguments::AngleBracketed(args) = &parent_type.arguments
+    {
+        let path_args_strings = args
+            .args
+            .iter()
+            .map(|arg| arg.to_token_stream().to_string());
+
+        Some(quote! {
+            ty.set_params(&[#(#path_args_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let set_parent_params = if !parent_generics.params.is_empty() {
+        let param_strings = parent_generics
+            .params
+            .iter()
+            .map(|param| param.to_token_stream().to_string());
+
+        Some(quote! {
+            parent_impl.set_generic_params(&[#(#param_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let set_parent_constraints = if let Some(clause) = &parent_generics.where_clause {
+        let constraint_strings = clause
+            .predicates
+            .iter()
+            .map(|clause| clause.to_token_stream().to_string());
+
+        Some(quote! {
+            parent_impl.set_generic_constraints(&[#(#constraint_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let set_sig_params = if !function.generics.params.is_empty() {
+        let param_strings = function
+            .generics
+            .params
+            .iter()
+            .map(|param| param.to_token_stream().to_string());
+
+        Some(quote! {
+            sig.set_generic_params(&[#(#param_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let set_sig_constraints = if let Some(clause) = &function.generics.where_clause {
+        let constraint_strings = clause
+            .predicates
+            .iter()
+            .map(|clause| clause.to_token_stream().to_string());
+
+        Some(quote! {
+            sig.set_generic_constraints(&[#(#constraint_strings),*]);
+        })
+    } else {
+        None
+    };
+
     let setup_inputs = function.args.iter().map(|arg| {
         let ty = to_runtime_type(arg, mod_path, type_params);
-        quote! {
-            sig.add_input(#ty);
-        }
+        quote!(sig.add_input(#ty);)
     });
     let set_output = function.ret.as_ref().map(|ty| {
         let ty = to_runtime_type(&ty, mod_path, type_params);
@@ -554,7 +650,16 @@ fn declare_function(
                             #setup_inputs
                         )*
                         #set_output
-                        _reflect::runtime::RuntimeType::SELF(#parent).get_function(#name_str, sig)
+                        #set_sig_params
+                        #set_sig_constraints
+                        let mut ty = _reflect::runtime::RuntimeType::SELF(#parent);
+                        #set_parent_type_params
+                        let mut fun = _reflect::Function::get_function(#name_str, sig);
+                        let mut parent_impl = _reflect::ParentImpl::new(ty);
+                        #set_parent_params
+                        #set_parent_constraints
+                        fun.set_parent(parent_impl);
+                        fun
                     }
                 }
 
@@ -617,6 +722,16 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
                 ..
             },
         ) if path.segments.len() == 1 => {
+            if let Some(ident) = &path.get_ident() {
+                if type_params.contains(ident) {
+                    let path_str = ident.to_string();
+                    return quote! {
+                        _reflect::runtime::RuntimeType::SELF(
+                            <_reflect::Path as ::std::str::FromStr>::from_str(#path_str).unwrap()
+                        )
+                    };
+                }
+            }
             let mut path = path.clone();
             expand_path_arguments(&mut path.segments[0].arguments, mod_path, type_params);
             let path_str = path.to_token_stream().to_string();
@@ -633,7 +748,9 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
             );
             let path_str: String = path.to_token_stream().to_string();
             quote! {
-                _reflect::module::from_str(#path_str).get_type()
+                _reflect::runtime::RuntimeType::SELF(
+                    <_reflect::Path as ::std::str::FromStr>::from_str(#path_str).unwrap()
+                )
             }
         }
         Type::TraitObject(bounds) => {
@@ -730,23 +847,22 @@ fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &Vec<&Ident>)
     } = path
     {
         if path.segments.len() == 1 {
-            type_params.iter().for_each(|&param| {
-                let ident = &path.segments[0].ident;
-                if ident != param {
-                    let mut segments = Punctuated::new();
-                    mod_path
-                        .segments
-                        .iter()
-                        .cloned()
-                        .chain(once(PathSegment {
-                            arguments: PathArguments::None,
-                            ident: ident.clone(),
-                        }))
-                        .for_each(|segment| segments.push(segment));
-                    path.segments = segments;
-                    path.leading_colon = Some(Token![::](Span::call_site()));
-                }
-            })
+            let segment = &mut path.segments[0];
+            let ident = &segment.ident;
+            if !type_params.contains(&ident) {
+                let mut segments = Punctuated::new();
+                mod_path
+                    .segments
+                    .iter()
+                    .cloned()
+                    .chain(once(PathSegment {
+                        arguments: PathArguments::None,
+                        ident: ident.clone(),
+                    }))
+                    .for_each(|segment| segments.push(segment));
+                path.segments = segments;
+                path.leading_colon = Some(Token![::](Span::call_site()));
+            }
         }
     }
 }
