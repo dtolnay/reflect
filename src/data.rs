@@ -84,10 +84,10 @@ impl<T> Struct<T> {
     where
         T: Clone,
     {
-        let fields = match *self {
-            Struct::Unit(ref s) => Vec::new(),
-            Struct::Tuple(ref s) => s.fields.clone(),
-            Struct::Struct(ref s) => s.fields.clone(),
+        let fields = match self {
+            Struct::Unit(s) => Vec::new(),
+            Struct::Tuple(s) => s.fields.clone(),
+            Struct::Struct(s) => s.fields.clone(),
         };
         Fields {
             fields: fields.into_iter(),

@@ -89,9 +89,9 @@ impl CompleteFunction {
             });
         }
 
-        let output = match self.f.sig.output {
-            Type(TypeNode::Tuple(ref types)) if types.is_empty() => None,
-            ref other => {
+        let output = match &self.f.sig.output {
+            Type(TypeNode::Tuple(types)) if types.is_empty() => None,
+            other => {
                 let ty = Print::ref_cast(other);
                 Some(quote!(-> #ty))
             }
@@ -150,21 +150,21 @@ impl CompleteFunction {
 
         use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
-            match self.values[v.0] {
-                Tuple(ref values) => {
+            match &self.values[v.0] {
+                Tuple(values) => {
                     for &v in values.iter() {
                         if reachable.insert(v) {
                             stack.extend(values);
                         }
                     }
                 }
-                Str(ref s) => {}
+                Str(s) => {}
                 Reference(v) | ReferenceMut(v) | Dereference(v) => {
-                    if reachable.insert(v) {
-                        stack.push(v);
+                    if reachable.insert(*v) {
+                        stack.push(*v);
                     }
                 }
-                Binding { ref name, .. } => {}
+                Binding { name, .. } => {}
                 Invoke(invoke) => {
                     for &v in &self.invokes[invoke.0].args {
                         if reachable.insert(v) {
@@ -180,8 +180,8 @@ impl CompleteFunction {
                     }
                 }
                 Destructure { parent, .. } => {
-                    if reachable.insert(parent) {
-                        stack.push(parent);
+                    if reachable.insert(*parent) {
+                        stack.push(*parent);
                     }
                 }
                 DataStructure { .. } => unimplemented!(),
@@ -211,15 +211,15 @@ impl CompleteFunction {
     }
 
     fn compile_value(&self, v: ValueRef) -> TokenStream {
-        match self.values[v.0] {
-            ValueNode::Tuple(ref values) => {
+        match &self.values[v.0] {
+            ValueNode::Tuple(values) => {
                 let values = self.make_values_list(values);
 
                 quote! {
                     ( #values )
                 }
             }
-            ValueNode::Str(ref s) => quote! { #s },
+            ValueNode::Str(s) => quote! { #s },
             ValueNode::Reference(v) => {
                 let v = v.binding();
                 quote! { &#v }
@@ -232,7 +232,7 @@ impl CompleteFunction {
                 let v = v.binding();
                 quote! { *#v }
             }
-            ValueNode::Binding { ref name, .. } => quote! { #name },
+            ValueNode::Binding { name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => {
                 let invoke = &self.invokes[invoke.0];
                 let parent_type = match invoke.function.parent {
@@ -250,9 +250,7 @@ impl CompleteFunction {
                 }
             }
             ValueNode::Destructure {
-                parent,
-                ref accessor,
-                ..
+                parent, accessor, ..
             } => {
                 let parent = parent.binding();
                 let accessor = Print::ref_cast(accessor);

@@ -12,9 +12,9 @@ pub(crate) struct Print<T>(T);
 impl ToTokens for Print<Accessor> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use Accessor::*;
-        match self.0 {
-            Name(ref ident) => ident.to_tokens(tokens),
-            Index(ref i) => LitInt::new(&i.to_string(), Span::call_site()).to_tokens(tokens),
+        match &self.0 {
+            Name(ident) => ident.to_tokens(tokens),
+            Index(i) => LitInt::new(&i.to_string(), Span::call_site()).to_tokens(tokens),
         }
     }
 }
@@ -29,9 +29,9 @@ impl ToTokens for Print<TypeNode> {
     //FIXME: generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use crate::TypeNode::*;
-        tokens.append_all(match self.0 {
+        tokens.append_all(match &self.0 {
             Infer => quote!(_),
-            Tuple(ref types) => {
+            Tuple(types) => {
                 if types.len() == 1 {
                     let ty = Print::ref_cast(&types[0]);
                     quote!((#ty,))
@@ -41,32 +41,26 @@ impl ToTokens for Print<TypeNode> {
                 }
             }
             PrimitiveStr => quote!(str),
-            Reference {
-                ref lifetime,
-                ref inner,
-            } => {
+            Reference { lifetime, inner } => {
                 let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&#lifetime #inner)
             }
-            ReferenceMut {
-                ref lifetime,
-                ref inner,
-            } => {
+            ReferenceMut { lifetime, inner } => {
                 let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
                 quote!(&mut #lifetime #inner)
             }
-            Dereference(ref inner) => panic!("Type::Dereference::to_tokens"),
-            DataStructure { ref name, .. } => {
+            Dereference(inner) => panic!("Type::Dereference::to_tokens"),
+            DataStructure { name, .. } => {
                 //FIXME: generics
                 quote!(#name)
             }
-            TraitObject(ref bounds) => {
+            TraitObject(bounds) => {
                 let bounds = bounds.iter().map(Print::ref_cast);
                 quote!((dyn #(#bounds)+*))
             }
-            Path(ref path) => {
+            Path(path) => {
                 let path = Print::ref_cast(path);
                 quote!(#path)
             }
@@ -83,21 +77,19 @@ impl ToTokens for Print<Generics> {
 
 impl ToTokens for Print<GenericParam> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.0 {
-            GenericParam::Type(ref type_param) => Print::ref_cast(type_param).to_tokens(tokens),
-            GenericParam::Lifetime(ref lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
-            GenericParam::Const(ref _const) => unimplemented!("const generics"),
+        match &self.0 {
+            GenericParam::Type(type_param) => Print::ref_cast(type_param).to_tokens(tokens),
+            GenericParam::Lifetime(lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
+            GenericParam::Const(_const) => unimplemented!("const generics"),
         }
     }
 }
 
 impl ToTokens for Print<GenericConstraint> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.0 {
-            GenericConstraint::Type(ref predicate) => Print::ref_cast(predicate).to_tokens(tokens),
-            GenericConstraint::Lifetime(ref lifetime) => {
-                Print::ref_cast(lifetime).to_tokens(tokens)
-            }
+        match &self.0 {
+            GenericConstraint::Type(predicate) => Print::ref_cast(predicate).to_tokens(tokens),
+            GenericConstraint::Lifetime(lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
         }
     }
 }
@@ -111,12 +103,10 @@ impl ToTokens for Print<TypeParam> {
 
 impl ToTokens for Print<TypeParamBound> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.0 {
-            TypeParamBound::Trait(ref trait_bound) => {
-                Print::ref_cast(trait_bound).to_tokens(tokens)
-            }
+        match &self.0 {
+            TypeParamBound::Trait(trait_bound) => Print::ref_cast(trait_bound).to_tokens(tokens),
 
-            TypeParamBound::Lifetime(ref lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
+            TypeParamBound::Lifetime(lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
         }
     }
 }
@@ -199,18 +189,18 @@ impl ToTokens for Print<Constraint> {
 
 impl ToTokens for Print<GenericArgument> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.0 {
-            GenericArgument::Lifetime(ref lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
+        match &self.0 {
+            GenericArgument::Lifetime(lifetime) => Print::ref_cast(lifetime).to_tokens(tokens),
 
-            GenericArgument::Type(ref ty) => Print::ref_cast(ty).to_tokens(tokens),
+            GenericArgument::Type(ty) => Print::ref_cast(ty).to_tokens(tokens),
 
-            GenericArgument::Binding(ref binding) => Print::ref_cast(binding).to_tokens(tokens),
+            GenericArgument::Binding(binding) => Print::ref_cast(binding).to_tokens(tokens),
 
-            GenericArgument::Constraint(ref constraint) => {
+            GenericArgument::Constraint(constraint) => {
                 Print::ref_cast(constraint).to_tokens(tokens)
             }
 
-            GenericArgument::Const(ref _expr) => unimplemented!(),
+            GenericArgument::Const(_expr) => unimplemented!(),
         }
     }
 }

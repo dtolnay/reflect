@@ -27,10 +27,10 @@ pub(crate) enum ValueNode {
 impl ValueNode {
     pub fn get_type_name(&self) -> Self {
         match self {
-            ValueNode::Tuple(ref types) => {
+            ValueNode::Tuple(types) => {
                 let types: String = types.iter().fold(String::from(""), |mut acc, v| {
-                    match v.node().get_type_name() {
-                        ValueNode::Str(ref name) => {
+                    match &v.node().get_type_name() {
+                        ValueNode::Str(name) => {
                             acc.push_str(name);
                             acc.push_str(", ");
                             acc
@@ -42,10 +42,10 @@ impl ValueNode {
                 ValueNode::Str(types)
             }
             ValueNode::Str(_) => ValueNode::Str(String::from("str")),
-            ValueNode::DataStructure { ref name, .. } => ValueNode::Str(name.to_owned()),
+            ValueNode::DataStructure { name, .. } => ValueNode::Str(name.to_owned()),
             ValueNode::Reference(v) => v.node().get_type_name(),
             ValueNode::ReferenceMut(v) => v.node().get_type_name(),
-            ValueNode::Binding { ref ty, .. } => ValueNode::Str(ty.0.get_name()),
+            ValueNode::Binding { ty, .. } => ValueNode::Str(ty.0.get_name()),
             ValueNode::Destructure {
                 parent,
                 accessor,

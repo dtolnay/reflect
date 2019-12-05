@@ -63,10 +63,10 @@ impl Type {
     }
 
     pub fn dereference(&self) -> Self {
-        match self.0 {
-            TypeNode::Reference { ref inner, .. } => Type((**inner).clone()),
-            TypeNode::ReferenceMut { ref inner, .. } => Type((**inner).clone()),
-            ref other => Type(TypeNode::Dereference(Box::new(other.clone()))),
+        match &self.0 {
+            TypeNode::Reference { inner, .. } => Type((**inner).clone()),
+            TypeNode::ReferenceMut { inner, .. } => Type((**inner).clone()),
+            other => Type(TypeNode::Dereference(Box::new(other.clone()))),
         }
     }
 
@@ -85,34 +85,32 @@ impl Type {
     }
 
     pub fn data(&self) -> Data<Self> {
-        match self.0 {
-            TypeNode::DataStructure { ref data, .. } => data.clone().map(|field| field.element),
-            TypeNode::Reference {
-                ref lifetime,
-                ref inner,
-            } => Type((**inner).clone()).data().map(|field| {
-                Type(TypeNode::Reference {
-                    lifetime: lifetime.clone(),
-                    inner: Box::new(field.element.0),
+        match &self.0 {
+            TypeNode::DataStructure { data, .. } => data.clone().map(|field| field.element),
+            TypeNode::Reference { lifetime, inner } => {
+                Type((**inner).clone()).data().map(|field| {
+                    Type(TypeNode::Reference {
+                        lifetime: lifetime.clone(),
+                        inner: Box::new(field.element.0),
+                    })
                 })
-            }),
-            TypeNode::ReferenceMut {
-                ref lifetime,
-                ref inner,
-            } => Type((**inner).clone()).data().map(|field| {
-                Type(TypeNode::ReferenceMut {
-                    lifetime: lifetime.clone(),
-                    inner: Box::new(field.element.0),
+            }
+            TypeNode::ReferenceMut { lifetime, inner } => {
+                Type((**inner).clone()).data().map(|field| {
+                    Type(TypeNode::ReferenceMut {
+                        lifetime: lifetime.clone(),
+                        inner: Box::new(field.element.0),
+                    })
                 })
-            }),
+            }
             _ => panic!("Type::data"),
         }
     }
 
     /// Returns a Type from a Tuple
     pub fn get_tuple_type(&self, index: usize) -> Self {
-        match self.0 {
-            TypeNode::Tuple(ref types) => types[index].clone(),
+        match &self.0 {
+            TypeNode::Tuple(types) => types[index].clone(),
             _ => panic!("Type::get_tuple_type: Not a Tuple"),
         }
     }
@@ -181,15 +179,15 @@ impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match self {
             //FIXME: Add more TypeNode branches
-            TypeNode::Tuple(ref types) => {
+            TypeNode::Tuple(types) => {
                 let types = types.iter().map(Print::ref_cast);
                 quote!((#(#types),*)).to_string()
             }
             TypeNode::PrimitiveStr => String::from("str"),
-            TypeNode::DataStructure { ref name, .. } => name.to_string(),
-            TypeNode::Reference { ref inner, .. } => (&**inner).get_name(),
-            TypeNode::ReferenceMut { ref inner, .. } => (&**inner).get_name(),
-            TypeNode::Path(ref path) => {
+            TypeNode::DataStructure { name, .. } => name.to_string(),
+            TypeNode::Reference { inner, .. } => (&**inner).get_name(),
+            TypeNode::ReferenceMut { inner, .. } => (&**inner).get_name(),
+            TypeNode::Path(path) => {
                 let mut tokens = TokenStream::new();
                 Print::ref_cast(path).to_tokens(&mut tokens);
                 tokens.to_string()
@@ -205,7 +203,7 @@ impl TypeNode {
         match self {
             Infer => panic!("Type::name_and_generics: Infer"),
 
-            Tuple(ref types) => {
+            Tuple(types) => {
                 let types = types.iter().map(Print::ref_cast);
                 (quote!((#(#types),*)), Vec::new(), Vec::new())
             }

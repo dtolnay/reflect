@@ -31,7 +31,7 @@ impl Value {
         match self.node() {
             ValueNode::Reference(inner) => Value { index: inner },
             ValueNode::ReferenceMut(inner) => Value { index: inner },
-            ref other => {
+            other => {
                 let node = ValueNode::Dereference(self.index);
                 Value {
                     index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
@@ -50,13 +50,13 @@ impl Value {
     pub fn data(&self) -> Data<Self> {
         use crate::ValueNode::*;
         match self.node() {
-            DataStructure { ref data, .. } => data.clone().map(|value_ref| Value {
+            DataStructure { data, .. } => data.clone().map(|value_ref| Value {
                 index: value_ref.element,
             }),
             Reference(v) => Value { index: v }.data().map(|v| v.element.reference()),
             ReferenceMut(v) => Value { index: v }.data().map(|v| v.element.reference_mut()),
             // FIXME generate match and propagate the binding
-            Binding { ref name, ref ty } => ty.data().map(|field| {
+            Binding { name, ty } => ty.data().map(|field| {
                 let node = ValueNode::Destructure {
                     parent: self.index,
                     accessor: field.accessor.clone(),
