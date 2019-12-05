@@ -455,16 +455,12 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let functions = item.functions.iter().map(|f| {
-        declare_function(
-            parent,
-            &item.generics,
-            &item.segment,
-            f,
-            mod_path,
-            type_params,
-        )
-    });
+    let setup_parent = setup_parent(parent, &item.generics, &item.segment);
+
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, &setup_parent, f, mod_path, type_params));
 
     quote! {
         #(
@@ -494,16 +490,12 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let functions = item.functions.iter().map(|f| {
-        declare_function(
-            parent,
-            &item.generics,
-            &item.segment,
-            f,
-            mod_path,
-            type_params,
-        )
-    });
+    let setup_parent = setup_parent(parent, &item.generics, &item.segment);
+
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, &setup_parent, f, mod_path, type_params));
 
     quote! {
         #d_type
@@ -521,8 +513,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
 
 fn declare_function(
     parent: &Ident,
-    parent_generics: &Generics,
-    parent_type: &PathSegment,
+    setup_parent: &TokenStream2,
     function: &Function,
     mod_path: &Path,
     type_params: &Vec<&Ident>,
@@ -555,6 +546,95 @@ fn declare_function(
         .chain(type_params.iter().map(|ident| *ident))
         .collect();
 
+    let set_sig_params = if !function.generics.params.is_empty() {
+        let param_strings = function
+            .generics
+            .params
+            .iter()
+            .map(|param| param.to_token_stream().to_string());
+
+        Some(quote! {
+            sig.set_generic_params(&[#(#param_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let set_sig_constraints = if let Some(clause) = &function.generics.where_clause {
+        let constraint_strings = clause
+            .predicates
+            .iter()
+            .map(|clause| clause.to_token_stream().to_string());
+
+        Some(quote! {
+            sig.set_generic_constraints(&[#(#constraint_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let setup_inputs = function.args.iter().map(|arg| {
+        let ty = to_runtime_type(arg, mod_path, type_params);
+        quote!(sig.add_input(#ty);)
+    });
+    let set_output = function.ret.as_ref().map(|ty| {
+        let ty = to_runtime_type(&ty, mod_path, type_params);
+        quote!(sig.set_output(#ty);)
+    });
+
+    let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
+        .map(|i| Ident::new(&format!("v{}", i), Span::call_site()));
+    let vars2 = vars.clone();
+
+    quote! {
+        impl __Indirect<#parent> {
+            #[allow(dead_code)]
+            fn #name() {
+                #[allow(non_camel_case_types)]
+                #[derive(Copy, Clone)]
+                pub struct #name;
+
+                impl _reflect::runtime::RuntimeFunction for #name {
+                    fn SELF(self) -> _reflect::Function {
+                        let mut sig = _reflect::Signature::new();
+                        #setup_receiver
+                        #(
+                            #setup_inputs
+                        )*
+                        #set_output
+                        #set_sig_params
+                        #set_sig_constraints
+                        let mut fun = _reflect::Function::get_function(#name_str, sig);
+                        #setup_parent
+                        fun
+                    }
+                }
+
+                impl #name {
+                    pub fn INVOKE(
+                        self,
+                        #(
+                            #vars: _reflect::Value,
+                        )*
+                    ) -> _reflect::Value {
+                        _reflect::runtime::RuntimeFunction::SELF(self).invoke(&[#(#vars2),*])
+                    }
+                }
+
+                impl #parent {
+                    #[allow(non_upper_case_globals)]
+                    pub const #name: #name = #name;
+                }
+            }
+        }
+    }
+}
+
+fn setup_parent(
+    parent: &Ident,
+    parent_generics: &Generics,
+    parent_type: &PathSegment,
+) -> TokenStream2 {
     let set_parent_type_params = if let PathArguments::AngleBracketed(args) = &parent_type.arguments
     {
         let path_args_strings = args
@@ -595,91 +675,13 @@ fn declare_function(
         None
     };
 
-    let set_sig_params = if !function.generics.params.is_empty() {
-        let param_strings = function
-            .generics
-            .params
-            .iter()
-            .map(|param| param.to_token_stream().to_string());
-
-        Some(quote! {
-            sig.set_generic_params(&[#(#param_strings),*]);
-        })
-    } else {
-        None
-    };
-
-    let set_sig_constraints = if let Some(clause) = &function.generics.where_clause {
-        let constraint_strings = clause
-            .predicates
-            .iter()
-            .map(|clause| clause.to_token_stream().to_string());
-
-        Some(quote! {
-            sig.set_generic_constraints(&[#(#constraint_strings),*]);
-        })
-    } else {
-        None
-    };
-
-    let setup_inputs = function.args.iter().map(|arg| {
-        let ty = to_runtime_type(arg, mod_path, type_params);
-        quote!(sig.add_input(#ty);)
-    });
-    let set_output = function.ret.as_ref().map(|ty| {
-        let ty = to_runtime_type(&ty, mod_path, type_params);
-        quote!(sig.set_output(#ty);)
-    });
-    let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
-        .map(|i| Ident::new(&format!("v{}", i), Span::call_site()));
-    let vars2 = vars.clone();
-
     quote! {
-        impl __Indirect<#parent> {
-            #[allow(dead_code)]
-            fn #name() {
-                #[allow(non_camel_case_types)]
-                #[derive(Copy, Clone)]
-                pub struct #name;
-
-                impl _reflect::runtime::RuntimeFunction for #name {
-                    fn SELF(self) -> _reflect::Function {
-                        let mut sig = _reflect::Signature::new();
-                        #setup_receiver
-                        #(
-                            #setup_inputs
-                        )*
-                        #set_output
-                        #set_sig_params
-                        #set_sig_constraints
-                        let mut ty = _reflect::runtime::RuntimeType::SELF(#parent);
-                        #set_parent_type_params
-                        let mut fun = _reflect::Function::get_function(#name_str, sig);
-                        let mut parent_impl = _reflect::ParentImpl::new(ty);
-                        #set_parent_params
-                        #set_parent_constraints
-                        fun.set_parent(parent_impl);
-                        fun
-                    }
-                }
-
-                impl #name {
-                    pub fn INVOKE(
-                        self,
-                        #(
-                            #vars: _reflect::Value,
-                        )*
-                    ) -> _reflect::Value {
-                        _reflect::runtime::RuntimeFunction::SELF(self).invoke(&[#(#vars2),*])
-                    }
-                }
-
-                impl #parent {
-                    #[allow(non_upper_case_globals)]
-                    pub const #name: #name = #name;
-                }
-            }
-        }
+        let mut ty = _reflect::runtime::RuntimeType::SELF(#parent);
+        #set_parent_type_params
+        let mut parent_impl = _reflect::ParentImpl::new(ty);
+        #set_parent_params
+        #set_parent_constraints
+        fun.set_parent(parent_impl);
     }
 }
 
