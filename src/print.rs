@@ -206,7 +206,6 @@ impl ToTokens for Print<GenericArgument> {
 }
 
 impl ToTokens for Print<path::Path> {
-    //FIXME generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use path::PathArguments;
         let leading = if self.0.global {

@@ -678,7 +678,7 @@ fn setup_parent(
     quote! {
         let mut ty = _reflect::runtime::RuntimeType::SELF(#parent);
         #set_parent_type_params
-        let mut parent_impl = _reflect::ParentImpl::new(ty);
+        let mut parent_impl = _reflect::Parent::new(ty);
         #set_parent_params
         #set_parent_constraints
         fun.set_parent(parent_impl);

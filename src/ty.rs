@@ -1,6 +1,6 @@
 use crate::{
-    generics, Data, Function, GenericConstraint, GenericParam, Generics, Ident, Lifetime,
-    ParentImpl, Path, Print, Signature, TypeParamBound,
+    generics, Data, Function, GenericConstraint, GenericParam, Generics, Ident, Lifetime, Parent,
+    Path, Print, Signature, TypeParamBound,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -72,7 +72,7 @@ impl Type {
 
     pub fn get_function(&self, name: &str, sig: Signature) -> Function {
         Function {
-            parent: Some(ParentImpl {
+            parent: Some(Parent {
                 ty: self.clone(),
                 generics: match self.0 {
                     TypeNode::DataStructure { ref generics, .. } => Some(generics.clone()),

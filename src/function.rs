@@ -3,13 +3,13 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) parent: Option<ParentImpl>,
+    pub(crate) parent: Option<Parent>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
 }
 
 #[derive(Debug, Clone)]
-pub struct ParentImpl {
+pub struct Parent {
     pub(crate) ty: Type,
     pub(crate) generics: Option<Generics>,
 }
@@ -38,12 +38,12 @@ impl Function {
         }
     }
 
-    pub fn set_parent(&mut self, parent: ParentImpl) {
+    pub fn set_parent(&mut self, parent: Parent) {
         self.parent = Some(parent);
     }
 }
 
-impl ParentImpl {
+impl Parent {
     pub fn new(ty: Type) -> Self {
         Self { ty, generics: None }
     }
