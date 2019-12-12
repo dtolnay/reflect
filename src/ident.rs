@@ -3,7 +3,7 @@ use quote::ToTokens;
 use std::fmt::{self, Display};
 
 #[derive(Debug, Clone)]
-pub struct Ident(proc_macro2::Ident);
+pub struct Ident(pub(crate) proc_macro2::Ident);
 
 impl Ident {
     pub fn new<T: Display>(ident: T) -> Self {

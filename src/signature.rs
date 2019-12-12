@@ -1,4 +1,4 @@
-use crate::{Generics, Type};
+use crate::{Generics, ParamMap, Type};
 
 #[derive(Debug, Clone)]
 pub struct Signature {
@@ -46,21 +46,21 @@ impl Signature {
         self.output = output;
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
         self.generics
             .get_or_insert(Generics {
                 params: Vec::new(),
                 constraints: Vec::new(),
             })
-            .set_generic_params(params);
+            .set_generic_params(params)
     }
 
-    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
         self.generics
             .get_or_insert(Generics {
                 params: Vec::new(),
                 constraints: Vec::new(),
             })
-            .set_generic_constraints(constraints);
+            .set_generic_constraints(constraints, param_map);
     }
 }

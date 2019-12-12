@@ -51,14 +51,14 @@ impl<'a> MakeImpl<'a> {
         F: RuntimeFunction,
     {
         WIP.with(|old_wip| {
-            *old_wip.borrow_mut() = Some(WipFunction {
+            old_wip.replace(Some(WipFunction {
                 self_ty: Some(self.wip.ty.clone()),
                 f: f.SELF(),
                 values: Vec::new(),
                 invokes: Vec::new(),
                 macros: Vec::new(),
                 ret: None,
-            })
+            }))
         });
 
         let ret = Some(run(MakeFunction { private: () }).index);

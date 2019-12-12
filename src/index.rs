@@ -1,4 +1,4 @@
-use crate::{Invoke, MacroInvoke, ValueNode};
+use crate::{Invoke, Lifetime, MacroInvoke, TypeParam, ValueNode};
 
 pub(crate) trait Push {
     type Element: TypedIndex;
@@ -52,5 +52,27 @@ impl TypedIndex for MacroInvoke {
 
     fn index(i: usize) -> Self::Index {
         MacroInvokeRef(i)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub(crate) struct TypeParamRef(pub usize);
+
+impl TypedIndex for TypeParam {
+    type Index = TypeParamRef;
+
+    fn index(i: usize) -> Self::Index {
+        TypeParamRef(i)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub(crate) struct LifetimeRef(pub usize);
+
+impl TypedIndex for Lifetime {
+    type Index = LifetimeRef;
+
+    fn index(i: usize) -> Self::Index {
+        LifetimeRef(i)
     }
 }

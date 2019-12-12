@@ -1,9 +1,6 @@
 use crate::index::Push;
 use crate::{MacroInvoke, Path, Type, TypeNode, Value, ValueNode, WIP};
 use std::rc::Rc;
-use std::str::FromStr;
-use syn::parse::Result;
-use syn::Error;
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -26,6 +23,7 @@ impl Module {
         }
     }
 
+    /// Get a simple path without any generics
     pub fn get_path(&self, name: &str) -> Path {
         self.path.get_path(name)
     }
@@ -48,15 +46,5 @@ impl Module {
         Value {
             index: wip.values.index_push(node),
         }
-    }
-}
-
-impl FromStr for Module {
-    type Err = Error;
-    // TODO: Consider using custum error type
-    fn from_str(path: &str) -> Result<Self> {
-        Ok(Module {
-            path: Path::from_str(path)?,
-        })
     }
 }

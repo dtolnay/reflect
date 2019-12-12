@@ -1,5 +1,5 @@
 use crate::generics::*;
-use crate::{path, Accessor, Type, TypeNode};
+use crate::{generics, path, Accessor, LifetimeRef, Type, TypeNode, TypeParamRef};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
@@ -64,6 +64,17 @@ impl ToTokens for Print<TypeNode> {
                 let path = Print::ref_cast(path);
                 quote!(#path)
             }
+            GenericParam(param) => match param {
+                generics::GenericParam::Type(type_param_ref) => {
+                    let type_param_ref = Print::ref_cast(type_param_ref);
+                    quote!(#type_param_ref)
+                }
+                generics::GenericParam::Lifetime(lifetime_ref) => {
+                    let lifetime_ref = Print::ref_cast(lifetime_ref);
+                    quote!(#lifetime_ref)
+                }
+                _ => unimplemented!(),
+            },
         });
     }
 }
@@ -98,6 +109,12 @@ impl ToTokens for Print<TypeParam> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = &self.0.ident;
         ident.to_tokens(tokens);
+    }
+}
+
+impl ToTokens for Print<TypeParamRef> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        TYPE_PARAMS.with(|param| Print::ref_cast(&param.borrow()[(self.0).0]).to_tokens(tokens));
     }
 }
 
@@ -148,6 +165,13 @@ impl ToTokens for Print<Lifetime> {
         let apostrophe = Punct::new('\'', Spacing::Joint);
         tokens.append(apostrophe);
         self.0.ident.to_tokens(tokens);
+    }
+}
+
+impl ToTokens for Print<LifetimeRef> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        LIFETIMES
+            .with(|lifetime| Print::ref_cast(&lifetime.borrow()[(self.0).0]).to_tokens(tokens));
     }
 }
 

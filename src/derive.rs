@@ -34,10 +34,11 @@ fn syn_to_type(input: DeriveInput) -> Type {
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
+    let (generics, mut param_map) = Generics::syn_to_generics(input.generics);
 
     Type(TypeNode::DataStructure {
         name: Ident::from(input.ident),
-        generics: Generics::syn_to_generics(input.generics),
+        generics,
         data: match input.data {
             syn::Data::Struct(data) => match data.fields {
                 syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
@@ -47,7 +48,7 @@ fn syn_to_type(input: DeriveInput) -> Type {
                         .map(|field| Field {
                             attrs: field.attrs,
                             accessor: Accessor::Name(Ident::from(field.ident.unwrap())),
-                            element: Type::syn_to_type(field.ty),
+                            element: Type::syn_to_type(field.ty, &mut param_map),
                         })
                         .collect(),
                     attrs,
@@ -60,7 +61,7 @@ fn syn_to_type(input: DeriveInput) -> Type {
                         .map(|(i, field)| Field {
                             attrs: field.attrs,
                             accessor: Accessor::Index(i),
-                            element: Type::syn_to_type(field.ty),
+                            element: Type::syn_to_type(field.ty, &mut param_map),
                         })
                         .collect(),
                     attrs,

@@ -1,9 +1,9 @@
-use crate::{Generics, Invoke, Push, Signature, Type, Value, ValueNode, WIP};
+use crate::{Generics, Invoke, ParamMap, Push, Signature, Type, Value, ValueNode, WIP};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) parent: Option<Parent>,
+    pub(crate) parent: Option<Rc<Parent>>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
 }
@@ -38,7 +38,10 @@ impl Function {
         }
     }
 
-    pub fn set_parent(&mut self, parent: Parent) {
+    /// When calling set_parent it is important to use a reference to the same
+    /// Parent struct for all functions declared inside of the same impl or
+    /// trait definition. Otherwise the trait inference may not work correctly
+    pub fn set_parent(&mut self, parent: Rc<Parent>) {
         self.parent = Some(parent);
     }
 }
@@ -48,21 +51,31 @@ impl Parent {
         Self { ty, generics: None }
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
         self.generics
             .get_or_insert(Generics {
                 params: Vec::new(),
                 constraints: Vec::new(),
             })
-            .set_generic_params(params);
+            .set_generic_params(params)
     }
 
-    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
         self.generics
             .get_or_insert(Generics {
                 params: Vec::new(),
                 constraints: Vec::new(),
             })
-            .set_generic_constraints(constraints);
+            .set_generic_constraints(constraints, param_map);
+    }
+
+    pub fn set_type_params(&mut self, params: &[&str], param_map: &mut ParamMap) {
+        self.ty.set_params(params, param_map)
+    }
+
+    pub fn get_param_map(&self) -> Option<ParamMap> {
+        self.generics
+            .as_ref()
+            .map(|generics| generics.get_param_map())
     }
 }
