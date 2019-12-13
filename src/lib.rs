@@ -369,7 +369,7 @@ use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
 use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, TraitBound, TypeParam,
-    TypeParamBound, LIFETIMES, TYPE_PARAMS,
+    TypeParamBound, TYPE_PARAMS,
 };
 use crate::ident::Ident;
 use crate::index::{InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeParamRef, ValueRef};

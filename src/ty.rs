@@ -1,6 +1,6 @@
 use crate::{
     generics, Data, GenericConstraint, GenericParam, Generics, Ident, LifetimeRef, ParamMap, Path,
-    Print, TypeParamBound, LIFETIMES, TYPE_PARAMS,
+    Print, TypeParamBound, TypeParamRef, TYPE_PARAMS,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -33,7 +33,7 @@ pub(crate) enum TypeNode {
         data: Data<Type>,
     },
     Path(Path),
-    GenericParam(GenericParam),
+    TypeParam(TypeParamRef),
 }
 
 impl Type {
@@ -119,7 +119,11 @@ impl Type {
             }) => {
                 if let Some(ident) = path.get_ident() {
                     if let Some(&param) = param_map.get(ident) {
-                        return Type(TypeNode::GenericParam(param));
+                        return Type(TypeNode::TypeParam(
+                            param
+                                .type_param_ref()
+                                .expect("syn_to_type: Not a type param ref"),
+                        ));
                     }
                 }
                 Type(TypeNode::Path(Path::syn_to_path(path, param_map)))
@@ -189,15 +193,10 @@ impl TypeNode {
                 Print::ref_cast(path).to_tokens(&mut tokens);
                 tokens.to_string()
             }
-            TypeNode::GenericParam(param) => {
-                match param {
-                    GenericParam::Type(type_param_ref) => TYPE_PARAMS
-                        .with(|params| params.borrow()[type_param_ref.0].ident.to_string()),
-                    GenericParam::Lifetime(lifetime_ref) => LIFETIMES
-                        .with(|lifetimes| lifetimes.borrow()[lifetime_ref.0].ident.to_string()),
-                    _ => unimplemented!(),
-                }
+            TypeNode::TypeParam(type_param_ref) => {
+                TYPE_PARAMS.with(|params| params.borrow()[type_param_ref.0].ident.to_string())
             }
+
             _ => panic!("Type::get_name"),
         }
     }
@@ -254,7 +253,11 @@ impl TypeNode {
                 (quote!(path), Vec::new(), Vec::new())
             }
 
-            GenericParam(param) => (quote!(), vec![param.clone()], Vec::new()),
+            TypeParam(type_param_ref) => (
+                quote!(),
+                vec![GenericParam::Type(*type_param_ref)],
+                Vec::new(),
+            ),
         }
     }
 }

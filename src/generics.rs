@@ -311,7 +311,11 @@ where
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Type(PredicateType {
                         lifetimes: Vec::new(),
-                        bounded_ty: Type(TypeNode::GenericParam(param)),
+                        bounded_ty: Type(TypeNode::TypeParam(
+                            param
+                                .type_param_ref()
+                                .expect("syn_to_generic_params: Not a type param ref"),
+                        )),
                         bounds: syn_to_type_param_bounds(bounds, &mut param_map).collect(),
                     }));
                 }

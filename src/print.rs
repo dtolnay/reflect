@@ -1,5 +1,5 @@
 use crate::generics::*;
-use crate::{generics, path, Accessor, LifetimeRef, Type, TypeNode, TypeParamRef};
+use crate::{path, Accessor, LifetimeRef, Type, TypeNode, TypeParamRef};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
@@ -64,17 +64,10 @@ impl ToTokens for Print<TypeNode> {
                 let path = Print::ref_cast(path);
                 quote!(#path)
             }
-            GenericParam(param) => match param {
-                generics::GenericParam::Type(type_param_ref) => {
-                    let type_param_ref = Print::ref_cast(type_param_ref);
-                    quote!(#type_param_ref)
-                }
-                generics::GenericParam::Lifetime(lifetime_ref) => {
-                    let lifetime_ref = Print::ref_cast(lifetime_ref);
-                    quote!(#lifetime_ref)
-                }
-                _ => unimplemented!(),
-            },
+            TypeParam(type_param_ref) => {
+                let type_param_ref = Print::ref_cast(type_param_ref);
+                quote!(#type_param_ref)
+            }
         });
     }
 }
