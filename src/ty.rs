@@ -116,7 +116,14 @@ impl Type {
                 //FIXME: add qself to Path
                 qself: None,
                 path,
-            }) => Type(TypeNode::Path(Path::syn_to_path(path, param_map))),
+            }) => {
+                if let Some(ident) = path.get_ident() {
+                    if let Some(&param) = param_map.get(ident) {
+                        return Type(TypeNode::GenericParam(param));
+                    }
+                }
+                Type(TypeNode::Path(Path::syn_to_path(path, param_map)))
+            }
 
             syn::Type::Reference(reference) => {
                 let inner = Box::new(Type::syn_to_type(*reference.elem, param_map).0);

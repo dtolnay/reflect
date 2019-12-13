@@ -104,21 +104,13 @@ impl Path {
     }
 
     pub(crate) fn syn_to_path(path: syn::Path, param_map: &mut ParamMap) -> Self {
-        match path {
-            syn::Path {
-                leading_colon,
-                segments,
-            } => {
-                let path: Vec<_> = segments
-                    .into_iter()
-                    .map(|segment| Self::syn_to_path_segment(segment, param_map))
-                    .collect();
-                Path {
-                    global: leading_colon.is_some(),
-                    path,
-                }
-            }
-        }
+        let global = path.leading_colon.is_some();
+        let path: Vec<_> = path
+            .segments
+            .into_iter()
+            .map(|segment| Self::syn_to_path_segment(segment, param_map))
+            .collect();
+        Path { global, path }
     }
 
     pub(crate) fn syn_to_path_segment(
