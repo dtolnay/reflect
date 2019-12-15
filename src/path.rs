@@ -9,8 +9,7 @@ pub struct Path {
 }
 
 pub(crate) struct SimplePath {
-    pub(crate) global: bool,
-    pub(crate) path: Vec<Ident>,
+    pub(crate) path: Path,
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +69,7 @@ impl Path {
     pub fn simple_path_from_str(path: &str) -> Self {
         parse_str::<SimplePath>(path)
             .expect("simple_path_from_str: Not a simple path")
-            .into()
+            .path
     }
 
     pub(crate) fn set_params(&mut self, params: &[&str], param_map: &mut ParamMap) {
@@ -166,31 +165,23 @@ impl Path {
     }
 }
 
-impl From<SimplePath> for Path {
-    fn from(simple: SimplePath) -> Self {
-        Path {
-            global: simple.global,
-            path: simple
-                .path
-                .into_iter()
-                .map(|ident| PathSegment {
-                    ident,
-                    args: PathArguments::None,
-                })
-                .collect(),
-        }
-    }
-}
-
 impl Parse for SimplePath {
     fn parse(input: ParseStream) -> Result<Self> {
         let global = input.parse::<Option<Token![::]>>()?.is_some();
         let first = Ident::from(input.parse::<syn::Ident>()?);
-        let mut path = vec![first];
+        let mut path = vec![PathSegment {
+            ident: first,
+            args: PathArguments::None,
+        }];
         while !input.is_empty() {
             input.parse::<Token![::]>()?;
-            path.push(Ident::from(input.parse::<syn::Ident>()?));
+            path.push(PathSegment {
+                ident: Ident::from(input.parse::<syn::Ident>()?),
+                args: PathArguments::None,
+            });
         }
-        Ok(SimplePath { global, path })
+        Ok(SimplePath {
+            path: Path { global, path },
+        })
     }
 }
