@@ -1,11 +1,16 @@
 use crate::{Ident, LifetimeRef, Path, Push, Type, TypeNode, TypeParamRef};
+use proc_macro2::Span;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use syn::{parse_str, BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
 
 thread_local! {
     pub(crate) static TYPE_PARAMS: RefCell<Vec<TypeParam>> = RefCell::new(Vec::new());
-    pub(crate) static LIFETIMES: RefCell<Vec<Lifetime>> = RefCell::new(Vec::new());
+    pub(crate) static LIFETIMES: RefCell<Vec<Lifetime>> = {
+        let mut lifetimes = Vec::new();
+        lifetimes.push(Lifetime { ident: Ident::new("static") });
+        RefCell::new(lifetimes)
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -111,9 +116,10 @@ pub struct ParamMap {
 
 impl ParamMap {
     pub(crate) fn new() -> Self {
-        ParamMap {
-            map: BTreeMap::new(),
-        }
+        let static_lifetime = syn::Ident::new("static", Span::call_site());
+        let mut param_map = BTreeMap::new();
+        param_map.insert(static_lifetime, GenericParam::Lifetime(LifetimeRef(0)));
+        ParamMap { map: param_map }
     }
 
     pub(crate) fn insert(&mut self, key: syn::Ident, value: GenericParam) -> Option<GenericParam> {
