@@ -1,4 +1,4 @@
-use crate::{Function, Path, TraitBound, Type, TypeNode, TypeParamBound};
+use crate::{Function, Path, Type, TypeNode};
 
 pub trait RuntimeType {
     #[allow(non_snake_case)]
@@ -8,16 +8,6 @@ pub trait RuntimeType {
 pub trait RuntimeFunction {
     #[allow(non_snake_case)]
     fn SELF(self) -> Function;
-}
-
-pub trait RuntimeTrait {
-    #[allow(non_snake_case)]
-    fn SELF(self) -> Path;
-}
-
-pub trait RuntimeTraitObject {
-    #[allow(non_snake_case)]
-    fn SELF(self) -> Type;
 }
 
 impl RuntimeType for Type {
@@ -35,29 +25,6 @@ impl RuntimeType for Path {
 impl RuntimeFunction for Function {
     fn SELF(self) -> Function {
         self
-    }
-}
-
-impl RuntimeTrait for Path {
-    fn SELF(self) -> Path {
-        self
-    }
-}
-
-// Could be changed to [Path; N] when const generics arrives, to avoid cloning
-impl RuntimeTraitObject for &[Path] {
-    fn SELF(self) -> Type {
-        Type(TypeNode::TraitObject(
-            self.iter()
-                .cloned()
-                .map(|path| {
-                    TypeParamBound::Trait(TraitBound {
-                        lifetimes: Vec::new(),
-                        path,
-                    })
-                })
-                .collect(),
-        ))
     }
 }
 

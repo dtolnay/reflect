@@ -1,4 +1,4 @@
-use crate::{Ident, LifetimeRef, Path, Push, Type, TypeNode, TypeParamRef};
+use crate::{Ident, LifetimeRef, Path, Push, SimplePath, Type, TypeNode, TypeParamRef};
 use proc_macro2::Span;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -145,6 +145,25 @@ impl From<Lifetime> for LifetimeRef {
 impl From<TypeParam> for TypeParamRef {
     fn from(param: TypeParam) -> TypeParamRef {
         TYPE_PARAMS.with(|params| params.borrow_mut().index_push(param))
+    }
+}
+
+impl TypeParamBound {
+    pub(crate) fn get_type_param_bound(type_param_bound: &str, param_map: &mut ParamMap) -> Self {
+        syn_to_type_param_bound(
+            parse_str(type_param_bound)
+                .expect("TypeParamBound::get_type_param_bound: Not a TypeParamBound"),
+            param_map,
+        )
+    }
+
+    pub(crate) fn get_simple_type_param_bound(path: &str) -> Self {
+        TypeParamBound::Trait(TraitBound {
+            lifetimes: Vec::new(),
+            path: parse_str::<SimplePath>(path)
+                .expect("TypeParamBound::get_simple_type_param_bound: Not a simple path")
+                .path,
+        })
     }
 }
 
@@ -397,20 +416,27 @@ where
 {
     bounds
         .into_iter()
-        .map(move |type_param_bound| match type_param_bound {
-            syn::TypeParamBound::Trait(syn::TraitBound {
-                lifetimes, path, ..
-            }) => TypeParamBound::Trait(TraitBound {
-                lifetimes: syn_to_bound_lifetimes(lifetimes, param_map),
-                path: Path::syn_to_path(path, param_map),
-            }),
-            syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(
-                param_map
-                    .get(&lifetime.ident)
-                    .and_then(|&param| GenericParam::lifetime_ref(param))
-                    .expect("syn_to_type_param_bounds: Not a lifetime ref"),
-            ),
-        })
+        .map(move |type_param_bound| syn_to_type_param_bound(type_param_bound, param_map))
+}
+
+pub(crate) fn syn_to_type_param_bound(
+    type_param_bound: syn::TypeParamBound,
+    param_map: &mut ParamMap,
+) -> TypeParamBound {
+    match type_param_bound {
+        syn::TypeParamBound::Trait(syn::TraitBound {
+            lifetimes, path, ..
+        }) => TypeParamBound::Trait(TraitBound {
+            lifetimes: syn_to_bound_lifetimes(lifetimes, param_map),
+            path: Path::syn_to_path(path, param_map),
+        }),
+        syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(
+            param_map
+                .get(&lifetime.ident)
+                .and_then(|&param| GenericParam::lifetime_ref(param))
+                .expect("syn_to_type_param_bounds: Not a lifetime ref"),
+        ),
+    }
 }
 
 impl GenericArgument {

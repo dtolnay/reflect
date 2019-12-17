@@ -10,6 +10,7 @@ use syn::punctuated::Punctuated;
 use syn::{
     braced, parenthesized, parse_macro_input, parse_str, token, GenericArgument, GenericParam,
     Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
+    TypeTraitObject,
 };
 
 use self::proc_macro::TokenStream;
@@ -69,7 +70,7 @@ enum Receiver {
 enum Type {
     Tuple(Vec<Type>),
     Path(Path),
-    TraitObject(Vec<Path>),
+    TraitObject(TypeTraitObject),
     Reference(Box<Type>),
     ReferenceMut(Box<Type>),
 }
@@ -328,9 +329,7 @@ impl Parse for Type {
                 Ok(Type::Reference(Box::new(inner)))
             }
         } else if lookahead.peek(Token![dyn]) {
-            let _: Token![dyn] = input.parse()?;
-            let bounds: Punctuated<Path, Token![+]> = Punctuated::parse_terminated(&input)?;
-            Ok(Type::TraitObject(bounds.into_iter().collect()))
+            Ok(Type::TraitObject(input.parse()?))
         } else if lookahead.peek(Ident) || lookahead.peek(Token![::]) {
             input.parse().map(Type::Path)
         } else {
@@ -552,7 +551,6 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         segment: item.segment.clone(),
     });
     let parent = &item.segment.ident;
-    let parent_str = item.segment.ident.to_string();
 
     let type_params = &item
         .generics
@@ -582,13 +580,6 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     quote! {
         #d_type
         #declare_parent
-
-        // FIXME: generics
-        impl _reflect::runtime::RuntimeTrait for #parent {
-            fn SELF(self) -> _reflect::Path {
-                MODULE().get_path(#parent_str)
-            }
-        }
         #(
             #functions
         )*
@@ -767,12 +758,29 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
         }
         Type::Path(path) => to_runtime_path_type(path, mod_path, type_params),
 
-        Type::TraitObject(bounds) => {
-            // FIXME: parse generics
-            quote! {
-                _reflect::runtime::RuntimeTraitObject::SELF(&[
-                    #(_reflect::runtime::RuntimeTrait::SELF(#bounds)),*
-                ] as &[_])
+        Type::TraitObject(type_trait_objects) => {
+            let bound_strings = type_trait_objects
+                .bounds
+                .iter()
+                .map(|bound| bound.to_token_stream().to_string());
+            if type_trait_objects.bounds.iter().any(|bound| match bound {
+                TypeParamBound::Lifetime(_) => true,
+                TypeParamBound::Trait(trait_bound) => {
+                    trait_bound.lifetimes.is_some()
+                        || trait_bound
+                            .path
+                            .segments
+                            .iter()
+                            .any(|segment| !segment.arguments.is_empty())
+                }
+            }) {
+                quote! {
+                    _reflect::Type::get_trait_object(&[#(#bound_strings),*], &mut param_map)
+                }
+            } else {
+                quote! {
+                    _reflect::Type::get_simple_trait_object(&[#(#bound_strings),*])
+                }
             }
         }
         Type::Reference(inner) => {

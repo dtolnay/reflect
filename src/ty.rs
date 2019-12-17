@@ -102,6 +102,25 @@ impl Type {
         }
     }
 
+    pub fn get_trait_object(type_param_bounds: &[&str], param_map: &mut ParamMap) -> Self {
+        Type(TypeNode::TraitObject(
+            type_param_bounds
+                .iter()
+                .map(|bound| TypeParamBound::get_type_param_bound(bound, param_map))
+                .collect(),
+        ))
+    }
+
+    /// Get a trait object without generics
+    pub fn get_simple_trait_object(type_param_bounds: &[&str]) -> Self {
+        Type(TypeNode::TraitObject(
+            type_param_bounds
+                .iter()
+                .map(|bound| TypeParamBound::get_simple_type_param_bound(bound))
+                .collect(),
+        ))
+    }
+
     pub(crate) fn syn_to_type(ty: syn::Type, param_map: &mut ParamMap) -> Self {
         match ty {
             syn::Type::Path(TypePath {

@@ -368,12 +368,13 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, TraitBound, TypeParam,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, TypeParam,
     TypeParamBound, TYPE_PARAMS,
 };
 use crate::ident::Ident;
 use crate::index::{InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeParamRef, ValueRef};
 use crate::node::ValueNode;
+use crate::path::SimplePath;
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeType};
 use crate::signature::Receiver;
