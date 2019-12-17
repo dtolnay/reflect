@@ -1,4 +1,5 @@
 use crate::{Generics, ParamMap, Type};
+use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub struct Signature {
@@ -48,19 +49,13 @@ impl Signature {
 
     pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
         self.generics
-            .get_or_insert(Generics {
-                params: Vec::new(),
-                constraints: Vec::new(),
-            })
+            .get_or_insert(Default::default())
             .set_generic_params(params)
     }
 
     pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
         self.generics
-            .get_or_insert(Generics {
-                params: Vec::new(),
-                constraints: Vec::new(),
-            })
+            .get_or_insert(Default::default())
             .set_generic_constraints(constraints, param_map);
     }
 }

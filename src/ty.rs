@@ -102,14 +102,6 @@ impl Type {
         }
     }
 
-    /// Set generic parameters to a path type
-    pub fn set_params(&mut self, params: &[&str], param_map: &mut ParamMap) {
-        match self.0 {
-            TypeNode::Path(ref mut path) => path.set_params(params, param_map),
-            _ => panic!("Type::set_params: Not a Path"),
-        }
-    }
-
     pub(crate) fn syn_to_type(ty: syn::Type, param_map: &mut ParamMap) -> Self {
         match ty {
             syn::Type::Path(TypePath {

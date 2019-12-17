@@ -441,9 +441,10 @@ fn declare_type(item: &ItemType) -> TokenStream2 {
 }
 
 fn declare_parent(
-    parent: &Ident,
     parent_generics: &Generics,
     parent_type: &PathSegment,
+    mod_path: &Path,
+    type_params: &Vec<&Ident>,
 ) -> TokenStream2 {
     let set_parent_params = if !parent_generics.params.is_empty() {
         let param_strings = parent_generics
@@ -452,21 +453,8 @@ fn declare_parent(
             .map(|param| param.to_token_stream().to_string());
 
         Some(quote! {
-            let mut param_map = parent_ty.set_generic_params(&[#(#param_strings),*]);
-        })
-    } else {
-        None
-    };
-
-    let set_parent_type_params = if let PathArguments::AngleBracketed(args) = &parent_type.arguments
-    {
-        let path_args_strings = args
-            .args
-            .iter()
-            .map(|arg| arg.to_token_stream().to_string());
-
-        Some(quote! {
-            parent_ty.set_type_params(&[#(#path_args_strings),*], &mut param_map);
+            let mut generics: _reflect::Generics = ::std::default::Default::default();
+            let mut param_map = generics.set_generic_params(&[#(#param_strings),*]);
         })
     } else {
         None
@@ -479,7 +467,27 @@ fn declare_parent(
             .map(|clause| clause.to_token_stream().to_string());
 
         Some(quote! {
-            parent_ty.set_generic_constraints(&[#(#constraint_strings),*], &mut param_map);
+            generics.set_generic_constraints(&[#(#constraint_strings),*], &mut param_map);
+        })
+    } else {
+        None
+    };
+
+    let parent = &parent_type.ident;
+    let mut segments = Punctuated::new();
+    segments.push(parent_type.clone());
+    let get_runtime_type = to_runtime_path_type(
+        &Path {
+            leading_colon: None,
+            segments,
+        },
+        mod_path,
+        type_params,
+    );
+
+    let set_generics = if !parent_generics.params.is_empty() {
+        Some(quote! {
+            parent_ty.set_generics(generics);
         })
     } else {
         None
@@ -490,11 +498,11 @@ fn declare_parent(
             fn get_parent(self) -> ::std::rc::Rc<_reflect::Parent> {
                 thread_local! {
                     static PARENT: ::std::rc::Rc<_reflect::Parent> = {
-                        let mut ty = _reflect::runtime::RuntimeType::SELF(#parent);
-                        let mut parent_ty = _reflect::Parent::new(ty);
                         #set_parent_params
-                        #set_parent_type_params
                         #set_parent_constraints
+                        let ty = #get_runtime_type;
+                        let mut parent_ty = _reflect::Parent::new(ty);
+                        #set_generics
                         ::std::rc::Rc::new(parent_ty)
                     };
                 }
@@ -519,7 +527,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let declare_parent = declare_parent(parent, &item.generics, &item.segment);
+    let declare_parent = declare_parent(&item.generics, &item.segment, mod_path, type_params);
 
     let functions = item.functions.iter().map(|f| {
         declare_function(
@@ -559,7 +567,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let declare_parent = declare_parent(parent, &item.generics, &item.segment);
+    let declare_parent = declare_parent(&item.generics, &item.segment, mod_path, type_params);
 
     let functions = item.functions.iter().map(|f| {
         declare_function(
@@ -783,59 +791,45 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
 }
 
 fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
+    let path = to_runtime_path(path, mod_path, type_params);
+    quote! {
+        _reflect::runtime::RuntimeType::SELF(
+            #path
+        )
+    }
+}
+
+fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
     if let Some(ident) = &path.get_ident() {
         // Check if the path is a generic argument
         if type_params.contains(ident) {
             let path_str = ident.to_string();
             return quote! {
-                _reflect::runtime::RuntimeType::SELF(
-                    _reflect::Path::simple_path_from_str(#path_str)
-                )
+                _reflect::Path::simple_path_from_str(#path_str)
             };
         }
     }
     let mut path = path.clone();
 
-    let mut arguments = std::mem::replace(
-        &mut path.segments.last_mut().unwrap().arguments,
-        PathArguments::None,
-    );
-
     // Check if path is defined in current module
-    let path_str = if path.segments.len() == 1 && path.leading_colon.is_none() {
+    if path.segments.len() == 1 && path.leading_colon.is_none() {
         let mut full_path = mod_path.clone();
         full_path.segments.push(path.segments[0].clone());
-        full_path.to_token_stream().to_string()
-    } else {
-        path.to_token_stream().to_string()
-    };
+        full_path.to_token_stream().to_string();
+        path = full_path
+    }
 
-    if arguments.is_empty() {
+    if path.segments.last().unwrap().arguments.is_empty() {
+        let path_str = path.to_token_stream().to_string();
         quote! {
-            _reflect::runtime::RuntimeType::SELF(
-                _reflect::Path::simple_path_from_str(#path_str)
-            )
+            _reflect::Path::simple_path_from_str(#path_str)
         }
     } else {
-        expand_path_arguments(&mut arguments, mod_path, type_params);
-        let arguments = match arguments {
-            PathArguments::AngleBracketed(ref args) => args
-                .args
-                .iter()
-                .map(|arg| arg.to_token_stream().to_string()),
-            PathArguments::Parenthesized(_args) => {
-                unimplemented!("to_runtime_type: Parenthesized arguments to supported")
-            }
-            _ => unreachable!(),
-        };
+        let arguments = &mut path.segments.last_mut().unwrap().arguments;
+        expand_path_arguments(arguments, mod_path, type_params);
+        let path_str = path.to_token_stream().to_string();
         quote! {
-            {
-                let mut ty = _reflect::runtime::RuntimeType::SELF(
-                    _reflect::Path::simple_path_from_str(#path_str)
-                );
-                ty.set_params(&[#(#arguments),*], &mut param_map);
-                ty
-            }
+            _reflect::Path::path_from_str(#path_str, &mut param_map)
         }
     }
 }

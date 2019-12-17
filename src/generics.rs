@@ -2,6 +2,7 @@ use crate::{Ident, LifetimeRef, Path, Push, Type, TypeNode, TypeParamRef};
 use proc_macro2::Span;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::default::Default;
 use syn::{parse_str, BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
 
 thread_local! {
@@ -188,7 +189,7 @@ impl Generics {
         param_map
     }
 
-    pub(crate) fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
         let syn_params = params.iter().map(|param| parse_str(param).unwrap());
         let (params, constraints, param_map) = syn_to_generic_params(syn_params);
         self.params.extend(params);
@@ -196,11 +197,7 @@ impl Generics {
         param_map
     }
 
-    pub(crate) fn set_generic_constraints(
-        &mut self,
-        constraints: &[&str],
-        param_map: &mut ParamMap,
-    ) {
+    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
         let syn_constraints = constraints
             .iter()
             .map(|constraint| parse_str(constraint).unwrap());
@@ -223,6 +220,15 @@ impl Generics {
             },
             param_map,
         )
+    }
+}
+
+impl Default for Generics {
+    fn default() -> Self {
+        Generics {
+            params: Vec::new(),
+            constraints: Vec::new(),
+        }
     }
 }
 

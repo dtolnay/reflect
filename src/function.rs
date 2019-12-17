@@ -51,26 +51,8 @@ impl Parent {
         Self { ty, generics: None }
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
-        self.generics
-            .get_or_insert(Generics {
-                params: Vec::new(),
-                constraints: Vec::new(),
-            })
-            .set_generic_params(params)
-    }
-
-    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
-        self.generics
-            .get_or_insert(Generics {
-                params: Vec::new(),
-                constraints: Vec::new(),
-            })
-            .set_generic_constraints(constraints, param_map);
-    }
-
-    pub fn set_type_params(&mut self, params: &[&str], param_map: &mut ParamMap) {
-        self.ty.set_params(params, param_map)
+    pub fn set_generics(&mut self, generics: Generics) {
+        self.generics = Some(generics);
     }
 
     pub fn get_param_map(&self) -> Option<ParamMap> {
