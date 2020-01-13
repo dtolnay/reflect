@@ -2,11 +2,16 @@ use quote::quote;
 use reflect::*;
 
 library! {
+    use std {
+        mod string {
+            type String;
+        }
+    }
     use simple {
         type Wrapper<T>;
 
         trait Simple<T> {
-            fn simple<U>(T, Wrapper<U>);
+            fn simple<U>(T, Wrapper<U>, Wrapper<Wrapper<::std::string::String>>);
         }
 
         trait Bound {}
@@ -35,7 +40,7 @@ fn test_generics() {
                 T: ::simple::Bound + Send,
                 'b: 'static,
         {
-            fn simple(__arg0: T, __arg1: ::simple::Wrapper<U>) {
+            fn simple(__arg0: T, __arg1: ::simple::Wrapper<U>, __arg2: ::simple::Wrapper<::simple::Wrapper<::std::string::String> >) {
                 let __v0 = ();
                 __v0
             }

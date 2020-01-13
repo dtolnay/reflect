@@ -908,28 +908,26 @@ fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &Vec<&Ident>) {
 /// If path is an type defined in the current module, make the fully qualified
 /// type for that path
 fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &Vec<&Ident>) {
-    if let path @ syn::Path {
-        leading_colon: None,
-        ..
-    } = path
-    {
-        if path.segments.len() == 1 {
-            let segment = &mut path.segments[0];
-            let ident = &segment.ident;
-            if !type_params.contains(&ident) {
-                let mut segments = Punctuated::new();
-                mod_path
-                    .segments
-                    .iter()
-                    .cloned()
-                    .chain(once(PathSegment {
-                        arguments: PathArguments::None,
-                        ident: ident.clone(),
-                    }))
-                    .for_each(|segment| segments.push(segment));
-                path.segments = segments;
-                path.leading_colon = Some(Token![::](Span::call_site()));
-            }
+    // Expand path arguments if any
+    let path_arguments = &mut path.segments.last_mut().unwrap().arguments;
+    expand_path_arguments(path_arguments, mod_path, type_params);
+
+    // If the type is defined in the current scope, expand to the fully quallified path
+    // FIXME: This test assumes that a type with one path segment and no leading
+    // colon is defined in the current scope. This may not be the case if the macro
+    // is not defined correctly.
+    if path.segments.len() == 1 && path.leading_colon.is_none() {
+        let segment = &path.segments[0];
+        if !type_params.contains(&&segment.ident) {
+            let mut segments = Punctuated::new();
+            mod_path
+                .segments
+                .iter()
+                .cloned()
+                .chain(once(segment.clone()))
+                .for_each(|segment| segments.push(segment));
+            path.segments = segments;
+            path.leading_colon = Some(Token![::](Span::call_site()));
         }
     }
 }
