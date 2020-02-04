@@ -3,6 +3,12 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
+    pub(crate) content: Rc<FunctionContent>,
+}
+
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct FunctionContent {
     pub(crate) parent: Option<Rc<Parent>>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
@@ -30,8 +36,15 @@ impl Function {
         }
     }
 
-    pub fn get_function(name: &str, sig: Signature) -> Function {
-        Function {
+    #[doc(hidden)]
+    pub fn new(content: Rc<FunctionContent>) -> Function {
+        Function { content }
+    }
+}
+
+impl FunctionContent {
+    pub fn get_function(name: &str, sig: Signature) -> FunctionContent {
+        FunctionContent {
             parent: None,
             name: name.to_owned(),
             sig,

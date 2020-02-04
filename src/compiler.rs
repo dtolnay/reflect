@@ -77,11 +77,11 @@ impl CompleteImpl {
 
 impl CompleteFunction {
     fn compile(&self) -> TokenStream {
-        let name = Ident::new(&self.f.name);
+        let name = Ident::new(&self.f.content.name);
 
         let mut inputs = Vec::new();
-        inputs.extend(receiver_tokens(self.f.sig.receiver));
-        for (i, input) in self.f.sig.inputs.iter().enumerate() {
+        inputs.extend(receiver_tokens(self.f.content.sig.receiver));
+        for (i, input) in self.f.content.sig.inputs.iter().enumerate() {
             let binding = Ident::new(format!("__arg{}", i));
             let ty = Print::ref_cast(input);
             inputs.push(quote! {
@@ -89,7 +89,7 @@ impl CompleteFunction {
             });
         }
 
-        let output = match &self.f.sig.output {
+        let output = match &self.f.content.sig.output {
             Type(TypeNode::Tuple(types)) if types.is_empty() => None,
             other => {
                 let ty = Print::ref_cast(other);
@@ -235,14 +235,14 @@ impl CompleteFunction {
             ValueNode::Binding { name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => {
                 let invoke = &self.invokes[invoke.0];
-                let parent_type = match invoke.function.parent {
+                let parent_type = match invoke.function.content.parent {
                     Some(ref parent) => {
                         let print = Print::ref_cast(&parent.ty);
                         Some(quote!(#print ::))
                     }
                     None => None,
                 };
-                let name = Ident::new(&invoke.function.name);
+                let name = Ident::new(&invoke.function.content.name);
                 let args = self.make_values_list(&invoke.args);
 
                 quote! {

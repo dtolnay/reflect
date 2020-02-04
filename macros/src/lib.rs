@@ -687,19 +687,24 @@ fn declare_function(
 
                 impl _reflect::runtime::RuntimeFunction for #name {
                     fn SELF(self) -> _reflect::Function {
-                        let mut sig = _reflect::Signature::new();
-                        let parent_ty = #parent.get_parent();
-                        #get_parent_param_map
-                        #set_sig_params
-                        #set_sig_constraints
-                        #setup_receiver
-                        #(
-                            #setup_inputs
-                        )*
-                        #set_output
-                        let mut fun = _reflect::Function::get_function(#name_str, sig);
-                        fun.set_parent(parent_ty);
-                        fun
+                        thread_local! {
+                            static FUNCTION: ::std::rc::Rc<_reflect::FunctionContent> = {
+                                let mut sig = _reflect::Signature::new();
+                                let parent_ty = #parent.get_parent();
+                                #get_parent_param_map
+                                #set_sig_params
+                                #set_sig_constraints
+                                #setup_receiver
+                                #(
+                                    #setup_inputs
+                                )*
+                                #set_output
+                                let mut fun = _reflect::FunctionContent::get_function(#name_str, sig);
+                                fun.set_parent(parent_ty);
+                                ::std::rc::Rc::new(fun)
+                            };
+                        };
+                        FUNCTION.with(|content| _reflect::Function::new(::std::rc::Rc::clone(content)))
                     }
                 }
 

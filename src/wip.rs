@@ -84,7 +84,7 @@ impl MakeFunction {
         let wip = &mut *wip.borrow_mut();
         let wip = wip.as_mut().unwrap();
 
-        let node = match match wip.f.sig.receiver {
+        let node = match match wip.f.content.sig.receiver {
             SelfByValue if index == 0 => wip.self_ty.clone(),
             SelfByReference if index == 0 => wip.self_ty.clone().map(|ty| ty.reference()),
             SelfByReferenceMut if index == 0 => wip.self_ty.clone().map(|ty| ty.reference_mut()),
@@ -100,7 +100,7 @@ impl MakeFunction {
             },
             None => ValueNode::Binding {
                 name: Ident::new(format!("__arg{}", index)),
-                ty: wip.f.sig.inputs[index].clone(),
+                ty: wip.f.content.sig.inputs[index].clone(),
             },
         };
         Value {

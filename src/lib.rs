@@ -355,7 +355,7 @@ pub use crate::data::{
 pub use crate::derive::derive;
 pub use crate::execution::Execution;
 pub use crate::field::{Field, Fields};
-pub use crate::function::{Function, Parent};
+pub use crate::function::{Function, FunctionContent, Parent};
 pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
 pub use crate::path::Path;
