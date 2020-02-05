@@ -341,6 +341,7 @@ mod index;
 mod map;
 mod module;
 mod node;
+mod parent;
 mod path;
 mod print;
 mod signature;
@@ -355,9 +356,10 @@ pub use crate::data::{
 pub use crate::derive::derive;
 pub use crate::execution::Execution;
 pub use crate::field::{Field, Fields};
-pub use crate::function::{Function, FunctionContent, Parent};
+pub use crate::function::Function;
 pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
+pub use crate::parent::Parent;
 pub use crate::path::Path;
 pub use crate::signature::Signature;
 pub use crate::ty::Type;
@@ -376,7 +378,7 @@ use crate::index::{InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeParamRef, V
 use crate::node::ValueNode;
 use crate::path::SimplePath;
 use crate::print::Print;
-use crate::runtime::{RuntimeFunction, RuntimeType};
+use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
 use crate::ty::TypeNode;
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

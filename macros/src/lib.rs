@@ -424,18 +424,11 @@ fn declare_item(item: &Item, mod_path: &Path) -> TokenStream2 {
 
 fn declare_type(item: &ItemType) -> TokenStream2 {
     let name = &item.segment.ident;
-    let name_str = name.to_string();
 
     quote! {
         #[derive(Copy, Clone)]
         #[allow(non_camel_case_types)]
         pub struct #name;
-
-        impl _reflect::runtime::RuntimeType for #name {
-            fn SELF(self) -> _reflect::Type {
-                MODULE().get_type(#name_str)
-            }
-        }
     }
 }
 
@@ -486,23 +479,23 @@ fn declare_parent(
 
     let set_generics = if !parent_generics.params.is_empty() {
         Some(quote! {
-            parent_ty.set_generics(generics);
+            parent.set_generics(generics);
         })
     } else {
         None
     };
 
     quote! {
-        impl #parent {
-            fn get_parent(self) -> ::std::rc::Rc<_reflect::Parent> {
+        impl _reflect::runtime::RuntimeParent for #parent {
+            fn SELF(self) -> ::std::rc::Rc<_reflect::Parent> {
                 thread_local! {
                     static PARENT: ::std::rc::Rc<_reflect::Parent> = {
                         #set_parent_params
                         #set_parent_constraints
                         let ty = #get_runtime_type;
-                        let mut parent_ty = _reflect::Parent::new(ty);
+                        let mut parent = _reflect::Parent::new(ty);
                         #set_generics
-                        ::std::rc::Rc::new(parent_ty)
+                        ::std::rc::Rc::new(parent)
                     };
                 }
                 PARENT.with(::std::rc::Rc::clone)
@@ -540,6 +533,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
 
     quote! {
         #declare_parent
+        impl _reflect::runtime::RuntimeImpl for #parent {}
         #(
             #functions
         )*
@@ -580,6 +574,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     quote! {
         #d_type
         #declare_parent
+        impl _reflect::runtime::RuntimeTrait for #parent {}
         #(
             #functions
         )*
@@ -623,7 +618,7 @@ fn declare_function(
 
     let get_parent_param_map = if parent_has_generics {
         Some(quote! {
-            let mut param_map = parent_ty.get_param_map().unwrap();
+            let mut param_map = parent.get_param_map().unwrap();
         })
     } else {
         None
@@ -686,11 +681,11 @@ fn declare_function(
                 pub struct #name;
 
                 impl _reflect::runtime::RuntimeFunction for #name {
-                    fn SELF(self) -> _reflect::Function {
+                    fn SELF(self) -> ::std::rc::Rc<_reflect::Function> {
                         thread_local! {
-                            static FUNCTION: ::std::rc::Rc<_reflect::FunctionContent> = {
+                            static FUNCTION: ::std::rc::Rc<_reflect::Function> = {
                                 let mut sig = _reflect::Signature::new();
-                                let parent_ty = #parent.get_parent();
+                                let parent = _reflect::runtime::RuntimeParent::SELF(#parent);
                                 #get_parent_param_map
                                 #set_sig_params
                                 #set_sig_constraints
@@ -699,12 +694,12 @@ fn declare_function(
                                     #setup_inputs
                                 )*
                                 #set_output
-                                let mut fun = _reflect::FunctionContent::get_function(#name_str, sig);
-                                fun.set_parent(parent_ty);
+                                let mut fun = _reflect::Function::get_function(#name_str, sig);
+                                fun.set_parent(parent);
                                 ::std::rc::Rc::new(fun)
                             };
                         };
-                        FUNCTION.with(|content| _reflect::Function::new(::std::rc::Rc::clone(content)))
+                        FUNCTION.with(::std::rc::Rc::clone)
                     }
                 }
 

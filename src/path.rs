@@ -55,11 +55,11 @@ impl Path {
     }
 
     /// Get a simple path without generics
-    pub(crate) fn get_path(&self, ident: &str) -> Self {
+    pub(crate) fn get_simple_path(&self, ident: &str) -> Self {
         let mut path = self.clone();
         path.path.push(PathSegment {
             ident: Ident::from(
-                parse_str::<syn::Ident>(ident).expect("Path::get_path: Not an Ident"),
+                parse_str::<syn::Ident>(ident).expect("Path::get_simple_path: Not an Ident"),
             ),
             args: PathArguments::None,
         });

@@ -1,23 +1,11 @@
-use crate::{Generics, Invoke, ParamMap, Push, Signature, Type, Value, ValueNode, WIP};
+use crate::{Invoke, Parent, Push, Signature, Value, ValueNode, WIP};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) content: Rc<FunctionContent>,
-}
-
-#[doc(hidden)]
-#[derive(Debug, Clone)]
-pub struct FunctionContent {
     pub(crate) parent: Option<Rc<Parent>>,
     pub(crate) name: String,
     pub(crate) sig: Signature,
-}
-
-#[derive(Debug, Clone)]
-pub struct Parent {
-    pub(crate) ty: Type,
-    pub(crate) generics: Option<Generics>,
 }
 
 impl Function {
@@ -36,15 +24,8 @@ impl Function {
         }
     }
 
-    #[doc(hidden)]
-    pub fn new(content: Rc<FunctionContent>) -> Function {
-        Function { content }
-    }
-}
-
-impl FunctionContent {
-    pub fn get_function(name: &str, sig: Signature) -> FunctionContent {
-        FunctionContent {
+    pub fn get_function(name: &str, sig: Signature) -> Function {
+        Function {
             parent: None,
             name: name.to_owned(),
             sig,
@@ -56,21 +37,5 @@ impl FunctionContent {
     /// trait definition. Otherwise the trait inference may not work correctly
     pub fn set_parent(&mut self, parent: Rc<Parent>) {
         self.parent = Some(parent);
-    }
-}
-
-impl Parent {
-    pub fn new(ty: Type) -> Self {
-        Self { ty, generics: None }
-    }
-
-    pub fn set_generics(&mut self, generics: Generics) {
-        self.generics = Some(generics);
-    }
-
-    pub fn get_param_map(&self) -> Option<ParamMap> {
-        self.generics
-            .as_ref()
-            .map(|generics| generics.get_param_map())
     }
 }

@@ -1,9 +1,12 @@
 use crate::ident::Ident;
-use crate::{Function, Invoke, MacroInvoke, Print, Receiver, Type, TypeNode, ValueNode, ValueRef};
+use crate::{
+    Function, Invoke, MacroInvoke, Parent, Print, Receiver, Type, TypeNode, ValueNode, ValueRef,
+};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub(crate) struct Program {
@@ -13,7 +16,7 @@ pub(crate) struct Program {
 
 #[derive(Debug)]
 pub(crate) struct CompleteImpl {
-    pub trait_ty: Option<Type>,
+    pub trait_ty: Option<Rc<Parent>>,
     pub ty: Type,
     pub functions: Vec<CompleteFunction>,
 }
@@ -21,7 +24,7 @@ pub(crate) struct CompleteImpl {
 #[derive(Debug)]
 pub(crate) struct CompleteFunction {
     pub self_ty: Option<Type>,
-    pub f: Function,
+    pub f: Rc<Function>,
     pub values: Vec<ValueNode>,
     pub invokes: Vec<Invoke>,
     pub macros: Vec<MacroInvoke>,
@@ -57,7 +60,7 @@ impl CompleteImpl {
         };
 
         if let Some(trait_ty) = &self.trait_ty {
-            let trait_ty = Print::ref_cast(trait_ty);
+            let trait_ty = Print::ref_cast(&**trait_ty);
             quote! {
                 // FIXME: assosiated types
                 // FIXME: trait generics
@@ -77,11 +80,11 @@ impl CompleteImpl {
 
 impl CompleteFunction {
     fn compile(&self) -> TokenStream {
-        let name = Ident::new(&self.f.content.name);
+        let name = Ident::new(&self.f.name);
 
         let mut inputs = Vec::new();
-        inputs.extend(receiver_tokens(self.f.content.sig.receiver));
-        for (i, input) in self.f.content.sig.inputs.iter().enumerate() {
+        inputs.extend(receiver_tokens(self.f.sig.receiver));
+        for (i, input) in self.f.sig.inputs.iter().enumerate() {
             let binding = Ident::new(format!("__arg{}", i));
             let ty = Print::ref_cast(input);
             inputs.push(quote! {
@@ -89,7 +92,7 @@ impl CompleteFunction {
             });
         }
 
-        let output = match &self.f.content.sig.output {
+        let output = match &self.f.sig.output {
             Type(TypeNode::Tuple(types)) if types.is_empty() => None,
             other => {
                 let ty = Print::ref_cast(other);
@@ -235,14 +238,14 @@ impl CompleteFunction {
             ValueNode::Binding { name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => {
                 let invoke = &self.invokes[invoke.0];
-                let parent_type = match invoke.function.content.parent {
+                let parent_type = match invoke.function.parent {
                     Some(ref parent) => {
                         let print = Print::ref_cast(&parent.ty);
                         Some(quote!(#print ::))
                     }
                     None => None,
                 };
-                let name = Ident::new(&invoke.function.content.name);
+                let name = Ident::new(&invoke.function.name);
                 let args = self.make_values_list(&invoke.args);
 
                 quote! {

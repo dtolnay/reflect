@@ -1,4 +1,6 @@
-use crate::{Ident, MakeImpl, Module, Path, RuntimeType, Type, WipFunction, WipImpl};
+use crate::{
+    Ident, MakeImpl, Module, Parent, Path, RuntimeTrait, RuntimeType, Type, WipFunction, WipImpl,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::thread::LocalKey;
@@ -28,7 +30,7 @@ impl<'a> Execution<'a> {
         self_type: SelfType,
         run: fn(MakeImpl),
     ) where
-        TraitType: RuntimeType,
+        TraitType: RuntimeTrait,
         SelfType: RuntimeType,
     {
         self.tracker
@@ -51,11 +53,11 @@ impl Tracker {
     fn load_crate(&self, name: &str) -> Module {
         self.crates.borrow_mut().push(Ident::new(name));
         Module {
-            path: Path::empty().get_path(name),
+            path: Path::empty().get_simple_path(name),
         }
     }
 
-    fn make_trait_impl(&self, trait_ty: Type, ty: Type, run: fn(MakeImpl)) {
+    fn make_trait_impl(&self, trait_ty: Rc<Parent>, ty: Type, run: fn(MakeImpl)) {
         let wip = WipImpl {
             trait_ty: Some(trait_ty),
             ty,

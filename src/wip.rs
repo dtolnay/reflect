@@ -1,6 +1,6 @@
 use crate::{
-    Function, Ident, Path, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode, ValueRef,
-    WIP,
+    Function, Ident, Parent, Path, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode,
+    ValueRef, WIP,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -12,7 +12,7 @@ pub struct MakeImpl<'a> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WipImpl {
-    pub(crate) trait_ty: Option<Type>,
+    pub(crate) trait_ty: Option<Rc<Parent>>,
     pub(crate) ty: Type,
     pub(crate) functions: RefCell<Vec<WipFunction>>,
 }
@@ -26,7 +26,7 @@ pub struct MakeFunction {
 pub(crate) struct WipFunction {
     // self_ty is None for freestanding functions
     pub(crate) self_ty: Option<Type>,
-    pub(crate) f: Function,
+    pub(crate) f: Rc<Function>,
     pub(crate) values: Vec<ValueNode>,
     pub(crate) invokes: Vec<Invoke>,
     pub(crate) macros: Vec<MacroInvoke>,
@@ -84,7 +84,7 @@ impl MakeFunction {
         let wip = &mut *wip.borrow_mut();
         let wip = wip.as_mut().unwrap();
 
-        let node = match match wip.f.content.sig.receiver {
+        let node = match match wip.f.sig.receiver {
             SelfByValue if index == 0 => wip.self_ty.clone(),
             SelfByReference if index == 0 => wip.self_ty.clone().map(|ty| ty.reference()),
             SelfByReferenceMut if index == 0 => wip.self_ty.clone().map(|ty| ty.reference_mut()),
@@ -100,7 +100,7 @@ impl MakeFunction {
             },
             None => ValueNode::Binding {
                 name: Ident::new(format!("__arg{}", index)),
-                ty: wip.f.content.sig.inputs[index].clone(),
+                ty: wip.f.sig.inputs[index].clone(),
             },
         };
         Value {

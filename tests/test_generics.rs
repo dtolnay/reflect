@@ -35,7 +35,7 @@ fn test_generics() {
     };
 
     let expected = quote! {
-        impl<'a, T>  ::simple::Simple for Generics<'a, T>
+        impl<'a, T>  ::simple::Simple<T> for Generics<'a, T>
             where
                 T: ::simple::Bound + Send,
                 'b: 'static,
