@@ -1,4 +1,4 @@
-use crate::{Accessor, Data, Ident, InvokeRef, MacroInvokeRef, Type, ValueRef};
+use crate::{Accessor, Data, Ident, InvokeRef, MacroInvokeRef, StaticBorrow, Type, ValueRef, WIP};
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {
@@ -51,6 +51,9 @@ impl ValueNode {
                 accessor,
                 ty,
             } => ValueNode::Str(ty.0.get_name()),
+            ValueNode::Invoke(invoke_ref) => ValueNode::Str(
+                WIP.with_borrow(|wip| wip.invokes[invoke_ref.0].function.sig.output.0.get_name()),
+            ),
             node => panic!("ValueNode::get_type_name"),
         }
     }
