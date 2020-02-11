@@ -35,7 +35,7 @@ pub(crate) struct WipFunction {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Invoke {
-    pub(crate) function: Function,
+    pub(crate) function: Rc<Function>,
     pub(crate) args: Vec<ValueRef>,
 }
 

@@ -1,4 +1,5 @@
-use crate::{GenericArgument, GenericArguments, Ident, ParamMap, Type};
+use crate::{GenericArgument, GenericArguments, GenericParam, Ident, ParamMap, Type};
+use std::collections::BTreeMap;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_str, ReturnType, Token};
 
@@ -138,6 +139,67 @@ impl Path {
                 ident,
                 args: PathArguments::None,
             }],
+        }
+    }
+
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        Path {
+            global: self.global,
+            path: self
+                .path
+                .iter()
+                .map(|segment| match segment.args {
+                    PathArguments::None => PathSegment {
+                        ident: segment.ident.clone(),
+                        args: PathArguments::None,
+                    },
+
+                    PathArguments::AngleBracketed(ref args) => PathSegment {
+                        ident: segment.ident.clone(),
+                        args: PathArguments::AngleBracketed(
+                            args.clone_with_fresh_generics(ref_map),
+                        ),
+                    },
+
+                    PathArguments::Parenthesized(ref args) => PathSegment {
+                        ident: segment.ident.clone(),
+                        args: PathArguments::Parenthesized(args.clone_with_fresh_generics(ref_map)),
+                    },
+                })
+                .collect(),
+        }
+    }
+}
+
+impl AngleBracketedGenericArguments {
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        AngleBracketedGenericArguments {
+            args: self.args.clone_with_fresh_generics(ref_map),
+        }
+    }
+}
+
+impl ParenthesizedGenericArguments {
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        ParenthesizedGenericArguments {
+            inputs: self
+                .inputs
+                .iter()
+                .map(|ty| ty.clone_with_fresh_generics(ref_map))
+                .collect(),
+            output: self
+                .output
+                .as_ref()
+                .map(|ty| ty.clone_with_fresh_generics(ref_map)),
         }
     }
 }

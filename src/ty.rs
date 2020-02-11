@@ -5,6 +5,7 @@ use crate::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use syn::TypePath;
 
@@ -185,6 +186,13 @@ impl Type {
     ) -> (TokenStream, Vec<GenericParam>, Vec<GenericConstraint>) {
         self.0.name_and_generics()
     }
+
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        Type(self.0.clone_with_fresh_generics(ref_map))
+    }
 }
 
 impl TypeNode {
@@ -268,6 +276,69 @@ impl TypeNode {
                 quote!(),
                 vec![GenericParam::Type(*type_param_ref)],
                 Vec::new(),
+            ),
+        }
+    }
+
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        use super::TypeNode::*;
+        match self {
+            Infer => Infer,
+
+            Tuple(types) => Tuple(
+                types
+                    .iter()
+                    .map(|ty| ty.clone_with_fresh_generics(ref_map))
+                    .collect(),
+            ),
+
+            PrimitiveStr => PrimitiveStr,
+
+            Reference { lifetime, inner } => Reference {
+                lifetime: lifetime.map(|lifetime_ref| {
+                    ref_map
+                        .get(&GenericParam::Lifetime(lifetime_ref))
+                        .and_then(|param| param.lifetime_ref())
+                        .unwrap()
+                }),
+                inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
+            },
+
+            ReferenceMut { lifetime, inner } => ReferenceMut {
+                lifetime: lifetime.map(|lifetime_ref| {
+                    ref_map
+                        .get(&GenericParam::Lifetime(lifetime_ref))
+                        .and_then(|param| param.lifetime_ref())
+                        .unwrap()
+                }),
+                inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
+            },
+
+            Dereference(dereference) => {
+                Dereference(Box::new(dereference.clone_with_fresh_generics(ref_map)))
+            }
+
+            TraitObject(bounds) => TraitObject(
+                bounds
+                    .iter()
+                    .map(|bound| bound.clone_with_fresh_generics(ref_map))
+                    .collect(),
+            ),
+
+            DataStructure { .. } => {
+                unimplemented!("Type::clone_with_fresh_generics: DataStructure")
+            }
+
+            Path(path) => Path(path.clone_with_fresh_generics(ref_map)),
+
+            TypeParam(type_param_ref) => TypeParam(
+                ref_map
+                    .get(&GenericParam::Type(*type_param_ref))
+                    .and_then(|param| param.type_param_ref())
+                    .unwrap(),
             ),
         }
     }
