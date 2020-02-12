@@ -29,13 +29,13 @@ fn derive(ex: Execution) {
 #[test]
 fn test_generics() {
     let input = quote! {
-        struct Generics<'a,  T: ::simple::Bound + Send> where 'b: 'static {
+        struct Generics<'a, 'b, T: ::simple::Bound + Send> where 'b: 'static {
             pub param: &'a &'static T
         }
     };
 
     let expected = quote! {
-        impl<'a, T>  ::simple::Simple<T> for Generics<'a, T>
+        impl<'a, 'b, T>  ::simple::Simple<T> for Generics<'a, 'b, T>
             where
                 T: ::simple::Bound + Send,
                 'b: 'static,

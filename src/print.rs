@@ -170,16 +170,14 @@ impl ToTokens for Print<LifetimeRef> {
 
 impl ToTokens for Print<LifetimeDef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let apostrophe = Punct::new('\'', Spacing::Joint);
-        tokens.append(apostrophe);
-        let ident = &self.0.ident;
+        let lifetime = Print::ref_cast(&self.0.lifetime);
         let bounds = self.0.bounds.iter().map(Print::ref_cast);
         let colon = if self.0.bounds.is_empty() {
             None
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon #(#bounds)+*))
+        tokens.append_all(quote!(#lifetime #colon #(#bounds)+*))
     }
 }
 

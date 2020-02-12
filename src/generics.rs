@@ -71,7 +71,7 @@ pub(crate) struct Lifetime {
 
 #[derive(Debug, Clone)]
 pub(crate) struct LifetimeDef {
-    pub(crate) ident: Ident,
+    pub(crate) lifetime: LifetimeRef,
     pub(crate) bounds: Vec<LifetimeRef>,
 }
 
@@ -253,7 +253,7 @@ impl GenericConstraint {
                     .collect(),
             }),
             Self::Lifetime(lifetime_def) => Self::Lifetime(LifetimeDef {
-                ident: lifetime_def.ident.clone(),
+                lifetime: lifetime_def.lifetime,
                 bounds: lifetime_def
                     .bounds
                     .iter()
@@ -415,7 +415,10 @@ where
             bounds,
             ..
         }) => GenericConstraint::Lifetime(LifetimeDef {
-            ident: Ident::from(ident),
+            lifetime: param_map
+                .get(&ident)
+                .and_then(|param| GenericParam::lifetime_ref(*param))
+                .expect("syn_where_predicates_to_generic_constraints: {:?} is not a lifetime ref"),
             bounds: bounds
                 .into_iter()
                 .map(|syn::Lifetime { ident, .. }| {
@@ -447,7 +450,6 @@ where
         .map(|param| match param {
             syn::GenericParam::Type(syn::TypeParam { ident, bounds, .. }) => {
                 let &param = param_map.get(&ident).unwrap();
-                let ident = Ident::from(ident);
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Type(PredicateType {
                         lifetimes: Vec::new(),
@@ -469,7 +471,10 @@ where
                 let &param = param_map.get(&ident).unwrap();
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Lifetime(LifetimeDef {
-                        ident: Ident::from(ident),
+                        lifetime: param_map
+                            .get(&ident)
+                            .and_then(|param| GenericParam::lifetime_ref(*param))
+                            .expect("syn_to_generic_params: Not a lifetime ref"),
                         bounds: bounds
                             .into_iter()
                             .map(|syn::Lifetime { ident, .. }| {
