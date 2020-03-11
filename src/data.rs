@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use syn::Attribute;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Data<T> {
     Struct(Struct<T>),
     Enum(Enum<T>),
@@ -19,7 +19,7 @@ impl<T> Data<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Struct<T> {
     Unit(UnitStruct),
     Tuple(TupleStruct<T>),
@@ -36,7 +36,7 @@ impl<T> Struct<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct UnitStruct {
     pub(crate) attrs: Vec<Attribute>,
 }
@@ -49,7 +49,7 @@ impl Debug for UnitStruct {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TupleStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
     pub(crate) attrs: Vec<Attribute>,
@@ -64,7 +64,7 @@ impl<T: Debug> Debug for TupleStruct<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct StructStruct<T> {
     pub(crate) fields: Vec<Field<T>>,
     pub(crate) attrs: Vec<Attribute>,
@@ -125,7 +125,7 @@ impl<T> StructStruct<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Enum<T> {
     pub(crate) variants: Vec<Variant<T>>,
     pub(crate) attrs: Vec<Attribute>,
@@ -158,7 +158,7 @@ impl Enum<Value> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Variant<T> {
     Unit(UnitVariant),
     Tuple(TupleVariant<T>),
@@ -175,7 +175,7 @@ impl<T> Variant<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct UnitVariant {
     pub(crate) attrs: Vec<Attribute>,
 }
@@ -188,7 +188,7 @@ impl Debug for UnitVariant {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TupleVariant<T> {
     pub(crate) phantom: PhantomData<T>,
     pub(crate) attrs: Vec<Attribute>,
@@ -202,7 +202,7 @@ impl<T: Debug> Debug for TupleVariant<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct StructVariant<T> {
     pub(crate) phantom: PhantomData<T>,
     pub(crate) attrs: Vec<Attribute>,

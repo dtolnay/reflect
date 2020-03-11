@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_str, ReturnType, Token};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     pub(crate) global: bool,
     pub(crate) path: Vec<PathSegment>,
@@ -13,26 +13,26 @@ pub(crate) struct SimplePath {
     pub(crate) path: Path,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PathSegment {
     pub(crate) ident: Ident,
     pub(crate) args: PathArguments,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum PathArguments {
     None,
     AngleBracketed(AngleBracketedGenericArguments),
     Parenthesized(ParenthesizedGenericArguments),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct AngleBracketedGenericArguments {
     pub(crate) args: GenericArguments,
 }
 
 /// Arguments of a function path segment: the `(A, B) -> C` in `Fn(A, B) -> C`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ParenthesizedGenericArguments {
     /// (A, B)
     pub(crate) inputs: Vec<Type>,

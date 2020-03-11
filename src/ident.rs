@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::fmt::{self, Display};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ident(pub(crate) proc_macro2::Ident);
 
 impl Ident {

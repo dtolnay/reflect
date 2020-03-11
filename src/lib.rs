@@ -345,6 +345,7 @@ mod parent;
 mod path;
 mod print;
 mod signature;
+mod trait_inference;
 mod ty;
 mod value;
 mod wip;
@@ -370,15 +371,18 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::{StaticBorrow, Tracker, WIP};
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, TypeParam,
-    TypeParamBound, TYPE_PARAMS,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, PredicateType,
+    TraitBound, TypeParam, TypeParamBound, TYPE_PARAMS,
 };
 use crate::ident::Ident;
-use crate::index::{InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeParamRef, ValueRef};
+use crate::index::{
+    InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, ValueRef,
+};
 use crate::node::ValueNode;
-use crate::path::SimplePath;
+use crate::path::{PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
+use crate::trait_inference::TypeEqualitySet;
 use crate::ty::TypeNode;
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

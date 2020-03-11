@@ -19,7 +19,7 @@ proc-macro2 = "1.0"
 quote = "1.0"
 ref-cast = "1.0"
 reflect-internal = { version = "0.0.4", path = "macros" }
-syn = "1.0"
+syn = { version = "1.0", features  = ["extra-traits"] }
 
 [workspace]
 members = ["macros"]

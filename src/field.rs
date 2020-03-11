@@ -16,13 +16,13 @@ impl<T> Iterator for Fields<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Accessor {
     Name(Ident),
     Index(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Field<T> {
     pub(crate) accessor: Accessor,
     pub(crate) element: T,

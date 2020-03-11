@@ -14,7 +14,7 @@ thread_local! {
     };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Generics {
     /// Represents the generic params without bounds.
     /// The bounds are moved to constraints.
@@ -24,7 +24,7 @@ pub struct Generics {
     pub(crate) constraints: Vec<GenericConstraint>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum GenericParam {
     Type(TypeParamRef),
     Lifetime(LifetimeRef),
@@ -37,13 +37,13 @@ pub(crate) struct TypeParam {
     pub(crate) ident: Ident,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GenericConstraint {
     Type(PredicateType),
     Lifetime(LifetimeDef),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PredicateType {
     /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
     pub(crate) lifetimes: Vec<LifetimeRef>,
@@ -51,13 +51,13 @@ pub(crate) struct PredicateType {
     pub(crate) bounds: Vec<TypeParamBound>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum TypeParamBound {
     Trait(TraitBound),
     Lifetime(LifetimeRef),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TraitBound {
     /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
     pub(crate) lifetimes: Vec<LifetimeRef>,
@@ -69,23 +69,23 @@ pub(crate) struct Lifetime {
     pub(crate) ident: Ident,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct LifetimeDef {
     pub(crate) lifetime: LifetimeRef,
     pub(crate) bounds: Vec<LifetimeRef>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct ConstParam {
     pub(crate) private: (),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GenericArguments {
     pub(crate) args: Vec<GenericArgument>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GenericArgument {
     Type(Type),
     Lifetime(LifetimeRef),
@@ -94,19 +94,19 @@ pub(crate) enum GenericArgument {
     Const(Expr),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Binding {
     pub(crate) ident: Ident,
     pub(crate) ty: Type,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Constraint {
     pub(crate) ident: Ident,
     pub(crate) bounds: Vec<TypeParamBound>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Expr {
     pub(crate) private: (),
 }

@@ -1,4 +1,6 @@
-use crate::{Invoke, Lifetime, MacroInvoke, TypeParam, ValueNode};
+use crate::{Invoke, Lifetime, MacroInvoke, TypeEqualitySet, TypeParam, ValueNode};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub(crate) trait Push {
     type Element: TypedIndex;
@@ -55,7 +57,7 @@ impl TypedIndex for MacroInvoke {
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub(crate) struct TypeParamRef(pub usize);
 
 impl TypedIndex for TypeParam {
@@ -66,7 +68,7 @@ impl TypedIndex for TypeParam {
     }
 }
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub(crate) struct LifetimeRef(pub usize);
 
 impl TypedIndex for Lifetime {
@@ -74,5 +76,16 @@ impl TypedIndex for Lifetime {
 
     fn index(i: usize) -> Self::Index {
         LifetimeRef(i)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub(crate) struct TypeEqualitySetRef(pub usize);
+
+impl TypedIndex for Rc<RefCell<TypeEqualitySet>> {
+    type Index = TypeEqualitySetRef;
+
+    fn index(i: usize) -> Self::Index {
+        TypeEqualitySetRef(i)
     }
 }

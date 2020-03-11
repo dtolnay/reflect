@@ -1,11 +1,15 @@
-use crate::{Accessor, Data, Ident, InvokeRef, MacroInvokeRef, StaticBorrow, Type, ValueRef, WIP};
+use crate::{
+    Accessor, Data, Ident, InvokeRef, MacroInvokeRef, StaticBorrow, Type, TypeNode, ValueRef, WIP,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {
     Tuple(Vec<ValueRef>),
     Str(String),
     Reference(ValueRef),
+    // TODO: Add lifetime_ref parameter
     ReferenceMut(ValueRef),
+    // TODO: Add lifetime_ref parameter
     Dereference(ValueRef),
     Binding {
         name: Ident,
@@ -25,6 +29,37 @@ pub(crate) enum ValueNode {
 }
 
 impl ValueNode {
+    pub fn get_type(&self) -> Type {
+        match self {
+            ValueNode::Tuple(types) => Type(TypeNode::Tuple(
+                types
+                    .iter()
+                    .map(|type_ref| type_ref.node().get_type())
+                    .collect(),
+            )),
+            ValueNode::Str(_) => Type(TypeNode::PrimitiveStr),
+            ValueNode::Reference(v) => Type(TypeNode::Reference {
+                lifetime: None,
+                inner: Box::new(v.node().get_type().0),
+            }),
+            ValueNode::ReferenceMut(v) => Type(TypeNode::ReferenceMut {
+                lifetime: None,
+                inner: Box::new(v.node().get_type().0),
+            }),
+            ValueNode::Binding { ty, .. } => ty.clone(),
+            ValueNode::Destructure {
+                parent,
+                accessor,
+                ty,
+            } => ty.clone(),
+            ValueNode::Invoke(invoke_ref) => {
+                WIP.with_borrow(|wip| wip.invokes[invoke_ref.0].function.sig.output.clone())
+            }
+
+            node => panic!("ValueNode::get_type"),
+        }
+    }
+
     pub fn get_type_name(&self) -> Self {
         match self {
             ValueNode::Tuple(types) => {

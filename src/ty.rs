@@ -9,11 +9,11 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use syn::TypePath;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct Type(pub(crate) TypeNode);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum TypeNode {
     Infer,
     Tuple(Vec<Type>),
