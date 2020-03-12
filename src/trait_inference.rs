@@ -3,9 +3,7 @@ use crate::{
     PathArguments, PredicateType, Push, TraitBound, Type, TypeEqualitySetRef, TypeNode,
     TypeParamBound,
 };
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::rc::Rc;
 
 /// A set of types that are considered to be equal
 pub(crate) struct TypeEqualitySet {
@@ -19,7 +17,7 @@ pub(crate) struct ConstraintSet {
 // A mapping between types and it's corresponding set of equal types
 pub(crate) struct TypeEqualitySets {
     set_map: HashMap<Type, TypeEqualitySetRef>,
-    sets: Vec<Rc<RefCell<TypeEqualitySet>>>,
+    sets: Vec<TypeEqualitySet>,
 }
 
 impl ConstraintSet {
@@ -66,7 +64,7 @@ impl TypeEqualitySetRef {
             Some(node) => node.clone(),
             None => {
                 most_concrete_type_map.insert(*self, Infer);
-                let set = &type_equality_sets.sets[self.0].borrow().set;
+                let set = &type_equality_sets.sets[self.0].set;
                 let mut iterator = set.iter();
                 let first = iterator.next().unwrap().clone().0;
                 let most_concrete = iterator.fold(first, |current_most_concrete, ty| {
@@ -96,10 +94,8 @@ impl TypeEqualitySets {
         self.set_map.contains_key(ty)
     }
 
-    fn get_set(&self, ty: &Type) -> Option<Rc<RefCell<TypeEqualitySet>>> {
-        self.set_map
-            .get(ty)
-            .map(|set_ref| self.sets[set_ref.0].clone())
+    fn get_set(&self, ty: &Type) -> Option<&TypeEqualitySet> {
+        self.set_map.get(ty).map(|set_ref| &self.sets[set_ref.0])
     }
 
     fn get_set_ref(&self, ty: &Type) -> Option<TypeEqualitySetRef> {
@@ -109,7 +105,6 @@ impl TypeEqualitySets {
     fn new_set(&mut self, ty: Type) -> TypeEqualitySetRef {
         let mut set = TypeEqualitySet::new();
         set.insert(ty.clone());
-        let set = Rc::new(RefCell::new(set));
         let set_ref = self.sets.index_push(set);
 
         self.set_map.insert(ty, set_ref);
@@ -162,13 +157,13 @@ impl TypeEqualitySets {
         match self.set_map.get(&ty1) {
             Some(&set_ref) => {
                 self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
-                self.sets[set_ref.0].borrow_mut().insert(ty2.clone());
+                self.sets[set_ref.0].insert(ty2.clone());
                 self.set_map.insert(ty2, set_ref);
             }
             None => match self.set_map.get(&ty2) {
                 Some(&set_ref) => {
                     self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
-                    self.sets[set_ref.0].borrow_mut().insert(ty1.clone());
+                    self.sets[set_ref.0].insert(ty1.clone());
                     self.set_map.insert(ty1, set_ref);
                 }
                 None => {
@@ -176,7 +171,6 @@ impl TypeEqualitySets {
                     let mut set = TypeEqualitySet::new();
                     set.insert(ty2.clone());
                     set.insert(ty1.clone());
-                    let set = Rc::new(RefCell::new(set));
                     let set_ref = self.sets.index_push(set);
                     self.set_map.insert(ty2, set_ref);
                     self.set_map.insert(ty1, set_ref);
@@ -481,8 +475,12 @@ impl TypeNode {
     ) -> Self {
         use TypeNode::*;
         match (ty1, ty2) {
-            (Infer, node) => node.make_most_concrete(most_concrete_type_map, type_equality_sets),
-            (node, Infer) => node.make_most_concrete(most_concrete_type_map, type_equality_sets),
+            (Infer, node) => {
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            }
+            (node, Infer) => {
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            }
             (PrimitiveStr, _) => PrimitiveStr,
             (_, PrimitiveStr) => PrimitiveStr,
             (Path(path1), Path(path2)) => crate::Path::make_most_concrete_from_pair(
@@ -491,11 +489,11 @@ impl TypeNode {
                 most_concrete_type_map,
                 type_equality_sets,
             ),
-            (path @ Path(_), _) => {
-                path.make_most_concrete(most_concrete_type_map, type_equality_sets)
+            (Path(path), _) => {
+                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
             }
-            (_, path @ Path(_)) => {
-                path.make_most_concrete(most_concrete_type_map, type_equality_sets)
+            (_, Path(path)) => {
+                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
             }
             (Tuple(types1), Tuple(types2)) if types1.len() == types2.len() => Tuple(
                 types1
@@ -534,10 +532,10 @@ impl TypeNode {
                 }
             }
             (TraitObject(_), node) => {
-                node.make_most_concrete(most_concrete_type_map, type_equality_sets)
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
             }
             (node, TraitObject(_)) => {
-                node.make_most_concrete(most_concrete_type_map, type_equality_sets)
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
             }
             (TypeParam(ref1), TypeParam(ref2)) => {
                 if ref1 < ref2 {
@@ -548,6 +546,14 @@ impl TypeNode {
             }
             _ => panic!("TypeNode: make_most_concrete_pair: incompatible types"),
         }
+    }
+
+    fn make_most_concrete_inner(
+        self,
+        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+        type_equality_sets: &TypeEqualitySets,
+    ) -> Self {
+        todo!()
     }
 
     fn inner_param_set_refs(
@@ -694,6 +700,14 @@ impl Path {
                 }
             }
         }
+    }
+
+    fn make_most_concrete_inner(
+        self,
+        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+        type_equality_sets: &TypeEqualitySets,
+    ) -> Self {
+        todo!()
     }
 
     fn make_most_concrete_from_pair(
