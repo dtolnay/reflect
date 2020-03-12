@@ -327,7 +327,6 @@ fn generic_param_set_refs(
 ) -> BTreeSet<TypeEqualitySetRef> {
     use TypeNode::*;
     let mut generic_param_set_refs = BTreeSet::new();
-    let mut checked_set_refs = BTreeSet::new();
 
     relevant_generic_params.iter().for_each(|param| {
         let type_param_ref = param.type_param_ref().unwrap();
@@ -335,11 +334,8 @@ fn generic_param_set_refs(
         let set_ref =
             set_ref.unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param_ref))));
 
-        if !checked_set_refs.contains(&set_ref) {
-            checked_set_refs.insert(set_ref);
-            let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
-            node.inner_param_set_refs(type_equality_sets, &mut generic_param_set_refs)
-        }
+        let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
+        node.inner_param_set_refs(type_equality_sets, &mut generic_param_set_refs)
     });
 
     generic_param_set_refs
