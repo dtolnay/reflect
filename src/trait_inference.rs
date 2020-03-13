@@ -1,7 +1,7 @@
 use crate::{
-    CompleteFunction, CompleteImpl, GenericArgument, GenericConstraint, GenericParam, Path,
-    PathArguments, PredicateType, Push, TraitBound, Type, TypeEqualitySetRef, TypeNode,
-    TypeParamBound,
+    AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
+    GenericArguments, GenericConstraint, GenericParam, Path, PathArguments, PredicateType, Push,
+    TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -65,16 +65,20 @@ impl TypeEqualitySetRef {
             None => {
                 most_concrete_type_map.insert(*self, Infer);
                 let set = &type_equality_sets.sets[self.0].set;
-                let mut iterator = set.iter();
+                let mut iterator = set.iter().peekable();
                 let first = iterator.next().unwrap().clone().0;
-                let most_concrete = iterator.fold(first, |current_most_concrete, ty| {
-                    TypeNode::make_most_concrete_from_pair(
-                        current_most_concrete,
-                        ty.clone().0,
-                        most_concrete_type_map,
-                        type_equality_sets,
-                    )
-                });
+                let most_concrete = if let None = iterator.peek() {
+                    first.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+                } else {
+                    iterator.fold(first, |current_most_concrete, ty| {
+                        TypeNode::make_most_concrete_from_pair(
+                            current_most_concrete,
+                            ty.clone().0,
+                            most_concrete_type_map,
+                            type_equality_sets,
+                        )
+                    })
+                };
                 most_concrete_type_map.insert(*self, most_concrete.clone());
                 most_concrete
             }
@@ -442,9 +446,9 @@ impl TypeNode {
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
     ) -> Option<Self> {
-        let node = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
-        if node.is_relevant(type_equality_sets, relevant_generic_params) {
-            Some(node)
+        let most_concrete = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
+        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
+            Some(most_concrete)
         } else {
             None
         }
@@ -549,7 +553,33 @@ impl TypeNode {
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
     ) -> Self {
-        todo!()
+        use TypeNode::*;
+        match self {
+            Tuple(types) => Tuple(
+                types
+                    .into_iter()
+                    .map(|ty| {
+                        Type(ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets))
+                    })
+                    .collect(),
+            ),
+            Reference { inner, lifetime } => Reference {
+                inner: Box::new(
+                    inner.make_most_concrete(most_concrete_type_map, type_equality_sets),
+                ),
+                lifetime,
+            },
+            ReferenceMut { inner, lifetime } => ReferenceMut {
+                inner: Box::new(
+                    inner.make_most_concrete(most_concrete_type_map, type_equality_sets),
+                ),
+                lifetime,
+            },
+            Path(path) => {
+                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
+            }
+            node => node,
+        }
     }
 
     fn inner_param_set_refs(
@@ -667,7 +697,13 @@ impl Path {
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
     ) -> Option<Self> {
-        todo!()
+        let most_concrete =
+            self.make_most_concrete_inner(most_concrete_type_map, type_equality_sets);
+        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
+            Some(most_concrete)
+        } else {
+            None
+        }
     }
 
     fn inner_param_set_refs(
@@ -685,25 +721,57 @@ impl Path {
                                 .0
                                 .inner_param_set_refs(type_equality_sets, generic_param_set_refs),
                             GenericArgument::Lifetime(lifetime) => {
-                                unimplemented!("TypeNode::inner_param_set_refs: Lifetime")
+                                // FIXME: Lifetime
+                                unimplemented!("Path::inner_param_set_refs: Lifetime")
                             }
                             _ => unimplemented!(),
                         }
                     }
                 }
                 PathArguments::Parenthesized(_) => {
-                    unimplemented!("TypeNode::inner_param_set_ref: Parenthesized")
+                    unimplemented!("Path::inner_param_set_ref: Parenthesized")
                 }
             }
         }
     }
 
     fn make_most_concrete_inner(
-        self,
+        mut self,
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
     ) -> Self {
-        todo!()
+        let path_len = self.path.len();
+        let segment = &mut self.path[path_len - 1];
+        let mut path_arguments = std::mem::replace(&mut segment.args, PathArguments::None);
+        path_arguments = match path_arguments {
+            PathArguments::None => PathArguments::None,
+            PathArguments::AngleBracketed(args) => {
+                let args = args
+                    .args
+                    .args
+                    .into_iter()
+                    .map(|arg| match arg {
+                        GenericArgument::Type(ty) => GenericArgument::Type(Type(
+                            ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets),
+                        )),
+                        GenericArgument::Lifetime(lifetime) => {
+                            // FIXME: Lifetime
+                            unimplemented!("Path::make_most_concrete_inner: Lifetime")
+                        }
+                        _ => unimplemented!(),
+                    })
+                    .collect();
+
+                PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    args: GenericArguments { args },
+                })
+            }
+            PathArguments::Parenthesized(_) => {
+                unimplemented!("Path::make_most_concrete_inner: Parenthesized")
+            }
+        };
+        std::mem::replace(&mut segment.args, path_arguments);
+        self
     }
 
     fn make_most_concrete_from_pair(

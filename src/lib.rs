@@ -379,7 +379,7 @@ use crate::index::{
     InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, ValueRef,
 };
 use crate::node::ValueNode;
-use crate::path::{PathArguments, SimplePath};
+use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
