@@ -1,15 +1,22 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
     GenericArguments, GenericConstraint, GenericParam, Path, PathArguments, PredicateType, Push,
-    TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
+    Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// A set of types that are considered to be equal
+/// A set of types that are considered to be equal. An example of how it is used:
+/// Say we have a function: fn func<T>(maybe: Option<T>) {}, and we call this
+/// function with a value of type ::std::option::Option<String>. Then we need
+/// at least two sets.
+/// In set one, we have { Option<T>, ::std::option::Option<String>, .. }
+/// In set two, we have { T, String, .. }. Both sets may contain more than two
+/// types, since more than two types may be considered equal
 pub(crate) struct TypeEqualitySet {
     pub(crate) set: HashSet<Type>,
 }
 
+/// A set of constraints used in the where clause in the final impl
 pub(crate) struct ConstraintSet {
     pub(crate) set: HashSet<GenericConstraint>,
 }
@@ -50,9 +57,22 @@ impl TypeEqualitySet {
     fn insert(&mut self, ty: Type) -> bool {
         self.set.insert(ty)
     }
+
+    fn union(&self, other: &TypeEqualitySet) -> TypeEqualitySet {
+        TypeEqualitySet {
+            set: self.set.union(&other.set).cloned().collect(),
+        }
+    }
 }
 
 impl TypeEqualitySetRef {
+    /// What is meant by making something more concrete, is essentially making
+    /// it less generic. Say we have a TypeEqualitySet with these types:
+    /// { T, Option<U> }. The most concrete type of these, are Option<U>.
+    /// Imaginge then that we have another set: { U, String }. String is more
+    /// concrete than U, and thus Option<String> is more concrete than Option<U>,
+    /// and thus the most concrete type we can get startng from the first set
+    /// is Option<String>
     fn make_most_concrete(
         &self,
         most_concrete_type_map: &mut BTreeMap<Self, TypeNode>,
@@ -63,7 +83,17 @@ impl TypeEqualitySetRef {
         match most_concrete {
             Some(node) => node.clone(),
             None => {
+                // Adding the Infer type as a temporary value is done for safety in case
+                // of self referential type constraints. Say we have deduced that
+                // Vec<&str> must be equal to &str, due to calling a function with the
+                // wrong type. We then run the risk calling this method in an infinite
+                // loop, since make_most_concrete_pair will call this method again with
+                // the set containing &str, since it is the inner type of Vec<&str>, but
+                // that is the same set as the current one, so we need a way to break the
+                // loop. Since this method always checks the most_concrete_type_map first,
+                // it will just return Infer, in case we have a self referential loop.
                 most_concrete_type_map.insert(*self, Infer);
+
                 let set = &type_equality_sets.sets[self.0].set;
                 let mut iterator = set.iter().peekable();
                 let first = iterator.next().unwrap().clone().0;
@@ -115,6 +145,8 @@ impl TypeEqualitySets {
         set_ref
     }
 
+    /// Insert two types as equal to eachother, and in case of TraitObjects, e.g.
+    /// ty1: T, ty2: dyn Clone, insert T: Clone as constraint.
     fn insert_as_equal_to(&mut self, ty1: Type, ty2: Type, constraints: &mut ConstraintSet) {
         use TypeNode::*;
         match (&ty1.0, &ty2.0) {
@@ -158,31 +190,42 @@ impl TypeEqualitySets {
             }
             _ => (),
         }
-        match self.set_map.get(&ty1) {
-            Some(&set_ref) => {
-                self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
+        self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
+        match (self.set_map.get(&ty1), self.set_map.get(&ty2)) {
+            (Some(&set_ref1), Some(&set_ref2)) => {
+                let set1 = &self.sets[set_ref1.0];
+                let set2 = &self.sets[set_ref2.0];
+                let new_set = set1.union(set2);
+                for ty in set2.set.iter() {
+                    if let Some(set_ref) = self.set_map.get_mut(ty) {
+                        *set_ref = set_ref1
+                    }
+                }
+                self.sets[set_ref1.0] = new_set;
+                self.sets[set_ref2.0] = TypeEqualitySet::new();
+            }
+            (Some(&set_ref), None) => {
                 self.sets[set_ref.0].insert(ty2.clone());
                 self.set_map.insert(ty2, set_ref);
             }
-            None => match self.set_map.get(&ty2) {
-                Some(&set_ref) => {
-                    self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
-                    self.sets[set_ref.0].insert(ty1.clone());
-                    self.set_map.insert(ty1, set_ref);
-                }
-                None => {
-                    self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
-                    let mut set = TypeEqualitySet::new();
-                    set.insert(ty2.clone());
-                    set.insert(ty1.clone());
-                    let set_ref = self.sets.index_push(set);
-                    self.set_map.insert(ty2, set_ref);
-                    self.set_map.insert(ty1, set_ref);
-                }
-            },
+            (None, Some(&set_ref)) => {
+                self.sets[set_ref.0].insert(ty1.clone());
+                self.set_map.insert(ty1, set_ref);
+            }
+            (None, None) => {
+                let mut set = TypeEqualitySet::new();
+                set.insert(ty2.clone());
+                set.insert(ty1.clone());
+                let set_ref = self.sets.index_push(set);
+                self.set_map.insert(ty2, set_ref);
+                self.set_map.insert(ty1, set_ref);
+            }
         }
     }
 
+    /// Insert the inner types of two types as equal to eachother
+    /// For example if we have two tuple types (T, &str) and (U, S) we would
+    /// get two sets {T, U}, and {&str, S}
     fn insert_inner_type_as_equal_to(
         &mut self,
         ty1: &Type,
@@ -227,6 +270,22 @@ impl TypeEqualitySets {
         }
     }
 
+    /// When comparing two paths with the same number of arguments, we assume
+    /// those arguments to correspond to eachother in the order they are
+    /// defined. If we have two paths: ::std::result::Result<T, U>, and
+    /// Result<V, W>, we assume T = V and U = W. This may not be the case
+    /// in all cases as Result could be defined as:
+    /// type Result<V, W> = std::result:Result<W, V>, but it is unlikely that
+    /// that someone would define a type like that. The benifit of pretending
+    /// that this scenario will not occur, is that we may get better trait
+    /// inference for the cases where the type parameters correspond to
+    /// eachother.
+    ///
+    /// For cases where two paths have an unequal number of parameters, we
+    /// assume that the path with the fewest paramters is a type alias for
+    /// the type with more parameters. Unfortunately, it is not possible to
+    /// know which paramter corresponds to which, and thus the parameters can
+    /// not be compared.
     fn insert_path_arguments_as_equal_to(
         &mut self,
         path1: &Path,
@@ -321,9 +380,14 @@ impl CompleteImpl {
     }
 }
 
-/// Find all equality sets of the generic parameters related to the
-/// DataStructure or trait that is being implemented, including inner
-/// parameters of other types like: the T in some::path<T>
+/// Find all equality sets of the most concrete types for the generic
+/// parameters related to the DataStructure or trait that is being
+/// implemented. Then return a set containing all the inner generic type
+/// parameters. Say we are implementing a trait Trait for a struct S<T, U>
+/// After doing some analysis we have concluded that the most concrete
+/// type for T is Option<V> and U is already the most concrete type it can be
+/// We then return a set containing references to the sets containing V, and
+/// the set containing U
 fn generic_param_set_refs(
     relevant_generic_params: &BTreeSet<GenericParam>,
     most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
@@ -414,6 +478,7 @@ fn iter_option_to_option_vec<T>(
 }
 
 impl TypeNode {
+    // TODO: consider changing name and write documentation
     fn is_relevant(
         &self,
         type_equality_sets: &TypeEqualitySets,
@@ -440,6 +505,7 @@ impl TypeNode {
         }
     }
 
+    // TODO: consider changing name and write documentation
     fn make_most_relevant(
         self,
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
@@ -467,6 +533,7 @@ impl TypeNode {
         }
     }
 
+    // TODO: write documentation
     fn make_most_concrete_from_pair(
         ty1: TypeNode,
         ty2: TypeNode,
@@ -774,6 +841,7 @@ impl Path {
         self
     }
 
+    // TODO: consider adding more detailed documentation
     fn make_most_concrete_from_pair(
         mut path1: Path,
         mut path2: Path,
@@ -876,17 +944,56 @@ impl CompleteFunction {
         self.invokes.iter().for_each(|invoke| {
             let parent = &invoke.function.parent;
             let sig = &invoke.function.sig;
-            sig.inputs
-                .iter()
-                .zip(invoke.args.iter())
-                .for_each(|(ty, val)| {
-                    // Make sure inner types are included
+            let args_iter = match sig.receiver {
+                Receiver::NoSelf => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len());
+                    invoke.args.iter()
+                }
+                Receiver::SelfByValue => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
                     type_equality_sets.insert_as_equal_to(
-                        ty.clone(),
-                        val.node().get_type(),
+                        parent.as_ref().unwrap().ty.clone(),
+                        args_iter.next().unwrap().node().get_type(),
                         constraints,
-                    )
-                });
+                    );
+                    args_iter
+                }
+                Receiver::SelfByReference => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
+                    type_equality_sets.insert_as_equal_to(
+                        Type(TypeNode::Reference {
+                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
+                            lifetime: None,
+                        }),
+                        args_iter.next().unwrap().node().get_type(),
+                        constraints,
+                    );
+                    args_iter
+                }
+                Receiver::SelfByReferenceMut => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
+                    type_equality_sets.insert_as_equal_to(
+                        Type(TypeNode::ReferenceMut {
+                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
+                            lifetime: None,
+                        }),
+                        args_iter.next().unwrap().node().get_type(),
+                        constraints,
+                    );
+                    args_iter
+                }
+            };
+
+            sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
+                type_equality_sets.insert_as_equal_to(
+                    ty.clone(),
+                    val.node().get_type(),
+                    constraints,
+                )
+            });
 
             // Add parent constraints
             // FIXME: Add constraints from parent type
