@@ -66,6 +66,7 @@ impl TypeEqualitySet {
 }
 
 impl TypeEqualitySetRef {
+    /// The most concrete type is what the inferred type for a value must be.
     /// What is meant by making something more concrete, is essentially making
     /// it less generic. Say we have a TypeEqualitySet with these types:
     /// { T, Option<U> }. The most concrete type of these, are Option<U>.
@@ -368,7 +369,7 @@ impl CompleteImpl {
             .set
             .into_iter()
             .filter_map(|constraint| {
-                constraint.make_most_relevant(
+                constraint.make_relevant(
                     &mut most_concrete_type_map,
                     &type_equality_sets,
                     &relevant_generic_params,
@@ -377,6 +378,89 @@ impl CompleteImpl {
             .collect();
 
         ConstraintSet { set: constraints }
+    }
+}
+
+impl CompleteFunction {
+    fn compute_trait_bounds(
+        &self,
+        constraints: &mut ConstraintSet,
+        type_equality_sets: &mut TypeEqualitySets,
+    ) {
+        self.invokes.iter().for_each(|invoke| {
+            let parent = &invoke.function.parent;
+            let sig = &invoke.function.sig;
+            let args_iter = match sig.receiver {
+                Receiver::NoSelf => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len());
+                    invoke.args.iter()
+                }
+                Receiver::SelfByValue => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
+                    type_equality_sets.insert_as_equal_to(
+                        parent.as_ref().unwrap().ty.clone(),
+                        args_iter.next().unwrap().node().get_type(),
+                        constraints,
+                    );
+                    args_iter
+                }
+                Receiver::SelfByReference => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
+                    type_equality_sets.insert_as_equal_to(
+                        Type(TypeNode::Reference {
+                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
+                            lifetime: None,
+                        }),
+                        args_iter.next().unwrap().node().get_type(),
+                        constraints,
+                    );
+                    args_iter
+                }
+                Receiver::SelfByReferenceMut => {
+                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                    let mut args_iter = invoke.args.iter();
+                    type_equality_sets.insert_as_equal_to(
+                        Type(TypeNode::ReferenceMut {
+                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
+                            lifetime: None,
+                        }),
+                        args_iter.next().unwrap().node().get_type(),
+                        constraints,
+                    );
+                    args_iter
+                }
+            };
+
+            sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
+                type_equality_sets.insert_as_equal_to(
+                    ty.clone(),
+                    val.node().get_type(),
+                    constraints,
+                )
+            });
+
+            // Add parent constraints
+            // FIXME: Add constraints from parent type
+            if let Some(generics) = parent.as_ref().and_then(|parent| parent.generics.as_ref()) {
+                generics.constraints.iter().for_each(|constraint| {
+                    if !constraints.contains(constraint) {
+                        constraints.insert(constraint.clone());
+                    };
+                })
+            };
+
+            // Add function constraints
+            // FIXME: Add constraints from types in signature
+            if let Some(generics) = sig.generics.as_ref() {
+                generics.constraints.iter().for_each(|constraint| {
+                    if !constraints.contains(constraint) {
+                        constraints.insert(constraint.clone());
+                    };
+                })
+            }
+        });
     }
 }
 
@@ -409,77 +493,116 @@ fn generic_param_set_refs(
     generic_param_set_refs
 }
 
-impl PredicateType {
+impl GenericConstraint {
+    /// This method tries to make a constraint that uses the correctly
+    /// inferred types based on the analysis done so far. There is a chance
+    /// that the constraint is not relevant at all, and thus it returns
+    /// Option<Self> instead if just Self.
+    ///
+    /// Example of a not relevat constraint is: `T: Clone`, where T is
+    /// inferred to be String. String is a concrete type, and therefore does
+    /// not need an explisit bound.
+    ///
+    /// Less obvious is that we disallow cases like:
+    /// `Type<T>: Trait` and `U: Trait<Type<T>>`
+    /// This is to avoid the scenario where Type is private but Trait is
+    /// public. In this case the final impl may compile without specifying the
+    /// trait bound, but won't compile with it.
+    ///
+    /// There are some corner cases where this could be done safely. If we are
+    /// doing an `impl<T> Trait for Struct<Type<T>>` for example. In this case
+    /// it is safe to accept the constraint: `Type<T>: Trait` as this won't
+    /// trigger the private type in public interface error. This scenario is
+    /// currently ignored by this method, and will return a None in that case,
+    /// but it might be supported in the future.
+    fn make_relevant(
+        self,
+        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+        type_equality_sets: &TypeEqualitySets,
+        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+    ) -> Option<Self> {
+        let most_concrete = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
+        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
+            Some(most_concrete)
+        } else {
+            None
+        }
+    }
+
     fn is_relevant(
+        &self,
+        type_equality_sets: &TypeEqualitySets,
+        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+    ) -> bool {
+        match self {
+            GenericConstraint::Type(pred_ty) => {
+                pred_ty.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
+            }
+
+            //FIXME: Properly handle lifetimes
+            GenericConstraint::Lifetime(_) => true,
+        }
+    }
+
+    fn make_most_concrete(
+        self,
+        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+        type_equality_sets: &TypeEqualitySets,
+    ) -> Self {
+        match self {
+            GenericConstraint::Type(pred_ty) => GenericConstraint::Type(
+                pred_ty.make_most_concrete(most_concrete_type_map, type_equality_sets),
+            ),
+            GenericConstraint::Lifetime(_) =>
+            //FIXME: Properly handle lifetimes
+            {
+                self
+            }
+        }
+    }
+}
+
+impl PredicateType {
+    fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
     ) -> bool {
         self.bounded_ty
             .0
-            .is_relevant(&type_equality_sets, &relevant_generic_params)
-            && self
-                .bounds
-                .iter()
-                .all(|bound| bound.is_relevant(&type_equality_sets, &relevant_generic_params))
+            .is_relevant_for_constraint(&type_equality_sets, &relevant_generic_params)
+            && self.bounds.iter().all(|bound| {
+                bound.is_relevant_for_constraint(&type_equality_sets, &relevant_generic_params)
+            })
     }
 
-    fn make_most_relevant(
+    fn make_most_concrete(
         self,
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
-    ) -> Option<Self> {
-        match self.bounded_ty.0.make_most_relevant(
-            most_concrete_type_map,
-            type_equality_sets,
-            relevant_generic_params,
-        ) {
-            Some(bounded_ty) => {
-                let bounds = iter_option_to_option_vec(self.bounds.into_iter().map(|bound| {
-                    bound.make_most_relevant(
-                        most_concrete_type_map,
-                        type_equality_sets,
-                        relevant_generic_params,
-                    )
-                }));
-                match bounds {
-                    Some(bounds) => Some(PredicateType {
-                        bounded_ty: Type(bounded_ty),
-                        bounds,
-                        // FIXME: lifetimes
-                        lifetimes: self.lifetimes,
-                    }),
+    ) -> Self {
+        let bounded_ty = self
+            .bounded_ty
+            .0
+            .make_most_concrete(most_concrete_type_map, type_equality_sets);
 
-                    None => None,
-                }
-            }
+        let bounds = self
+            .bounds
+            .into_iter()
+            .map(|bound| bound.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
+            .collect();
 
-            None => None,
+        PredicateType {
+            bounded_ty: Type(bounded_ty),
+            bounds,
+            // FIXME: lifetimes
+            lifetimes: self.lifetimes,
         }
     }
 }
 
-/// Transform an iterator of Option values where every item is Some(value)
-/// into Some(vec) of those values. If any of the items are None. The returned
-/// value is also None
-fn iter_option_to_option_vec<T>(
-    iterator: impl Iterator<Item = Option<T>> + ExactSizeIterator,
-) -> Option<Vec<T>> {
-    let vec = Some(Vec::with_capacity(iterator.len()));
-    iterator.fold(vec, |vec, val| {
-        if let (Some(mut vec), Some(val)) = (vec, val) {
-            vec.push(val);
-            Some(vec)
-        } else {
-            None
-        }
-    })
-}
-
 impl TypeNode {
-    // TODO: consider changing name and write documentation
-    fn is_relevant(
+    fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
@@ -496,27 +619,12 @@ impl TypeNode {
                 }
             }
             Reference { lifetime, inner } => {
-                inner.is_relevant(type_equality_sets, relevant_generic_params)
+                inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
             }
             ReferenceMut { lifetime, inner } => {
-                inner.is_relevant(type_equality_sets, relevant_generic_params)
+                inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
             }
             _ => false,
-        }
-    }
-
-    // TODO: consider changing name and write documentation
-    fn make_most_relevant(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
-    ) -> Option<Self> {
-        let most_concrete = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
-        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
-            Some(most_concrete)
-        } else {
-            None
         }
     }
 
@@ -526,14 +634,16 @@ impl TypeNode {
         type_equality_sets: &TypeEqualitySets,
     ) -> Self {
         let ty = Type(self);
-        if let Some(set) = type_equality_sets.get_set_ref(&ty) {
-            set.make_most_concrete(most_concrete_type_map, type_equality_sets)
+        if let Some(set_ref) = type_equality_sets.get_set_ref(&ty) {
+            set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets)
         } else {
             ty.0
         }
     }
 
-    // TODO: write documentation
+    /// Makes the most concrete TypeNode from two TypeNodes that are consdered
+    /// to be equal. This is primarily decided based on the inner types of the
+    /// nodes.
     fn make_most_concrete_from_pair(
         ty1: TypeNode,
         ty2: TypeNode,
@@ -684,7 +794,7 @@ impl TypeNode {
 }
 
 impl TypeParamBound {
-    fn is_relevant(
+    fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
@@ -694,7 +804,7 @@ impl TypeParamBound {
                 //FIXME: Properly deal with lifetimes
                 bound
                     .path
-                    .is_relevant(type_equality_sets, relevant_generic_params)
+                    .is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
             }
 
             TypeParamBound::Lifetime(_) => {
@@ -704,37 +814,30 @@ impl TypeParamBound {
         }
     }
 
-    fn make_most_relevant(
+    fn make_most_concrete_inner(
         self,
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
-    ) -> Option<Self> {
+    ) -> Self {
         match self {
             TypeParamBound::Trait(bound) => {
-                if let Some(path) = bound.path.make_most_relevant(
-                    most_concrete_type_map,
-                    type_equality_sets,
-                    relevant_generic_params,
-                ) {
-                    Some(TypeParamBound::Trait(TraitBound {
-                        path,
-                        // FIXME: properly deal with lifetimes
-                        lifetimes: bound.lifetimes,
-                    }))
-                } else {
-                    None
-                }
+                TypeParamBound::Trait(TraitBound {
+                    path: bound
+                        .path
+                        .make_most_concrete_inner(most_concrete_type_map, type_equality_sets),
+                    // FIXME: properly deal with lifetimes
+                    lifetimes: bound.lifetimes,
+                })
             }
 
             // FIXME: properly deal with lifetimes
-            bound @ TypeParamBound::Lifetime(_) => Some(bound),
+            bound @ TypeParamBound::Lifetime(_) => bound,
         }
     }
 }
 
 impl Path {
-    fn is_relevant(
+    fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
         relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
@@ -744,33 +847,18 @@ impl Path {
 
             PathArguments::AngleBracketed(args) => args.args.args.iter().all(|arg| match arg {
                 GenericArgument::Type(ty) => {
-                    ty.0.is_relevant(type_equality_sets, relevant_generic_params)
+                    ty.0.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
                 }
 
                 GenericArgument::Lifetime(_) => true,
 
-                _ => unimplemented!("is_relevant: PathArguments::AngleBracketed"),
+                _ => unimplemented!("is_relevant_for_constraint: PathArguments::AngleBracketed"),
             }),
 
             PathArguments::Parenthesized(_) => {
-                unimplemented!("is_relevant: PathArguments::Parenthesized")
+                unimplemented!("is_relevant_for_constraint: PathArguments::Parenthesized")
             }
         })
-    }
-
-    fn make_most_relevant(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
-    ) -> Option<Self> {
-        let most_concrete =
-            self.make_most_concrete_inner(most_concrete_type_map, type_equality_sets);
-        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
-            Some(most_concrete)
-        } else {
-            None
-        }
     }
 
     fn inner_param_set_refs(
@@ -841,7 +929,29 @@ impl Path {
         self
     }
 
-    // TODO: consider adding more detailed documentation
+    /// Compares two paths, and makes the most concrete path based on the two.
+    ///
+    /// The two paths may be different in length and number of arguments, but
+    /// still represent the same underlying type. This methods accounts for
+    /// this, and will try to combine these paths in the best way possible.
+    /// It is for example common to make a custum Result type with one
+    /// parameter, that is just a type alias for std::result::Result. e.g.:
+    /// `type Result<T> = std::result::Result<Error, T>`
+    ///
+    /// This method prefers the path with the least arguments, as it will most
+    /// likely be the most concrete, but this may not be the case in some
+    /// circumstanses.
+    ///
+    /// For two paths with an equal number of generic arguments, these
+    /// arguments are compared to eachother in chronlogical order. For example
+    /// with the types: Result<T, U> and std::result::Result<&'static str, V>
+    /// it is assumed that T is equal to &'static str, and U is equal to V
+    ///
+    /// In the rare case we have to types like Result<T, U> and tluseR<W, V>
+    /// this will not hold if tluseR<W, V> is defined as:
+    /// `type tluseR<W, V> = Result<V, W>;`.
+    /// The code generation may produce invalid code in this case, but I
+    /// assume this will be rare, and not worth worrying about.
     fn make_most_concrete_from_pair(
         mut path1: Path,
         mut path2: Path,
@@ -907,113 +1017,5 @@ impl Path {
             }
             _ => panic!("Path::make_most_concrete_from_pair: incompatible types"),
         }
-    }
-}
-
-impl GenericConstraint {
-    fn make_most_relevant(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
-    ) -> Option<Self> {
-        match self {
-            GenericConstraint::Type(pred_ty) => pred_ty
-                .make_most_relevant(
-                    most_concrete_type_map,
-                    type_equality_sets,
-                    relevant_generic_params,
-                )
-                .map(|pred_ty| GenericConstraint::Type(pred_ty)),
-
-            GenericConstraint::Lifetime(_) =>
-            //FIXME: Properly handle lifetimes
-            {
-                Some(self)
-            }
-        }
-    }
-}
-
-impl CompleteFunction {
-    fn compute_trait_bounds(
-        &self,
-        constraints: &mut ConstraintSet,
-        type_equality_sets: &mut TypeEqualitySets,
-    ) {
-        self.invokes.iter().for_each(|invoke| {
-            let parent = &invoke.function.parent;
-            let sig = &invoke.function.sig;
-            let args_iter = match sig.receiver {
-                Receiver::NoSelf => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len());
-                    invoke.args.iter()
-                }
-                Receiver::SelfByValue => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        parent.as_ref().unwrap().ty.clone(),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
-                    args_iter
-                }
-                Receiver::SelfByReference => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        Type(TypeNode::Reference {
-                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
-                            lifetime: None,
-                        }),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
-                    args_iter
-                }
-                Receiver::SelfByReferenceMut => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        Type(TypeNode::ReferenceMut {
-                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
-                            lifetime: None,
-                        }),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
-                    args_iter
-                }
-            };
-
-            sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
-                type_equality_sets.insert_as_equal_to(
-                    ty.clone(),
-                    val.node().get_type(),
-                    constraints,
-                )
-            });
-
-            // Add parent constraints
-            // FIXME: Add constraints from parent type
-            if let Some(generics) = parent.as_ref().and_then(|parent| parent.generics.as_ref()) {
-                generics.constraints.iter().for_each(|constraint| {
-                    if !constraints.contains(constraint) {
-                        constraints.insert(constraint.clone());
-                    };
-                })
-            };
-
-            // Add function constraints
-            // FIXME: Add constraints from types in signature
-            if let Some(generics) = sig.generics.as_ref() {
-                generics.constraints.iter().for_each(|constraint| {
-                    if !constraints.contains(constraint) {
-                        constraints.insert(constraint.clone());
-                    };
-                })
-            }
-        });
     }
 }
