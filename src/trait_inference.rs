@@ -4,6 +4,7 @@ use crate::{
     Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::iter::Extend;
 
 /// A set of types that are considered to be equal. An example of how it is used:
 /// Say we have a function: fn func<T>(maybe: Option<T>) {}, and we call this
@@ -23,8 +24,15 @@ pub(crate) struct ConstraintSet {
 
 // A mapping between types and it's corresponding set of equal types
 pub(crate) struct TypeEqualitySets {
-    set_map: HashMap<Type, TypeEqualitySetRef>,
-    sets: Vec<TypeEqualitySet>,
+    pub(crate) set_map: HashMap<Type, TypeEqualitySetRef>,
+    pub(crate) sets: Vec<TypeEqualitySet>,
+}
+
+pub(crate) struct TraitInferenceResult {
+    pub(crate) constraints: ConstraintSet,
+    pub(crate) generic_params: BTreeSet<GenericParam>,
+    pub(crate) data_struct_args: GenericArguments,
+    pub(crate) trait_args: GenericArguments,
 }
 
 impl ConstraintSet {
@@ -57,12 +65,6 @@ impl TypeEqualitySet {
     fn insert(&mut self, ty: Type) -> bool {
         self.set.insert(ty)
     }
-
-    fn union(&self, other: &TypeEqualitySet) -> TypeEqualitySet {
-        TypeEqualitySet {
-            set: self.set.union(&other.set).cloned().collect(),
-        }
-    }
 }
 
 impl TypeEqualitySetRef {
@@ -79,7 +81,6 @@ impl TypeEqualitySetRef {
         most_concrete_type_map: &mut BTreeMap<Self, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
     ) -> TypeNode {
-        use TypeNode::*;
         let most_concrete = most_concrete_type_map.get(self);
         match most_concrete {
             Some(node) => node.clone(),
@@ -93,7 +94,7 @@ impl TypeEqualitySetRef {
                 // that is the same set as the current one, so we need a way to break the
                 // loop. Since this method always checks the most_concrete_type_map first,
                 // it will just return Infer, in case we have a self referential loop.
-                most_concrete_type_map.insert(*self, Infer);
+                most_concrete_type_map.insert(*self, TypeNode::Infer);
 
                 let set = &type_equality_sets.sets[self.0].set;
                 let mut iterator = set.iter().peekable();
@@ -133,7 +134,7 @@ impl TypeEqualitySets {
         self.set_map.get(ty).map(|set_ref| &self.sets[set_ref.0])
     }
 
-    fn get_set_ref(&self, ty: &Type) -> Option<TypeEqualitySetRef> {
+    pub(crate) fn get_set_ref(&self, ty: &Type) -> Option<TypeEqualitySetRef> {
         self.set_map.get(ty).map(|&set_ref| set_ref)
     }
 
@@ -194,16 +195,14 @@ impl TypeEqualitySets {
         self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
         match (self.set_map.get(&ty1), self.set_map.get(&ty2)) {
             (Some(&set_ref1), Some(&set_ref2)) => {
-                let set1 = &self.sets[set_ref1.0];
-                let set2 = &self.sets[set_ref2.0];
-                let new_set = set1.union(set2);
+                let set2 = std::mem::replace(&mut self.sets[set_ref2.0], TypeEqualitySet::new());
+                let set1 = &mut self.sets[set_ref1.0];
                 for ty in set2.set.iter() {
                     if let Some(set_ref) = self.set_map.get_mut(ty) {
                         *set_ref = set_ref1
                     }
                 }
-                self.sets[set_ref1.0] = new_set;
-                self.sets[set_ref2.0] = TypeEqualitySet::new();
+                set1.set.extend(set2.set);
             }
             (Some(&set_ref), None) => {
                 self.sets[set_ref.0].insert(ty2.clone());
@@ -327,40 +326,55 @@ impl TypeEqualitySets {
 }
 
 impl CompleteImpl {
-    fn compute_trait_bounds(&self) -> ConstraintSet {
+    pub(crate) fn compute_trait_bounds(&self) -> TraitInferenceResult {
         let mut constraints = ConstraintSet::new();
         let mut type_equality_sets = TypeEqualitySets::new();
-        let mut relevant_generic_params = BTreeSet::new();
+        let mut original_generic_params = Vec::new();
+        let mut original_data_struct_args = Vec::new();
+        let mut original_trait_args = Vec::new();
         let mut most_concrete_type_map = BTreeMap::new();
 
+        // data structure generics
         if let Type(TypeNode::DataStructure { ref generics, .. }) = self.ty {
             generics.constraints.iter().for_each(|constraint| {
                 constraints.insert(constraint.clone());
             });
-            generics.params.iter().for_each(|param_ref| {
-                relevant_generic_params.insert(*param_ref);
+            generics.params.iter().for_each(|&param| {
+                original_generic_params.push(param);
+                original_data_struct_args.push(param);
             })
         };
 
-        if let Some(generics) = self
-            .trait_ty
-            .as_ref()
-            .and_then(|trait_ty| trait_ty.generics.as_ref())
-        {
+        // trait generics
+        if let Some((generics, ty)) = self.trait_ty.as_ref().and_then(|trait_ty| {
+            trait_ty
+                .generics
+                .as_ref()
+                .map(|generics| (generics, &trait_ty.ty))
+        }) {
             generics.constraints.iter().for_each(|constraint| {
                 constraints.insert(constraint.clone());
             });
-            generics.params.iter().for_each(|param_ref| {
-                relevant_generic_params.insert(*param_ref);
-            })
+            generics.params.iter().for_each(|&param| {
+                original_generic_params.push(param);
+            });
+            if let TypeNode::Path(path) = &ty.0 {
+                match &path.path.last().unwrap().args {
+                    PathArguments::None => {}
+                    PathArguments::AngleBracketed(args) => {
+                        original_trait_args.extend(args.args.args.iter().cloned());
+                    }
+                    _ => unreachable!(),
+                }
+            }
         };
 
         self.functions.iter().for_each(|function| {
             function.compute_trait_bounds(&mut constraints, &mut type_equality_sets)
         });
 
-        let relevant_generic_params = generic_param_set_refs(
-            &relevant_generic_params,
+        let relevant_generic_params = get_relevant_generic_params(
+            &original_generic_params,
             &mut most_concrete_type_map,
             &mut type_equality_sets,
         );
@@ -377,7 +391,26 @@ impl CompleteImpl {
             })
             .collect();
 
-        ConstraintSet { set: constraints }
+        let constraints = ConstraintSet { set: constraints };
+
+        let data_struct_args = get_data_struct_args(
+            original_data_struct_args,
+            &mut most_concrete_type_map,
+            &type_equality_sets,
+        );
+
+        let trait_args = get_trait_args(
+            original_trait_args,
+            &mut most_concrete_type_map,
+            &type_equality_sets,
+        );
+
+        TraitInferenceResult {
+            constraints,
+            generic_params: relevant_generic_params,
+            data_struct_args,
+            trait_args,
+        }
     }
 }
 
@@ -464,33 +497,74 @@ impl CompleteFunction {
     }
 }
 
-/// Find all equality sets of the most concrete types for the generic
+/// Find generic parameters of the most concrete types for the generic
 /// parameters related to the DataStructure or trait that is being
 /// implemented. Then return a set containing all the inner generic type
 /// parameters. Say we are implementing a trait Trait for a struct S<T, U>
-/// After doing some analysis we have concluded that the most concrete
-/// type for T is Option<V> and U is already the most concrete type it can be
-/// We then return a set containing references to the sets containing V, and
-/// the set containing U
-fn generic_param_set_refs(
-    relevant_generic_params: &BTreeSet<GenericParam>,
+/// After doing some analysis we have concluded that the most concrete type
+/// for T is Option<V> and U is already the most concrete type it can be. We
+/// then return a set containing V, and U
+fn get_relevant_generic_params(
+    original_generic_params: &Vec<GenericParam>,
     most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
     type_equality_sets: &mut TypeEqualitySets,
-) -> BTreeSet<TypeEqualitySetRef> {
+) -> BTreeSet<GenericParam> {
     use TypeNode::*;
-    let mut generic_param_set_refs = BTreeSet::new();
+    let mut relevant_generic_params = BTreeSet::new();
 
-    relevant_generic_params.iter().for_each(|param| {
+    original_generic_params.iter().for_each(|param| {
         let type_param_ref = param.type_param_ref().unwrap();
         let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param_ref)));
         let set_ref =
             set_ref.unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param_ref))));
 
         let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
-        node.inner_param_set_refs(type_equality_sets, &mut generic_param_set_refs)
+        node.inner_params(type_equality_sets, &mut relevant_generic_params)
     });
 
-    generic_param_set_refs
+    relevant_generic_params
+}
+
+fn get_data_struct_args(
+    original_data_struct_args: Vec<GenericParam>,
+    most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+    type_equality_sets: &TypeEqualitySets,
+) -> GenericArguments {
+    GenericArguments {
+        args: original_data_struct_args
+            .into_iter()
+            .map(|arg| match arg {
+                GenericParam::Type(ty) => GenericArgument::Type(Type(
+                    TypeNode::TypeParam(ty)
+                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
+                )),
+                GenericParam::Lifetime(lifetime_ref) => GenericArgument::Lifetime(lifetime_ref),
+                GenericParam::Const(_) => unimplemented!(),
+            })
+            .collect(),
+    }
+}
+
+fn get_trait_args(
+    original_trait_args: Vec<GenericArgument>,
+    most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
+    type_equality_sets: &TypeEqualitySets,
+) -> GenericArguments {
+    GenericArguments {
+        args: original_trait_args
+            .into_iter()
+            .map(|arg| match arg {
+                GenericArgument::Type(ty) => GenericArgument::Type(Type(
+                    ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets),
+                )),
+
+                // FIXME: properly handle lifetimes
+                lifetime @ GenericArgument::Lifetime(_) => lifetime,
+
+                _ => unimplemented!(),
+            })
+            .collect(),
+    }
 }
 
 impl GenericConstraint {
@@ -519,7 +593,7 @@ impl GenericConstraint {
         self,
         most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> Option<Self> {
         let most_concrete = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
         if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
@@ -532,7 +606,7 @@ impl GenericConstraint {
     fn is_relevant(
         &self,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         match self {
             GenericConstraint::Type(pred_ty) => {
@@ -566,7 +640,7 @@ impl PredicateType {
     fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         self.bounded_ty
             .0
@@ -605,18 +679,12 @@ impl TypeNode {
     fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         use TypeNode::*;
         match self {
             TypeParam(type_param_ref) => {
-                if let Some(set_ref) =
-                    type_equality_sets.get_set_ref(&Type(TypeParam(*type_param_ref)))
-                {
-                    relevant_generic_params.contains(&set_ref)
-                } else {
-                    false
-                }
+                relevant_generic_params.contains(&GenericParam::Type(*type_param_ref))
             }
             Reference { lifetime, inner } => {
                 inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
@@ -714,13 +782,7 @@ impl TypeNode {
             (node, TraitObject(_)) => {
                 node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
             }
-            (TypeParam(ref1), TypeParam(ref2)) => {
-                if ref1 < ref2 {
-                    TypeParam(ref1)
-                } else {
-                    TypeParam(ref2)
-                }
-            }
+            (TypeParam(ref1), TypeParam(ref2)) => TypeParam(ref1.min(ref2)),
             _ => panic!("TypeNode: make_most_concrete_pair: incompatible types"),
         }
     }
@@ -759,34 +821,29 @@ impl TypeNode {
         }
     }
 
-    fn inner_param_set_refs(
+    fn inner_params(
         &self,
         type_equality_sets: &mut TypeEqualitySets,
-        generic_param_set_refs: &mut BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &mut BTreeSet<GenericParam>,
     ) {
         use TypeNode::*;
         match self {
             Tuple(types) => {
                 for ty in types.iter() {
-                    ty.0.inner_param_set_refs(type_equality_sets, generic_param_set_refs)
+                    ty.0.inner_params(type_equality_sets, relevant_generic_params)
                 }
             }
             Reference { inner, .. } => {
-                inner.inner_param_set_refs(type_equality_sets, generic_param_set_refs)
+                inner.inner_params(type_equality_sets, relevant_generic_params)
             }
             ReferenceMut { inner, .. } => {
-                inner.inner_param_set_refs(type_equality_sets, generic_param_set_refs)
+                inner.inner_params(type_equality_sets, relevant_generic_params)
             }
             Path(path) => {
-                path.inner_param_set_refs(type_equality_sets, generic_param_set_refs);
+                path.inner_params(type_equality_sets, relevant_generic_params);
             }
             TypeParam(type_param_ref) => {
-                let set_ref = type_equality_sets
-                    .get_set_ref(&Type(TypeParam(*type_param_ref)))
-                    .unwrap_or_else(|| {
-                        type_equality_sets.new_set(Type(TypeParam(*type_param_ref)))
-                    });
-                generic_param_set_refs.insert(set_ref);
+                relevant_generic_params.insert(GenericParam::Type(*type_param_ref));
             }
             _ => {}
         }
@@ -797,7 +854,7 @@ impl TypeParamBound {
     fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         match self {
             TypeParamBound::Trait(bound) => {
@@ -840,7 +897,7 @@ impl Path {
     fn is_relevant_for_constraint(
         &self,
         type_equality_sets: &TypeEqualitySets,
-        relevant_generic_params: &BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         self.path.iter().all(|segment| match &segment.args {
             PathArguments::None => true,
@@ -861,10 +918,10 @@ impl Path {
         })
     }
 
-    fn inner_param_set_refs(
+    fn inner_params(
         &self,
         type_equality_sets: &mut TypeEqualitySets,
-        generic_param_set_refs: &mut BTreeSet<TypeEqualitySetRef>,
+        relevant_generic_params: &mut BTreeSet<GenericParam>,
     ) {
         for segment in self.path.iter() {
             match &segment.args {
@@ -872,12 +929,12 @@ impl Path {
                 PathArguments::AngleBracketed(args) => {
                     for arg in args.args.args.iter() {
                         match arg {
-                            GenericArgument::Type(ty) => ty
-                                .0
-                                .inner_param_set_refs(type_equality_sets, generic_param_set_refs),
-                            GenericArgument::Lifetime(lifetime) => {
-                                // FIXME: Lifetime
-                                unimplemented!("Path::inner_param_set_refs: Lifetime")
+                            GenericArgument::Type(ty) => {
+                                ty.0.inner_params(type_equality_sets, relevant_generic_params)
+                            }
+                            GenericArgument::Lifetime(lifetime_ref) => {
+                                relevant_generic_params
+                                    .insert(GenericParam::Lifetime(*lifetime_ref));
                             }
                             _ => unimplemented!(),
                         }
@@ -996,7 +1053,7 @@ impl Path {
                             (
                                 GenericArgument::Lifetime(lifetime_ref1),
                                 GenericArgument::Lifetime(lifetime_ref2),
-                            ) => GenericArgument::Lifetime(*lifetime_ref1),
+                            ) => GenericArgument::Lifetime((*lifetime_ref1).min(*lifetime_ref2)),
                             _ => unimplemented!(
                                 "Path::make_most_concrete_from_pair: GenericArgument"
                             ),
