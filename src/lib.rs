@@ -360,7 +360,7 @@ pub use crate::field::{Field, Fields};
 pub use crate::function::Function;
 pub use crate::generics::{GenericArguments, Generics};
 pub use crate::module::Module;
-pub use crate::parent::Parent;
+pub use crate::parent::{Parent, ParentKind};
 pub use crate::path::Path;
 pub use crate::signature::Signature;
 pub use crate::ty::Type;

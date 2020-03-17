@@ -75,6 +75,11 @@ enum Type {
     ReferenceMut(Box<Type>),
 }
 
+enum ParentKind {
+    Trait,
+    DataStructure,
+}
+
 impl Parse for Input {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut crates = Vec::new();
@@ -437,6 +442,7 @@ fn declare_parent(
     parent_type: &PathSegment,
     mod_path: &Path,
     type_params: &Vec<&Ident>,
+    parent_kind: ParentKind,
 ) -> TokenStream2 {
     let set_parent_params = if !parent_generics.params.is_empty() {
         let param_strings = parent_generics
@@ -466,9 +472,18 @@ fn declare_parent(
     };
 
     let parent = &parent_type.ident;
+    let parent_kind = match parent_kind {
+        ParentKind::Trait => quote! {
+            _reflect::ParentKind::Trait
+        },
+        ParentKind::DataStructure => quote! {
+            _reflect::ParentKind::DataStructure
+        },
+    };
+
     let mut segments = Punctuated::new();
     segments.push(parent_type.clone());
-    let get_runtime_type = to_runtime_path_type(
+    let get_runtime_path = to_runtime_path(
         &Path {
             leading_colon: None,
             segments,
@@ -492,8 +507,8 @@ fn declare_parent(
                     static PARENT: ::std::rc::Rc<_reflect::Parent> = {
                         #set_parent_params
                         #set_parent_constraints
-                        let ty = #get_runtime_type;
-                        let mut parent = _reflect::Parent::new(ty);
+                        let path = #get_runtime_path;
+                        let mut parent = _reflect::Parent::new(path, #parent_kind);
                         #set_generics
                         ::std::rc::Rc::new(parent)
                     };
@@ -519,7 +534,13 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let declare_parent = declare_parent(&item.generics, &item.segment, mod_path, type_params);
+    let declare_parent = declare_parent(
+        &item.generics,
+        &item.segment,
+        mod_path,
+        type_params,
+        ParentKind::DataStructure,
+    );
 
     let functions = item.functions.iter().map(|f| {
         declare_function(
@@ -559,7 +580,13 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         })
         .collect();
 
-    let declare_parent = declare_parent(&item.generics, &item.segment, mod_path, type_params);
+    let declare_parent = declare_parent(
+        &item.generics,
+        &item.segment,
+        mod_path,
+        type_params,
+        ParentKind::Trait,
+    );
 
     let functions = item.functions.iter().map(|f| {
         declare_function(

@@ -1,10 +1,11 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, Path, PathArguments, PredicateType, Push,
-    Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
+    GenericArguments, GenericConstraint, GenericParam, Parent, ParentKind, Path, PathArguments,
+    PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::Extend;
+use std::rc::Rc;
 
 /// A set of types that are considered to be equal. An example of how it is used:
 /// Say we have a function: fn func<T>(maybe: Option<T>) {}, and we call this
@@ -346,7 +347,7 @@ impl CompleteImpl {
         };
 
         // trait generics
-        if let Some((generics, ty)) = self.trait_ty.as_ref().and_then(|trait_ty| {
+        if let Some((generics, path)) = self.trait_ty.as_ref().and_then(|trait_ty| {
             trait_ty
                 .generics
                 .as_ref()
@@ -358,14 +359,12 @@ impl CompleteImpl {
             generics.params.iter().for_each(|&param| {
                 original_generic_params.push(param);
             });
-            if let TypeNode::Path(path) = &ty.0 {
-                match &path.path.last().unwrap().args {
-                    PathArguments::None => {}
-                    PathArguments::AngleBracketed(args) => {
-                        original_trait_args.extend(args.args.args.iter().cloned());
-                    }
-                    _ => unreachable!(),
+            match &path.path.last().unwrap().args {
+                PathArguments::None => {}
+                PathArguments::AngleBracketed(args) => {
+                    original_trait_args.extend(args.args.args.iter().cloned());
                 }
+                _ => unreachable!(),
             }
         };
 
@@ -420,48 +419,68 @@ impl CompleteFunction {
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
     ) {
+        use Receiver::*;
         self.invokes.iter().for_each(|invoke| {
             let parent = &invoke.function.parent;
             let sig = &invoke.function.sig;
             let args_iter = match sig.receiver {
-                Receiver::NoSelf => {
+                NoSelf => {
                     assert_eq!(invoke.args.len(), sig.inputs.len());
                     invoke.args.iter()
                 }
-                Receiver::SelfByValue => {
+                reciever => {
                     assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
                     let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        parent.as_ref().unwrap().ty.clone(),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
-                    args_iter
-                }
-                Receiver::SelfByReference => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        Type(TypeNode::Reference {
-                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
-                            lifetime: None,
-                        }),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
-                    args_iter
-                }
-                Receiver::SelfByReferenceMut => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    type_equality_sets.insert_as_equal_to(
-                        Type(TypeNode::ReferenceMut {
-                            inner: Box::new(parent.as_ref().unwrap().ty.clone().0),
-                            lifetime: None,
-                        }),
-                        args_iter.next().unwrap().node().get_type(),
-                        constraints,
-                    );
+                    let parent = parent.as_ref().unwrap();
+                    let first_type = args_iter.next().unwrap().node().get_type();
+
+                    match reciever {
+                        SelfByValue => match parent.parent_kind {
+                            ParentKind::Trait => {
+                                if let TypeNode::TypeParam(_) = &first_type.0 {
+                                    add_self_trait_bound(parent, first_type, constraints)
+                                }
+                            }
+                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                Type(TypeNode::Path(parent.ty.clone())),
+                                first_type,
+                                constraints,
+                            ),
+                        },
+                        SelfByReference => match parent.parent_kind {
+                            ParentKind::Trait => {
+                                let first_type = first_type.dereference();
+                                if let TypeNode::TypeParam(_) = &first_type.0 {
+                                    add_self_trait_bound(parent, first_type, constraints)
+                                }
+                            }
+                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                Type(TypeNode::Reference {
+                                    inner: Box::new(TypeNode::Path(parent.ty.clone())),
+                                    lifetime: None,
+                                }),
+                                first_type,
+                                constraints,
+                            ),
+                        },
+                        SelfByReferenceMut => match parent.parent_kind {
+                            ParentKind::Trait => {
+                                let first_type = first_type.dereference();
+                                if let TypeNode::TypeParam(_) = &first_type.0 {
+                                    add_self_trait_bound(parent, first_type, constraints)
+                                }
+                            }
+                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                Type(TypeNode::ReferenceMut {
+                                    inner: Box::new(TypeNode::Path(parent.ty.clone())),
+                                    lifetime: None,
+                                }),
+                                args_iter.next().unwrap().node().get_type(),
+                                constraints,
+                            ),
+                        },
+                        NoSelf => unreachable!(),
+                    }
                     args_iter
                 }
             };
@@ -495,6 +514,17 @@ impl CompleteFunction {
             }
         });
     }
+}
+
+fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut ConstraintSet) {
+    constraints.insert(GenericConstraint::Type(PredicateType {
+        lifetimes: Vec::new(),
+        bounded_ty: first_type,
+        bounds: vec![TypeParamBound::Trait(TraitBound {
+            lifetimes: Vec::new(),
+            path: parent.ty.clone(),
+        })],
+    }));
 }
 
 /// Find generic parameters of the most concrete types for the generic

@@ -1,14 +1,25 @@
-use crate::{Generics, ParamMap, Type};
+use crate::{Generics, ParamMap, Path};
 
 #[derive(Debug, Clone)]
 pub struct Parent {
-    pub(crate) ty: Type,
+    pub(crate) ty: Path,
     pub(crate) generics: Option<Generics>,
+    pub(crate) parent_kind: ParentKind,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ParentKind {
+    Trait,
+    DataStructure,
 }
 
 impl Parent {
-    pub fn new(ty: Type) -> Self {
-        Self { ty, generics: None }
+    pub fn new(ty: Path, parent_kind: ParentKind) -> Self {
+        Self {
+            ty,
+            generics: None,
+            parent_kind,
+        }
     }
 
     pub fn set_generics(&mut self, generics: Generics) {
