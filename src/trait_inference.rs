@@ -3,7 +3,12 @@ use crate::{
     GenericArguments, GenericConstraint, GenericParam, Parent, ParentKind, Path, PathArguments,
     PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
 };
+// SeaHasher is used, both because it is a faster hashing algorithm than the
+// default one, and because it has a hasher with a defalt seed, which is
+// useful for testing purposes, and consistent output between compiles.
+use seahash::SeaHasher;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::hash::BuildHasherDefault;
 use std::iter::Extend;
 use std::rc::Rc;
 
@@ -15,17 +20,17 @@ use std::rc::Rc;
 /// In set two, we have { T, String, .. }. Both sets may contain more than two
 /// types, since more than two types may be considered equal
 pub(crate) struct TypeEqualitySet {
-    pub(crate) set: HashSet<Type>,
+    pub(crate) set: HashSet<Type, BuildHasherDefault<SeaHasher>>,
 }
 
 /// A set of constraints used in the where clause in the final impl
 pub(crate) struct ConstraintSet {
-    pub(crate) set: HashSet<GenericConstraint>,
+    pub(crate) set: HashSet<GenericConstraint, BuildHasherDefault<SeaHasher>>,
 }
 
 // A mapping between types and it's corresponding set of equal types
 pub(crate) struct TypeEqualitySets {
-    pub(crate) set_map: HashMap<Type, TypeEqualitySetRef>,
+    pub(crate) set_map: HashMap<Type, TypeEqualitySetRef, BuildHasherDefault<SeaHasher>>,
     pub(crate) sets: Vec<TypeEqualitySet>,
 }
 
@@ -39,7 +44,7 @@ pub(crate) struct TraitInferenceResult {
 impl ConstraintSet {
     fn new() -> Self {
         ConstraintSet {
-            set: HashSet::new(),
+            set: HashSet::default(),
         }
     }
 
@@ -55,7 +60,7 @@ impl ConstraintSet {
 impl TypeEqualitySet {
     fn new() -> Self {
         TypeEqualitySet {
-            set: HashSet::new(),
+            set: HashSet::default(),
         }
     }
 
@@ -122,7 +127,7 @@ impl TypeEqualitySetRef {
 impl TypeEqualitySets {
     fn new() -> Self {
         TypeEqualitySets {
-            set_map: HashMap::new(),
+            set_map: HashMap::default(),
             sets: Vec::new(),
         }
     }
@@ -351,7 +356,7 @@ impl CompleteImpl {
             trait_ty
                 .generics
                 .as_ref()
-                .map(|generics| (generics, &trait_ty.ty))
+                .map(|generics| (generics, &trait_ty.path))
         }) {
             generics.constraints.iter().for_each(|constraint| {
                 constraints.insert(constraint.clone());
@@ -442,7 +447,7 @@ impl CompleteFunction {
                                 }
                             }
                             ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                Type(TypeNode::Path(parent.ty.clone())),
+                                Type(TypeNode::Path(parent.path.clone())),
                                 first_type,
                                 constraints,
                             ),
@@ -456,7 +461,7 @@ impl CompleteFunction {
                             }
                             ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                 Type(TypeNode::Reference {
-                                    inner: Box::new(TypeNode::Path(parent.ty.clone())),
+                                    inner: Box::new(TypeNode::Path(parent.path.clone())),
                                     lifetime: None,
                                 }),
                                 first_type,
@@ -472,7 +477,7 @@ impl CompleteFunction {
                             }
                             ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                 Type(TypeNode::ReferenceMut {
-                                    inner: Box::new(TypeNode::Path(parent.ty.clone())),
+                                    inner: Box::new(TypeNode::Path(parent.path.clone())),
                                     lifetime: None,
                                 }),
                                 args_iter.next().unwrap().node().get_type(),
@@ -522,7 +527,7 @@ fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut
         bounded_ty: first_type,
         bounds: vec![TypeParamBound::Trait(TraitBound {
             lifetimes: Vec::new(),
-            path: parent.ty.clone(),
+            path: parent.path.clone(),
         })],
     }));
 }
@@ -542,15 +547,25 @@ fn get_relevant_generic_params(
     use TypeNode::*;
     let mut relevant_generic_params = BTreeSet::new();
 
-    original_generic_params.iter().for_each(|param| {
-        let type_param_ref = param.type_param_ref().unwrap();
-        let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param_ref)));
-        let set_ref =
-            set_ref.unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param_ref))));
+    original_generic_params
+        .iter()
+        .for_each(|param| match *param {
+            GenericParam::Type(type_param_ref) => {
+                let type_param_ref = param.type_param_ref().unwrap();
+                let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param_ref)));
+                let set_ref = set_ref
+                    .unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param_ref))));
 
-        let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
-        node.inner_params(type_equality_sets, &mut relevant_generic_params)
-    });
+                let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
+                node.inner_params(type_equality_sets, &mut relevant_generic_params)
+            }
+            // FIXME: Properly handle lifetimes
+            lifetime @ GenericParam::Lifetime(_) => {
+                relevant_generic_params.insert(lifetime);
+            }
+
+            GenericParam::Const(_) => unimplemented!(),
+        });
 
     relevant_generic_params
 }

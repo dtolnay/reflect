@@ -2,7 +2,7 @@ use crate::{Generics, ParamMap, Path};
 
 #[derive(Debug, Clone)]
 pub struct Parent {
-    pub(crate) ty: Path,
+    pub(crate) path: Path,
     pub(crate) generics: Option<Generics>,
     pub(crate) parent_kind: ParentKind,
 }
@@ -16,7 +16,7 @@ pub enum ParentKind {
 impl Parent {
     pub fn new(ty: Path, parent_kind: ParentKind) -> Self {
         Self {
-            ty,
+            path: ty,
             generics: None,
             parent_kind,
         }

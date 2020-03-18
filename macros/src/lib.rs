@@ -783,7 +783,18 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
                 _reflect::Type::tuple(&[#(#types),*])
             }
         }
-        Type::Path(path) => to_runtime_path_type(path, mod_path, type_params),
+        Type::Path(path) => {
+            if let Some(ident) = &path.get_ident() {
+                // Check if the path is a generic argument
+                if type_params.contains(ident) {
+                    let type_param = ident.to_string();
+                    return quote! {
+                        _reflect::Type::type_param_from_str(#type_param, &mut param_map)
+                    };
+                }
+            }
+            to_runtime_path_type(path, mod_path, type_params)
+        }
 
         Type::TraitObject(type_trait_objects) => {
             let bound_strings = type_trait_objects
@@ -835,15 +846,6 @@ fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>)
 }
 
 fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
-    if let Some(ident) = &path.get_ident() {
-        // Check if the path is a generic argument
-        if type_params.contains(ident) {
-            let path_str = ident.to_string();
-            return quote! {
-                _reflect::Path::simple_path_from_str(#path_str)
-            };
-        }
-    }
     let mut path = path.clone();
 
     // Check if path is defined in current module

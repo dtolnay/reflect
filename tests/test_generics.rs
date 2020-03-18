@@ -35,12 +35,12 @@ fn test_generics() {
     };
 
     let expected = quote! {
-        impl<'a, 'b, T>  ::simple::Simple<T> for Generics<'a, 'b, T>
+        impl<'__a1, '__a2, __T0, __T1>  ::simple::Simple<__T1> for Generics<'__a1, '__a2, __T0>
             where
-                T: ::simple::Bound + Send,
-                'b: 'static,
+            __T0: ::simple::Bound + Send,
+            '__a2: 'static,
         {
-            fn simple(__arg0: T, __arg1: ::simple::Wrapper<U>, __arg2: ::simple::Wrapper<::simple::Wrapper<::std::string::String> >) {
+            fn simple<__T2>(__arg0: __T1, __arg1: ::simple::Wrapper<__T2>, __arg2: ::simple::Wrapper<::simple::Wrapper<::std::string::String> >) {
                 let __v0 = ();
                 __v0
             }

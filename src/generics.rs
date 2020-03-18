@@ -26,8 +26,8 @@ pub struct Generics {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum GenericParam {
-    Type(TypeParamRef),
     Lifetime(LifetimeRef),
+    Type(TypeParamRef),
     // Not supported
     Const(ConstParam),
 }

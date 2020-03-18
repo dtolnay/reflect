@@ -1,13 +1,13 @@
 use crate::{
-    generics, Data, GenericConstraint, GenericParam, Generics, Ident, LifetimeRef, ParamMap, Path,
-    Print, TypeParamBound, TypeParamRef, TYPE_PARAMS,
+    generics, Data, GenericParam, Generics, Ident, LifetimeRef, ParamMap, Path, Print,
+    TypeParamBound, TypeParamRef, TYPE_PARAMS,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use syn::TypePath;
+use syn::{parse_str, TypePath};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -122,6 +122,19 @@ impl Type {
         ))
     }
 
+    pub fn type_param_from_str(type_param: &str, param_map: &mut ParamMap) -> Self {
+        let ident = parse_str(type_param).unwrap();
+        if let Some(&param) = param_map.get(&ident) {
+            return Type(TypeNode::TypeParam(
+                param
+                    .type_param_ref()
+                    .expect("Type::type_param_from_str: Not a type param ref"),
+            ));
+        } else {
+            panic!("Type::type_param_from_str: Not a type param ref")
+        }
+    }
+
     pub(crate) fn syn_to_type(ty: syn::Type, param_map: &mut ParamMap) -> Self {
         match ty {
             syn::Type::Path(TypePath {
@@ -181,12 +194,6 @@ impl Type {
         }
     }
 
-    pub(crate) fn name_and_generics(
-        &self,
-    ) -> (TokenStream, Vec<GenericParam>, Vec<GenericConstraint>) {
-        self.0.name_and_generics()
-    }
-
     pub(crate) fn clone_with_fresh_generics(
         &self,
         ref_map: &BTreeMap<GenericParam, GenericParam>,
@@ -217,66 +224,6 @@ impl TypeNode {
             }
 
             _ => panic!("Type::get_name"),
-        }
-    }
-
-    pub(crate) fn name_and_generics(
-        &self,
-    ) -> (TokenStream, Vec<GenericParam>, Vec<GenericConstraint>) {
-        use super::TypeNode::*;
-        match self {
-            Infer => panic!("Type::name_and_generics: Infer"),
-
-            Tuple(types) => {
-                let types = types.iter().map(Print::ref_cast);
-                (quote!((#(#types),*)), Vec::new(), Vec::new())
-            }
-
-            PrimitiveStr => (quote!(str), Vec::new(), Vec::new()),
-
-            Reference { lifetime, inner } => {
-                let lifetime = lifetime.as_ref().map(Print::ref_cast);
-                let (name, params, constraints) = inner.name_and_generics();
-                (quote!(& #lifetime #name), params, constraints)
-            }
-
-            ReferenceMut { lifetime, inner } => {
-                let lifetime = lifetime.as_ref().map(Print::ref_cast);
-                let (name, params, constraints) = inner.name_and_generics();
-                (quote!(&mut #lifetime #name), params, constraints)
-            }
-
-            Dereference(_dereference) => panic!("Type::name_and_generics: Dereference"),
-
-            TraitObject(type_param_bound) => {
-                if type_param_bound.len() != 1 {
-                    panic!("Type::name_and_generics: TraitObject has more than one bound")
-                }
-                let type_param_bound = Print::ref_cast(&type_param_bound[0]);
-                (quote!(dyn #type_param_bound), Vec::new(), Vec::new())
-            }
-
-            DataStructure {
-                name,
-                generics:
-                    Generics {
-                        params,
-                        constraints,
-                    },
-                ..
-            } => (quote!(#name), params.clone(), constraints.clone()),
-
-            Path(path) => {
-                //FIXME: separate generics from path if possible
-                let path = Print::ref_cast(path);
-                (quote!(path), Vec::new(), Vec::new())
-            }
-
-            TypeParam(type_param_ref) => (
-                quote!(),
-                vec![GenericParam::Type(*type_param_ref)],
-                Vec::new(),
-            ),
         }
     }
 

@@ -1,9 +1,9 @@
 use crate::generics::*;
-use crate::{path, Accessor, LifetimeRef, Parent, Type, TypeNode, TypeParamRef};
+use crate::{path, Accessor, LifetimeRef, Type, TypeNode, TypeParamRef};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
-use syn::LitInt;
+use syn::{Ident, LitInt};
 
 #[derive(RefCast)]
 #[repr(C)]
@@ -107,7 +107,7 @@ impl ToTokens for Print<TypeParam> {
 
 impl ToTokens for Print<TypeParamRef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        TYPE_PARAMS.with(|param| Print::ref_cast(&param.borrow()[(self.0).0]).to_tokens(tokens));
+        Ident::new(&format!("__T{}", (self.0).0), Span::call_site()).to_tokens(tokens);
     }
 }
 
@@ -163,8 +163,13 @@ impl ToTokens for Print<Lifetime> {
 
 impl ToTokens for Print<LifetimeRef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        LIFETIMES
-            .with(|lifetime| Print::ref_cast(&lifetime.borrow()[(self.0).0]).to_tokens(tokens));
+        let apostrophe = Punct::new('\'', Spacing::Joint);
+        tokens.append(apostrophe);
+        if (self.0).0 == 0 {
+            tokens.append(Ident::new("static", Span::call_site()));
+        } else {
+            tokens.append(Ident::new(&format!("__a{}", (self.0).0), Span::call_site()));
+        }
     }
 }
 
@@ -248,11 +253,5 @@ impl ToTokens for Print<path::Path> {
             quote!(#ident #args)
         });
         tokens.append_all(quote!(#leading #(#path)::*));
-    }
-}
-
-impl ToTokens for Print<Parent> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        Print::ref_cast(&self.0.ty).to_tokens(tokens);
     }
 }

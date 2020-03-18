@@ -1,6 +1,7 @@
 use crate::ident::Ident;
 use crate::{
-    Function, Invoke, MacroInvoke, Parent, Print, Receiver, Type, TypeNode, ValueNode, ValueRef,
+    Function, Invoke, MacroInvoke, Parent, PathArguments, Print, Receiver, Type, TypeNode,
+    ValueNode, ValueRef,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -45,42 +46,94 @@ impl CompleteImpl {
     fn compile(&self) -> TokenStream {
         let functions = self.functions.iter().map(CompleteFunction::compile);
 
-        let (name, params, constraints) = self.ty.name_and_generics();
-        let params = if params.is_empty() {
-            None
+        let name = if let TypeNode::DataStructure { name, .. } = &self.ty.0 {
+            name
         } else {
-            let params = params.iter().map(Print::ref_cast);
-            Some(quote!(<#(#params),*>))
+            panic!()
         };
-        let where_clause = if constraints.is_empty() {
-            None
+        let (params, self_ty_args, where_clause, trait_ty) = if self.has_generics() {
+            let result = self.compute_trait_bounds();
+            let params = result.generic_params.iter().map(Print::ref_cast);
+            let params = Some(quote!(<#(#params),*>));
+            let constraints = result.constraints.set.iter().map(Print::ref_cast);
+            let self_ty_args = result.data_struct_args.args.iter().map(Print::ref_cast);
+            let self_ty_args = if result.data_struct_args.args.is_empty() {
+                None
+            } else {
+                Some(quote!(<#(#self_ty_args),*>))
+            };
+            let where_clause = if result.constraints.set.is_empty() {
+                None
+            } else {
+                Some(quote!(where #(#constraints,)*))
+            };
+            let trait_ty = self.trait_ty.as_ref().map(|parent| {
+                let mut path = parent.path.clone();
+                let args = &mut path.path.last_mut().unwrap().args;
+                if let PathArguments::AngleBracketed(args) = args {
+                    args.args = result.trait_args;
+                };
+                let path = Print::ref_cast(&path);
+                quote!(#path)
+            });
+            (params, self_ty_args, where_clause, trait_ty)
         } else {
-            let constraints = constraints.iter().map(Print::ref_cast);
-            Some(quote!(where #(#constraints,)*))
+            (
+                None,
+                None,
+                None,
+                self.trait_ty.as_ref().map(|trait_ty| {
+                    let path = Print::ref_cast(&trait_ty.path);
+                    quote!(#path)
+                }),
+            )
         };
 
-        if let Some(trait_ty) = &self.trait_ty {
-            let trait_ty = Print::ref_cast(&**trait_ty);
+        if let Some(trait_ty) = trait_ty {
             quote! {
                 // FIXME: assosiated types
                 // FIXME: trait generics
-                impl #params #trait_ty for #name #params #where_clause {
+                impl #params #trait_ty for #name #self_ty_args #where_clause {
                     #(#functions)*
                 }
             }
         } else {
             quote! {
-                impl #params #name #params #where_clause {
+                impl #params #name #self_ty_args #where_clause {
                     #(#functions)*
                 }
             }
         }
+    }
+
+    fn has_generics(&self) -> bool {
+        if let TypeNode::DataStructure { generics, .. } = &self.ty.0 {
+            return !generics.params.is_empty();
+        }
+        if let Some(parent) = &self.trait_ty {
+            return parent.generics.is_some();
+        }
+        false
     }
 }
 
 impl CompleteFunction {
     fn compile(&self) -> TokenStream {
         let name = Ident::new(&self.f.name);
+
+        let (params, where_clause) = if let Some(generics) = &self.f.sig.generics {
+            let params = generics.params.iter().map(Print::ref_cast);
+            let params = Some(quote!(<#(#params),*>));
+            let where_clause = if generics.constraints.is_empty() {
+                None
+            } else {
+                let constraints = generics.constraints.iter().map(Print::ref_cast);
+                Some(quote!(where #(#constraints,)*))
+            };
+            (params, where_clause)
+        } else {
+            (None, None)
+        };
 
         let mut inputs = Vec::new();
         inputs.extend(receiver_tokens(self.f.sig.receiver));
@@ -131,7 +184,7 @@ impl CompleteFunction {
         let ret = self.ret.map(ValueRef::binding);
 
         quote! {
-            fn #name (#(#inputs),*) #output {
+            fn #name #params (#(#inputs),*) #output #where_clause {
                 #(#values)*
                 #ret
             }
@@ -240,7 +293,7 @@ impl CompleteFunction {
                 let invoke = &self.invokes[invoke.0];
                 let parent_type = match invoke.function.parent {
                     Some(ref parent) => {
-                        let print = Print::ref_cast(&parent.ty);
+                        let print = Print::ref_cast(&parent.path);
                         Some(quote!(#print ::))
                     }
                     None => None,

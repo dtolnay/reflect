@@ -67,7 +67,7 @@ impl Function {
 
             Rc::new(Function {
                 parent: Some(Rc::new(Parent {
-                    ty: old_parent.ty.clone_with_fresh_generics(&ref_map),
+                    path: old_parent.path.clone_with_fresh_generics(&ref_map),
                     generics: Some(parent_generics),
                     parent_kind: old_parent.parent_kind,
                 })),
