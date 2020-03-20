@@ -96,15 +96,15 @@ fn tracker_to_program(tracker: Tracker) -> Program {
                     .into_iter()
                     .map(|function| {
                         let function: WipFunction = function;
-                        let values = function.values;
-                        let invokes = function.invokes;
-                        let macros = function.macros;
+                        let values: Option<_> = function.values.into();
+                        let invokes: Option<_> = function.invokes.into();
+                        let macros: Option<_> = function.macros.into();
                         CompleteFunction {
                             self_ty: function.self_ty,
                             f: function.f,
-                            values,
-                            invokes,
-                            macros,
+                            values: values.unwrap(),
+                            invokes: invokes.unwrap(),
+                            macros: macros.unwrap(),
                             ret: function.ret,
                         }
                     })

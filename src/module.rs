@@ -1,6 +1,5 @@
 use crate::index::Push;
-use crate::{MacroInvoke, Path, Type, TypeNode, Value, ValueNode, WIP};
-use std::rc::Rc;
+use crate::{GlobalBorrow, MacroInvoke, Path, Type, TypeNode, Value, ValueNode, GLOBAL_DATA};
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -33,18 +32,17 @@ impl Module {
     }
 
     pub fn invoke_macro(&self, name: &str, values: &[Value]) -> Value {
-        let wip = WIP.with(Rc::clone);
-        let wip = &mut *wip.borrow_mut();
-        let wip = wip.as_mut().unwrap();
-
-        let invoke = wip.macros.index_push(MacroInvoke {
-            macro_path: self.path.get_simple_path(name),
-            args: values.iter().map(|value| value.index).collect(),
+        let macro_path = self.path.get_simple_path(name);
+        let invoke = GLOBAL_DATA.with_borrow_macros_mut(|macros| {
+            macros.index_push(MacroInvoke {
+                macro_path,
+                args: values.iter().map(|value| value.index).collect(),
+            })
         });
 
         let node = ValueNode::MacroInvocation(invoke);
         Value {
-            index: wip.values.index_push(node),
+            index: node.index_push(),
         }
     }
 }

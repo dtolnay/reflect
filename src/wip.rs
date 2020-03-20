@@ -1,8 +1,9 @@
 use crate::{
-    Function, Ident, Parent, Path, Push, RuntimeFunction, StaticBorrow, Type, Value, ValueNode,
-    ValueRef, WIP,
+    Function, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Parent, Path, RuntimeFunction, Type,
+    Value, ValueNode, ValueRef, GLOBAL_DATA,
 };
 use std::cell::RefCell;
+use std::ops::Range;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -18,8 +19,8 @@ pub(crate) struct WipImpl {
 }
 
 #[derive(Debug, Clone)]
-pub struct MakeFunction {
-    private: (),
+pub struct MakeFunction<'a> {
+    wip: &'a WipFunction,
 }
 
 #[derive(Debug, Clone)]
@@ -27,9 +28,9 @@ pub(crate) struct WipFunction {
     // self_ty is None for freestanding functions
     pub(crate) self_ty: Option<Type>,
     pub(crate) f: Rc<Function>,
-    pub(crate) values: Vec<ValueNode>,
-    pub(crate) invokes: Vec<Invoke>,
-    pub(crate) macros: Vec<MacroInvoke>,
+    pub(crate) values: WipRange<ValueRef>,
+    pub(crate) invokes: WipRange<InvokeRef>,
+    pub(crate) macros: WipRange<MacroInvokeRef>,
     pub(crate) ret: Option<ValueRef>,
 }
 
@@ -45,44 +46,69 @@ pub(crate) struct MacroInvoke {
     pub(crate) args: Vec<ValueRef>,
 }
 
+/// A range where the end may not yet have been determined
+#[derive(Debug, Clone)]
+pub(crate) struct WipRange<Idx> {
+    pub(crate) start: Idx,
+    pub(crate) end: Option<Idx>,
+}
+
+impl<Idx> From<WipRange<Idx>> for Option<Range<Idx>> {
+    fn from(wip_range: WipRange<Idx>) -> Self {
+        match wip_range.end {
+            Some(end) => Some(Range {
+                start: wip_range.start,
+                end,
+            }),
+            None => None,
+        }
+    }
+}
+
+impl<Idx> WipRange<Idx> {
+    pub(crate) fn new(start: Idx) -> Self {
+        Self { start, end: None }
+    }
+}
+
 impl<'a> MakeImpl<'a> {
     pub fn make_function<F>(&self, f: F, run: fn(MakeFunction) -> Value)
     where
         F: RuntimeFunction,
     {
-        WIP.with(|old_wip| {
-            old_wip.replace(Some(WipFunction {
-                self_ty: Some(self.wip.ty.clone()),
-                f: f.SELF(),
-                values: Vec::new(),
-                invokes: Vec::new(),
-                macros: Vec::new(),
-                ret: None,
-            }))
+        let f = f.SELF();
+        let mut wip = GLOBAL_DATA.with_borrow(|global| WipFunction {
+            self_ty: Some(self.wip.ty.clone()),
+            f,
+            values: WipRange::new(ValueRef(global.values.len())),
+            invokes: WipRange::new(InvokeRef(global.invokes.len())),
+            macros: WipRange::new(MacroInvokeRef(global.macros.len())),
+            ret: None,
         });
-
-        let ret = Some(run(MakeFunction { private: () }).index);
-        let mut wip = WIP.with(|wip| wip.borrow_mut().take().unwrap());
+        let ret = Some(run(MakeFunction { wip: &wip }).index);
+        GLOBAL_DATA.with_borrow(|global| {
+            wip.values.end = Some(ValueRef(global.values.len()));
+            wip.invokes.end = Some(InvokeRef(global.invokes.len()));
+            wip.macros.end = Some(MacroInvokeRef(global.macros.len()));
+        });
         wip.ret = ret;
 
         self.wip.functions.borrow_mut().push(wip);
     }
 }
 
-impl MakeFunction {
+impl<'a> MakeFunction<'a> {
     pub fn unit(&self) -> Value {
-        WIP.with_borrow_mut(|wip| wip.unit())
+        self.wip.unit()
     }
 
     pub fn string(&self, s: &str) -> Value {
-        WIP.with_borrow_mut(|wip| wip.string(s))
+        self.wip.string(s)
     }
 
     pub fn arg(&self, mut index: usize) -> Value {
         use crate::Receiver::*;
-        let wip = WIP.with(Rc::clone);
-        let wip = &mut *wip.borrow_mut();
-        let wip = wip.as_mut().unwrap();
+        let wip = self.wip;
 
         let node = match match wip.f.sig.receiver {
             SelfByValue if index == 0 => wip.self_ty.clone(),
@@ -104,27 +130,27 @@ impl MakeFunction {
             },
         };
         Value {
-            index: wip.values.index_push(node),
+            index: node.index_push(),
         }
     }
 }
 
 impl WipFunction {
     pub(crate) fn node(&self, index: ValueRef) -> ValueNode {
-        self.values[index.0].clone()
+        index.node()
     }
 
-    fn unit(&mut self) -> Value {
+    fn unit(&self) -> Value {
         let node = ValueNode::Tuple(Vec::new());
         Value {
-            index: self.values.index_push(node),
+            index: node.index_push(),
         }
     }
 
-    fn string(&mut self, s: &str) -> Value {
+    fn string(&self, s: &str) -> Value {
         let node = ValueNode::Str(s.to_owned());
         Value {
-            index: self.values.index_push(node),
+            index: node.index_push(),
         }
     }
 }

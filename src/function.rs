@@ -1,4 +1,6 @@
-use crate::{Generics, Invoke, Parent, Push, Signature, Value, ValueNode, WIP};
+use crate::{
+    Generics, GlobalBorrow, Invoke, Parent, Push, Signature, Value, ValueNode, GLOBAL_DATA,
+};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -10,17 +12,16 @@ pub struct Function {
 
 impl Function {
     pub fn invoke(self: Rc<Function>, args: &[Value]) -> Value {
-        let wip = WIP.with(Rc::clone);
-        let wip = &mut *wip.borrow_mut();
-        let wip = wip.as_mut().unwrap();
-
-        let invoke = wip.invokes.index_push(Invoke {
-            function: self.clone_with_fresh_generics(),
-            args: args.iter().map(|value| value.index).collect(),
+        let function = self.clone_with_fresh_generics();
+        let invoke = GLOBAL_DATA.with_borrow_invokes_mut(|invokes| {
+            invokes.index_push(Invoke {
+                function,
+                args: args.iter().map(|value| value.index).collect(),
+            })
         });
         let node = ValueNode::Invoke(invoke);
         Value {
-            index: wip.values.index_push(node),
+            index: node.index_push(),
         }
     }
 

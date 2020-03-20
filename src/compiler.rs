@@ -1,12 +1,13 @@
 use crate::ident::Ident;
 use crate::{
-    Function, Invoke, MacroInvoke, Parent, PathArguments, Print, Receiver, Type, TypeNode,
-    ValueNode, ValueRef,
+    Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, PathArguments, Print, Receiver,
+    Type, TypeNode, ValueNode, ValueRef, GLOBAL_DATA,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
+use std::ops::Range;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -26,9 +27,9 @@ pub(crate) struct CompleteImpl {
 pub(crate) struct CompleteFunction {
     pub self_ty: Option<Type>,
     pub f: Rc<Function>,
-    pub values: Vec<ValueNode>,
-    pub invokes: Vec<Invoke>,
-    pub macros: Vec<MacroInvoke>,
+    pub values: Range<ValueRef>,
+    pub invokes: Range<InvokeRef>,
+    pub macros: Range<MacroInvokeRef>,
     pub ret: Option<ValueRef>,
 }
 
@@ -156,29 +157,31 @@ impl CompleteFunction {
         let reachable = self.compute_reachability();
         let mutable = self.compute_mutability();
         let values = self.refs().flat_map(|v| {
-            // Don't create let bindings for string literals as they're will be inlined
-            if let ValueNode::Str(_) = self.values[v.0] {
-                return None;
-            }
+            GLOBAL_DATA.with_borrow_values(|values| {
+                // Don't create let bindings for string literals as they're will be inlined
+                if let ValueNode::Str(_) = values[v.0] {
+                    return None;
+                }
 
-            let expr = self.compile_value(v);
-            if reachable.contains(&v) {
-                let let_mut = if mutable.contains(&v) {
-                    quote!(let mut)
+                let expr = self.compile_value(v);
+                if reachable.contains(&v) {
+                    let let_mut = if mutable.contains(&v) {
+                        quote!(let mut)
+                    } else {
+                        quote!(let)
+                    };
+                    let binding = v.binding();
+                    Some(quote! {
+                        #let_mut #binding = #expr;
+                    })
+                } else if self.is_important(v) {
+                    Some(quote! {
+                        let _ = #expr;
+                    })
                 } else {
-                    quote!(let)
-                };
-                let binding = v.binding();
-                Some(quote! {
-                    #let_mut #binding = #expr;
-                })
-            } else if self.is_important(v) {
-                Some(quote! {
-                    let _ = #expr;
-                })
-            } else {
-                None
-            }
+                    None
+                }
+            })
         });
 
         let ret = self.ret.map(ValueRef::binding);
@@ -192,7 +195,7 @@ impl CompleteFunction {
     }
 
     fn refs(&self) -> impl Iterator<Item = ValueRef> {
-        (0..self.values.len()).map(ValueRef)
+        (self.values.start.0..self.values.end.0).map(ValueRef)
     }
 
     fn compute_reachability(&self) -> Set<ValueRef> {
@@ -206,7 +209,7 @@ impl CompleteFunction {
 
         use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
-            match &self.values[v.0] {
+            GLOBAL_DATA.with_borrow(|global| match &global.values[v.0] {
                 Tuple(values) => {
                     for &v in values.iter() {
                         if reachable.insert(v) {
@@ -222,14 +225,14 @@ impl CompleteFunction {
                 }
                 Binding { name, .. } => {}
                 Invoke(invoke) => {
-                    for &v in &self.invokes[invoke.0].args {
+                    for &v in &global.invokes[invoke.0].args {
                         if reachable.insert(v) {
                             stack.push(v);
                         }
                     }
                 }
                 MacroInvocation(invoke) => {
-                    for &v in &self.macros[invoke.0].args {
+                    for &v in &global.macros[invoke.0].args {
                         if reachable.insert(v) {
                             stack.push(v);
                         }
@@ -241,7 +244,7 @@ impl CompleteFunction {
                     }
                 }
                 DataStructure { .. } => unimplemented!(),
-            }
+            })
         }
 
         reachable
@@ -251,23 +254,27 @@ impl CompleteFunction {
         let mut mutable = Set::new();
 
         for v in self.refs() {
-            if let ValueNode::ReferenceMut(referent) = self.values[v.0] {
-                mutable.insert(referent);
-            }
+            GLOBAL_DATA.with_borrow_values(|values| {
+                if let ValueNode::ReferenceMut(referent) = values[v.0] {
+                    mutable.insert(referent);
+                }
+            })
         }
 
         mutable
     }
 
     fn is_important(&self, v: ValueRef) -> bool {
-        if let ValueNode::Invoke(_) | ValueNode::MacroInvocation(_) = self.values[v.0] {
-            return true;
-        }
-        false
+        GLOBAL_DATA.with_borrow_values(|values| {
+            if let ValueNode::Invoke(_) | ValueNode::MacroInvocation(_) = values[v.0] {
+                return true;
+            }
+            false
+        })
     }
 
     fn compile_value(&self, v: ValueRef) -> TokenStream {
-        match &self.values[v.0] {
+        GLOBAL_DATA.with_borrow(|global| match &global.values[v.0] {
             ValueNode::Tuple(values) => {
                 let values = self.make_values_list(values);
 
@@ -290,7 +297,7 @@ impl CompleteFunction {
             }
             ValueNode::Binding { name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => {
-                let invoke = &self.invokes[invoke.0];
+                let invoke = &global.invokes[invoke.0];
                 let parent_type = match invoke.function.parent {
                     Some(ref parent) => {
                         let print = Print::ref_cast(&parent.path);
@@ -317,7 +324,7 @@ impl CompleteFunction {
             }
             ValueNode::DataStructure { .. } => unimplemented!(),
             ValueNode::MacroInvocation(invoke) => {
-                let invoke = &self.macros[invoke.0];
+                let invoke = &global.macros[invoke.0];
                 let path = Print::ref_cast(&invoke.macro_path);
                 let args = self.make_values_list(&invoke.args);
 
@@ -327,14 +334,16 @@ impl CompleteFunction {
 
                 tokens
             }
-        }
+        })
     }
 
     /// Makes a list of comma-separated values with string literals inlined
     fn make_values_list(&self, values: &[ValueRef]) -> TokenStream {
-        let values = values.iter().map(|value| match &self.values[value.0] {
-            ValueNode::Str(s) => self.compile_value(*value),
-            _ => value.binding().to_token_stream(),
+        let values = values.iter().map(|value| {
+            GLOBAL_DATA.with_borrow_values(|values| match &values[value.0] {
+                ValueNode::Str(s) => self.compile_value(*value),
+                _ => value.binding().to_token_stream(),
+            })
         });
 
         quote! { #(#values),* }

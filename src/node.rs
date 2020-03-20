@@ -1,5 +1,6 @@
 use crate::{
-    Accessor, Data, Ident, InvokeRef, MacroInvokeRef, StaticBorrow, Type, TypeNode, ValueRef, WIP,
+    Accessor, Data, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Push, Type, TypeNode, ValueRef,
+    GLOBAL_DATA,
 };
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,7 @@ pub(crate) enum ValueNode {
 }
 
 impl ValueNode {
+    // FIXME: Not safe to call when a node has been moved outside a WipFunction
     pub fn get_type(&self) -> Type {
         match self {
             ValueNode::Tuple(types) => Type(TypeNode::Tuple(
@@ -52,9 +54,8 @@ impl ValueNode {
                 accessor,
                 ty,
             } => ty.clone(),
-            ValueNode::Invoke(invoke_ref) => {
-                WIP.with_borrow(|wip| wip.invokes[invoke_ref.0].function.sig.output.clone())
-            }
+            ValueNode::Invoke(invoke_ref) => GLOBAL_DATA
+                .with_borrow_invokes(|invokes| invokes[invoke_ref.0].function.sig.output.clone()),
 
             node => panic!("ValueNode::get_type"),
         }
@@ -86,10 +87,16 @@ impl ValueNode {
                 accessor,
                 ty,
             } => ValueNode::Str(ty.0.get_name()),
-            ValueNode::Invoke(invoke_ref) => ValueNode::Str(
-                WIP.with_borrow(|wip| wip.invokes[invoke_ref.0].function.sig.output.0.get_name()),
-            ),
+            ValueNode::Invoke(invoke_ref) => {
+                ValueNode::Str(GLOBAL_DATA.with_borrow_invokes(|invokes| {
+                    invokes[invoke_ref.0].function.sig.output.0.get_name()
+                }))
+            }
             node => panic!("ValueNode::get_type_name"),
         }
+    }
+
+    pub(crate) fn index_push(self) -> ValueRef {
+        GLOBAL_DATA.with_borrow_values_mut(|values| values.index_push(self))
     }
 }

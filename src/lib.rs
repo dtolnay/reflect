@@ -336,6 +336,7 @@ mod execution;
 mod field;
 mod function;
 mod generics;
+mod global_data;
 mod ident;
 mod index;
 mod map;
@@ -368,12 +369,13 @@ pub use crate::value::Value;
 pub use crate::wip::{MakeFunction, MakeImpl};
 
 use crate::compiler::{CompleteFunction, CompleteImpl, Program};
-use crate::execution::{StaticBorrow, Tracker, WIP};
+use crate::execution::Tracker;
 use crate::field::Accessor;
 use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, PredicateType,
-    TraitBound, TypeParam, TypeParamBound, TYPE_PARAMS,
+    TraitBound, TypeParam, TypeParamBound,
 };
+use crate::global_data::{GlobalBorrow, GLOBAL_DATA};
 use crate::ident::Ident;
 use crate::index::{
     InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, ValueRef,

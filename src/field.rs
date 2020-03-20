@@ -1,4 +1,4 @@
-use crate::{attr, Ident, Push, StaticBorrow, Type, Value, ValueNode, WIP};
+use crate::{attr, Ident, Type, Value, ValueNode};
 use std::fmt::{self, Debug, Display};
 use std::vec;
 use syn::Attribute;
@@ -53,7 +53,7 @@ impl Field<Value> {
     pub fn get_name(&self) -> Value {
         let node = ValueNode::Str(self.accessor.to_string());
         Value {
-            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+            index: node.index_push(),
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::{Accessor, Data, Push, StaticBorrow, Type, TypeNode, ValueNode, ValueRef, WIP};
+use crate::{Accessor, Data, GlobalBorrow, Type, TypeNode, ValueNode, ValueRef, GLOBAL_DATA};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Value {
@@ -9,21 +9,21 @@ impl Value {
     pub fn tuple(values: &[Self]) -> Self {
         let node = ValueNode::Tuple(values.iter().map(|v| v.index).collect());
         Value {
-            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+            index: node.index_push(),
         }
     }
 
     pub fn reference(&self) -> Self {
         let node = ValueNode::Reference(self.index);
         Value {
-            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+            index: node.index_push(),
         }
     }
 
     pub fn reference_mut(&self) -> Self {
         let node = ValueNode::ReferenceMut(self.index);
         Value {
-            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+            index: node.index_push(),
         }
     }
 
@@ -34,7 +34,7 @@ impl Value {
             other => {
                 let node = ValueNode::Dereference(self.index);
                 Value {
-                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+                    index: node.index_push(),
                 }
             }
         }
@@ -43,7 +43,7 @@ impl Value {
     pub fn get_type_name(&self) -> Self {
         let node = self.node().get_type_name();
         Value {
-            index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+            index: node.index_push(),
         }
     }
 
@@ -63,7 +63,7 @@ impl Value {
                     ty: field.element,
                 };
                 Value {
-                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+                    index: node.index_push(),
                 }
             }),
             _ => panic!("Value::data"),
@@ -89,7 +89,7 @@ impl Value {
                     ty: types[index].clone(),
                 };
                 Value {
-                    index: WIP.with_borrow_mut(|wip| wip.values.index_push(node)),
+                    index: node.index_push(),
                 }
             }
             _ => panic!("Value:get_tuple_value: Not a Tuple"),
@@ -105,6 +105,6 @@ impl Value {
 
 impl ValueRef {
     pub(crate) fn node(self) -> ValueNode {
-        WIP.with_borrow(|wip| wip.node(self))
+        GLOBAL_DATA.with_borrow(|global| global.node(self))
     }
 }

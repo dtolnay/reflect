@@ -1,7 +1,8 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, Parent, ParentKind, Path, PathArguments,
-    PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound,
+    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Parent, ParentKind, Path,
+    PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
+    TypeParamBound, GLOBAL_DATA,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -425,97 +426,100 @@ impl CompleteFunction {
         type_equality_sets: &mut TypeEqualitySets,
     ) {
         use Receiver::*;
-        self.invokes.iter().for_each(|invoke| {
-            let parent = &invoke.function.parent;
-            let sig = &invoke.function.sig;
-            let args_iter = match sig.receiver {
-                NoSelf => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len());
-                    invoke.args.iter()
-                }
-                reciever => {
-                    assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
-                    let mut args_iter = invoke.args.iter();
-                    let parent = parent.as_ref().unwrap();
-                    let first_type = args_iter.next().unwrap().node().get_type();
-
-                    match reciever {
-                        SelfByValue => match parent.parent_kind {
-                            ParentKind::Trait => {
-                                if let TypeNode::TypeParam(_) = &first_type.0 {
-                                    add_self_trait_bound(parent, first_type, constraints)
-                                }
-                            }
-                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                Type(TypeNode::Path(parent.path.clone())),
-                                first_type,
-                                constraints,
-                            ),
-                        },
-                        SelfByReference => match parent.parent_kind {
-                            ParentKind::Trait => {
-                                let first_type = first_type.dereference();
-                                if let TypeNode::TypeParam(_) = &first_type.0 {
-                                    add_self_trait_bound(parent, first_type, constraints)
-                                }
-                            }
-                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                Type(TypeNode::Reference {
-                                    inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                    lifetime: None,
-                                }),
-                                first_type,
-                                constraints,
-                            ),
-                        },
-                        SelfByReferenceMut => match parent.parent_kind {
-                            ParentKind::Trait => {
-                                let first_type = first_type.dereference();
-                                if let TypeNode::TypeParam(_) = &first_type.0 {
-                                    add_self_trait_bound(parent, first_type, constraints)
-                                }
-                            }
-                            ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                Type(TypeNode::ReferenceMut {
-                                    inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                    lifetime: None,
-                                }),
-                                args_iter.next().unwrap().node().get_type(),
-                                constraints,
-                            ),
-                        },
-                        NoSelf => unreachable!(),
+        GLOBAL_DATA.with_borrow_invokes(|invokes| {
+            for invoke in invokes[self.invokes.start.0..self.invokes.end.0].iter() {
+                let parent = &invoke.function.parent;
+                let sig = &invoke.function.sig;
+                let args_iter = match sig.receiver {
+                    NoSelf => {
+                        assert_eq!(invoke.args.len(), sig.inputs.len());
+                        invoke.args.iter()
                     }
-                    args_iter
+                    reciever => {
+                        assert_eq!(invoke.args.len(), sig.inputs.len() + 1);
+                        let mut args_iter = invoke.args.iter();
+                        let parent = parent.as_ref().unwrap();
+                        let first_type = args_iter.next().unwrap().node().get_type();
+
+                        match reciever {
+                            SelfByValue => match parent.parent_kind {
+                                ParentKind::Trait => {
+                                    if let TypeNode::TypeParam(_) = &first_type.0 {
+                                        add_self_trait_bound(parent, first_type, constraints)
+                                    }
+                                }
+                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                    Type(TypeNode::Path(parent.path.clone())),
+                                    first_type,
+                                    constraints,
+                                ),
+                            },
+                            SelfByReference => match parent.parent_kind {
+                                ParentKind::Trait => {
+                                    let first_type = first_type.dereference();
+                                    if let TypeNode::TypeParam(_) = &first_type.0 {
+                                        add_self_trait_bound(parent, first_type, constraints)
+                                    }
+                                }
+                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                    Type(TypeNode::Reference {
+                                        inner: Box::new(TypeNode::Path(parent.path.clone())),
+                                        lifetime: None,
+                                    }),
+                                    first_type,
+                                    constraints,
+                                ),
+                            },
+                            SelfByReferenceMut => match parent.parent_kind {
+                                ParentKind::Trait => {
+                                    let first_type = first_type.dereference();
+                                    if let TypeNode::TypeParam(_) = &first_type.0 {
+                                        add_self_trait_bound(parent, first_type, constraints)
+                                    }
+                                }
+                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
+                                    Type(TypeNode::ReferenceMut {
+                                        inner: Box::new(TypeNode::Path(parent.path.clone())),
+                                        lifetime: None,
+                                    }),
+                                    first_type,
+                                    constraints,
+                                ),
+                            },
+                            NoSelf => unreachable!(),
+                        }
+                        args_iter
+                    }
+                };
+
+                sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
+                    type_equality_sets.insert_as_equal_to(
+                        ty.clone(),
+                        val.node().get_type(),
+                        constraints,
+                    )
+                });
+
+                // Add parent constraints
+                // FIXME: Add constraints from parent type
+                if let Some(generics) = parent.as_ref().and_then(|parent| parent.generics.as_ref())
+                {
+                    generics.constraints.iter().for_each(|constraint| {
+                        if !constraints.contains(constraint) {
+                            constraints.insert(constraint.clone());
+                        };
+                    })
+                };
+
+                // Add function constraints
+                // FIXME: Add constraints from types in signature
+                if let Some(generics) = sig.generics.as_ref() {
+                    generics.constraints.iter().for_each(|constraint| {
+                        if !constraints.contains(constraint) {
+                            constraints.insert(constraint.clone());
+                        };
+                    })
                 }
-            };
-
-            sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
-                type_equality_sets.insert_as_equal_to(
-                    ty.clone(),
-                    val.node().get_type(),
-                    constraints,
-                )
-            });
-
-            // Add parent constraints
-            // FIXME: Add constraints from parent type
-            if let Some(generics) = parent.as_ref().and_then(|parent| parent.generics.as_ref()) {
-                generics.constraints.iter().for_each(|constraint| {
-                    if !constraints.contains(constraint) {
-                        constraints.insert(constraint.clone());
-                    };
-                })
-            };
-
-            // Add function constraints
-            // FIXME: Add constraints from types in signature
-            if let Some(generics) = sig.generics.as_ref() {
-                generics.constraints.iter().for_each(|constraint| {
-                    if !constraints.contains(constraint) {
-                        constraints.insert(constraint.clone());
-                    };
-                })
             }
         });
     }
@@ -828,7 +832,16 @@ impl TypeNode {
                 node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
             }
             (TypeParam(ref1), TypeParam(ref2)) => TypeParam(ref1.min(ref2)),
-            _ => panic!("TypeNode: make_most_concrete_pair: incompatible types"),
+            (TypeParam(_), node) => {
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            }
+            (node, TypeParam(_)) => {
+                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            }
+            (node1, node2) => panic!(
+                "TypeNode: make_most_concrete_pair: incompatible types \n{:#?}\nand\n{:#?}",
+                node1, node2
+            ),
         }
     }
 
