@@ -16,7 +16,7 @@ reflect::library! {
             }
 
             impl DebugStruct {
-                fn field(&mut self, &str, &Debug) -> &mut DebugStruct;
+                fn field(&mut self, &str, &dyn Debug) -> &mut DebugStruct;
                 fn finish(&mut self) -> Result;
             }
         }

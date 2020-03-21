@@ -46,3 +46,24 @@ fn test_debug() {
     let actual = reflect::derive(input, debug::derive);
     assert_eq!(actual.to_string(), expected.to_string());
 }
+
+#[test]
+fn test_generic_debug() {
+    let input = quote! {
+        struct Generic<'a, T: Debug, U> where U: Clone {
+            t: T,
+            u: &'a U,
+        }
+    };
+
+    let expected = quote! {
+        impl<'__a1, __T0, __T1> ::std::fmt::Debug for Generic<'__a1, __T0, __T1>
+            where
+            __T1: Clone,
+            __T0: Debug,
+            &'__a1 __T1: Debug,
+    };
+    let actual = reflect::derive(input, debug::derive);
+
+    assert!(actual.to_string().starts_with(&expected.to_string()));
+}
