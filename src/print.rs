@@ -1,5 +1,5 @@
 use crate::generics::*;
-use crate::{path, Accessor, LifetimeRef, Type, TypeNode, TypeParamRef};
+use crate::{path, Accessor, LifetimeRef, SimplePath, Type, TypeNode, TypeParamRef};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
@@ -252,6 +252,18 @@ impl ToTokens for Print<path::Path> {
             };
             quote!(#ident #args)
         });
+        tokens.append_all(quote!(#leading #(#path)::*));
+    }
+}
+
+impl ToTokens for Print<SimplePath> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let leading = if self.0.path.global {
+            Some(quote!(::))
+        } else {
+            None
+        };
+        let path = self.0.path.path.iter().map(|segment| &segment.ident);
         tokens.append_all(quote!(#leading #(#path)::*));
     }
 }

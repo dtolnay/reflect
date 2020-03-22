@@ -1,4 +1,5 @@
 use crate::{GenericArgument, GenericArguments, GenericParam, Ident, ParamMap, Type};
+use ref_cast::RefCast;
 use std::collections::BTreeMap;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_str, ReturnType, Token};
@@ -9,6 +10,8 @@ pub struct Path {
     pub(crate) path: Vec<PathSegment>,
 }
 
+#[derive(RefCast)]
+#[repr(C)]
 pub(crate) struct SimplePath {
     pub(crate) path: Path,
 }

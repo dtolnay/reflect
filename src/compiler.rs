@@ -1,7 +1,7 @@
 use crate::ident::Ident;
 use crate::{
     Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, PathArguments, Print, Receiver,
-    Type, TypeNode, ValueNode, ValueRef, GLOBAL_DATA,
+    SimplePath, Type, TypeNode, ValueNode, ValueRef, GLOBAL_DATA,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -300,7 +300,7 @@ impl CompleteFunction {
                 let invoke = &global.invokes[invoke.0];
                 let parent_type = match invoke.function.parent {
                     Some(ref parent) => {
-                        let print = Print::ref_cast(&parent.path);
+                        let print = Print::ref_cast(SimplePath::ref_cast(&parent.path));
                         Some(quote!(#print ::))
                     }
                     None => None,
