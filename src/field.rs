@@ -1,4 +1,4 @@
-use crate::{attr, Ident, Type, Value, ValueNode};
+use crate::{attr, GlobalPush, Ident, Type, Value, ValueNode, VALUES};
 use std::fmt::{self, Debug, Display};
 use std::vec;
 use syn::Attribute;
@@ -53,7 +53,7 @@ impl Field<Value> {
     pub fn get_name(&self) -> Value {
         let node = ValueNode::Str(self.accessor.to_string());
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 

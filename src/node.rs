@@ -1,16 +1,16 @@
 use crate::{
-    Accessor, Data, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Push, Type, TypeNode, ValueRef,
-    GLOBAL_DATA,
+    Accessor, Data, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Type, TypeNode, ValueRef,
+    INVOKES,
 };
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueNode {
     Tuple(Vec<ValueRef>),
     Str(String),
+    // TODO: Add lifetime_ref parameter
     Reference(ValueRef),
     // TODO: Add lifetime_ref parameter
     ReferenceMut(ValueRef),
-    // TODO: Add lifetime_ref parameter
     Dereference(ValueRef),
     Binding {
         name: Ident,
@@ -54,8 +54,9 @@ impl ValueNode {
                 accessor,
                 ty,
             } => ty.clone(),
-            ValueNode::Invoke(invoke_ref) => GLOBAL_DATA
-                .with_borrow_invokes(|invokes| invokes[invoke_ref.0].function.sig.output.clone()),
+            ValueNode::Invoke(invoke_ref) => {
+                INVOKES.with_borrow(|invokes| invokes[invoke_ref.0].function.sig.output.clone())
+            }
 
             node => panic!("ValueNode::get_type"),
         }
@@ -87,16 +88,11 @@ impl ValueNode {
                 accessor,
                 ty,
             } => ValueNode::Str(ty.0.get_name()),
-            ValueNode::Invoke(invoke_ref) => {
-                ValueNode::Str(GLOBAL_DATA.with_borrow_invokes(|invokes| {
-                    invokes[invoke_ref.0].function.sig.output.0.get_name()
-                }))
-            }
+            ValueNode::Invoke(invoke_ref) => ValueNode::Str(
+                INVOKES
+                    .with_borrow(|invokes| invokes[invoke_ref.0].function.sig.output.0.get_name()),
+            ),
             node => panic!("ValueNode::get_type_name"),
         }
-    }
-
-    pub(crate) fn index_push(self) -> ValueRef {
-        GLOBAL_DATA.with_borrow_values_mut(|values| values.index_push(self))
     }
 }

@@ -375,10 +375,13 @@ use crate::generics::{
     GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, PredicateType,
     TraitBound, TypeParam, TypeParamBound,
 };
-use crate::global_data::{GlobalBorrow, GLOBAL_DATA};
+use crate::global_data::{
+    GlobalBorrow, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
+};
 use crate::ident::Ident;
 use crate::index::{
-    InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, ValueRef,
+    InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, TypedIndex,
+    ValueRef,
 };
 use crate::node::ValueNode;
 use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};

@@ -1,4 +1,6 @@
-use crate::{Accessor, Data, GlobalBorrow, Type, TypeNode, ValueNode, ValueRef, GLOBAL_DATA};
+use crate::{
+    Accessor, Data, GlobalBorrow, GlobalPush, Type, TypeNode, ValueNode, ValueRef, VALUES,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Value {
@@ -9,21 +11,21 @@ impl Value {
     pub fn tuple(values: &[Self]) -> Self {
         let node = ValueNode::Tuple(values.iter().map(|v| v.index).collect());
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 
     pub fn reference(&self) -> Self {
         let node = ValueNode::Reference(self.index);
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 
     pub fn reference_mut(&self) -> Self {
         let node = ValueNode::ReferenceMut(self.index);
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 
@@ -34,7 +36,7 @@ impl Value {
             other => {
                 let node = ValueNode::Dereference(self.index);
                 Value {
-                    index: node.index_push(),
+                    index: VALUES.index_push(node),
                 }
             }
         }
@@ -43,7 +45,7 @@ impl Value {
     pub fn get_type_name(&self) -> Self {
         let node = self.node().get_type_name();
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 
@@ -63,7 +65,7 @@ impl Value {
                     ty: field.element,
                 };
                 Value {
-                    index: node.index_push(),
+                    index: VALUES.index_push(node),
                 }
             }),
             _ => panic!("Value::data"),
@@ -89,7 +91,7 @@ impl Value {
                     ty: types[index].clone(),
                 };
                 Value {
-                    index: node.index_push(),
+                    index: VALUES.index_push(node),
                 }
             }
             _ => panic!("Value:get_tuple_value: Not a Tuple"),
@@ -105,6 +107,6 @@ impl Value {
 
 impl ValueRef {
     pub(crate) fn node(self) -> ValueNode {
-        GLOBAL_DATA.with_borrow(|global| global.node(self))
+        VALUES.with_borrow(|values| values[self.0].clone())
     }
 }

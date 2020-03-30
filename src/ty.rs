@@ -1,6 +1,6 @@
 use crate::{
     generics, Data, GenericParam, Generics, GlobalBorrow, Ident, LifetimeRef, ParamMap, Path,
-    Print, TypeParamBound, TypeParamRef, GLOBAL_DATA,
+    Print, TypeParamBound, TypeParamRef, TYPE_PARAMS,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -219,8 +219,9 @@ impl TypeNode {
                 Print::ref_cast(path).to_tokens(&mut tokens);
                 tokens.to_string()
             }
-            TypeNode::TypeParam(type_param_ref) => GLOBAL_DATA
-                .with_borrow_type_params(|params| params[type_param_ref.0].ident.to_string()),
+            TypeNode::TypeParam(type_param_ref) => {
+                TYPE_PARAMS.with_borrow(|params| params[type_param_ref.0].ident.to_string())
+            }
 
             _ => panic!("Type::get_name"),
         }

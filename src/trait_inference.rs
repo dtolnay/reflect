@@ -2,7 +2,7 @@ use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
     GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Parent, ParentKind, Path,
     PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
-    TypeParamBound, GLOBAL_DATA,
+    TypeParamBound, INVOKES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -426,7 +426,7 @@ impl CompleteFunction {
         type_equality_sets: &mut TypeEqualitySets,
     ) {
         use Receiver::*;
-        GLOBAL_DATA.with_borrow_invokes(|invokes| {
+        INVOKES.with_borrow(|invokes| {
             for invoke in invokes[self.invokes.start.0..self.invokes.end.0].iter() {
                 let parent = &invoke.function.parent;
                 let sig = &invoke.function.sig;

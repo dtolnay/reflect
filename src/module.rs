@@ -1,5 +1,4 @@
-use crate::index::Push;
-use crate::{GlobalBorrow, MacroInvoke, Path, Type, TypeNode, Value, ValueNode, GLOBAL_DATA};
+use crate::{GlobalPush, MacroInvoke, Path, Type, TypeNode, Value, ValueNode, MACROS, VALUES};
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -33,16 +32,14 @@ impl Module {
 
     pub fn invoke_macro(&self, name: &str, values: &[Value]) -> Value {
         let macro_path = self.path.get_simple_path(name);
-        let invoke = GLOBAL_DATA.with_borrow_macros_mut(|macros| {
-            macros.index_push(MacroInvoke {
-                macro_path,
-                args: values.iter().map(|value| value.index).collect(),
-            })
+        let invoke = MACROS.index_push(MacroInvoke {
+            macro_path,
+            args: values.iter().map(|value| value.index).collect(),
         });
 
         let node = ValueNode::MacroInvocation(invoke);
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 }

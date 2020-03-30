@@ -1,6 +1,4 @@
-use crate::{
-    Generics, GlobalBorrow, Invoke, Parent, Push, Signature, Value, ValueNode, GLOBAL_DATA,
-};
+use crate::{Generics, GlobalPush, Invoke, Parent, Signature, Value, ValueNode, INVOKES, VALUES};
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -13,15 +11,13 @@ pub struct Function {
 impl Function {
     pub fn invoke(self: Rc<Function>, args: &[Value]) -> Value {
         let function = self.clone_with_fresh_generics();
-        let invoke = GLOBAL_DATA.with_borrow_invokes_mut(|invokes| {
-            invokes.index_push(Invoke {
-                function,
-                args: args.iter().map(|value| value.index).collect(),
-            })
+        let invoke = INVOKES.index_push(Invoke {
+            function,
+            args: args.iter().map(|value| value.index).collect(),
         });
         let node = ValueNode::Invoke(invoke);
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 

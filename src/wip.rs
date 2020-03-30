@@ -1,6 +1,6 @@
 use crate::{
-    Function, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Parent, Path, RuntimeFunction, Type,
-    Value, ValueNode, ValueRef, GLOBAL_DATA,
+    Function, GlobalBorrow, GlobalPush, Ident, InvokeRef, MacroInvokeRef, Parent, Path,
+    RuntimeFunction, Type, Value, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -76,21 +76,18 @@ impl<'a> MakeImpl<'a> {
     where
         F: RuntimeFunction,
     {
-        let f = f.SELF();
-        let mut wip = GLOBAL_DATA.with_borrow(|global| WipFunction {
+        let mut wip = WipFunction {
             self_ty: Some(self.wip.ty.clone()),
-            f,
-            values: WipRange::new(ValueRef(global.values.len())),
-            invokes: WipRange::new(InvokeRef(global.invokes.len())),
-            macros: WipRange::new(MacroInvokeRef(global.macros.len())),
+            f: f.SELF(),
+            values: WipRange::new(ValueRef(VALUES.with_borrow(Vec::len))),
+            invokes: WipRange::new(InvokeRef(INVOKES.with_borrow(Vec::len))),
+            macros: WipRange::new(MacroInvokeRef(MACROS.with_borrow(Vec::len))),
             ret: None,
-        });
+        };
         let ret = Some(run(MakeFunction { wip: &wip }).index);
-        GLOBAL_DATA.with_borrow(|global| {
-            wip.values.end = Some(ValueRef(global.values.len()));
-            wip.invokes.end = Some(InvokeRef(global.invokes.len()));
-            wip.macros.end = Some(MacroInvokeRef(global.macros.len()));
-        });
+        wip.values.end = Some(ValueRef(VALUES.with_borrow(Vec::len)));
+        wip.invokes.end = Some(InvokeRef(INVOKES.with_borrow(Vec::len)));
+        wip.macros.end = Some(MacroInvokeRef(MACROS.with_borrow(Vec::len)));
         wip.ret = ret;
 
         self.wip.functions.borrow_mut().push(wip);
@@ -130,7 +127,7 @@ impl<'a> MakeFunction<'a> {
             },
         };
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 }
@@ -143,14 +140,14 @@ impl WipFunction {
     fn unit(&self) -> Value {
         let node = ValueNode::Tuple(Vec::new());
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 
     fn string(&self, s: &str) -> Value {
         let node = ValueNode::Str(s.to_owned());
         Value {
-            index: node.index_push(),
+            index: VALUES.index_push(node),
         }
     }
 }

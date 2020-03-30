@@ -1,6 +1,6 @@
 use crate::{
-    GlobalBorrow, Ident, LifetimeRef, Path, Push, SimplePath, Type, TypeNode, TypeParamRef,
-    GLOBAL_DATA,
+    GlobalBorrow, GlobalPush, Ident, LifetimeRef, Path, Push, SimplePath, Type, TypeNode,
+    TypeParamRef, LIFETIMES, TYPE_PARAMS,
 };
 use proc_macro2::Span;
 use std::collections::BTreeMap;
@@ -131,13 +131,13 @@ impl ParamMap {
 
 impl From<Lifetime> for LifetimeRef {
     fn from(lifetime: Lifetime) -> LifetimeRef {
-        GLOBAL_DATA.with_borrow_lifetimes_mut(|lifetimes| lifetimes.index_push(lifetime))
+        LIFETIMES.index_push(lifetime)
     }
 }
 
 impl From<TypeParam> for TypeParamRef {
     fn from(param: TypeParam) -> TypeParamRef {
-        GLOBAL_DATA.with_borrow_type_params_mut(|params| params.index_push(param))
+        TYPE_PARAMS.index_push(param)
     }
 }
 
@@ -206,12 +206,12 @@ impl GenericParam {
 
     pub(crate) fn get_fresh_param(self) -> Self {
         match self {
-            Self::Type(type_param_ref) => GLOBAL_DATA.with_borrow_type_params_mut(|params| {
+            Self::Type(type_param_ref) => TYPE_PARAMS.with_borrow_mut(|params| {
                 let param = params[type_param_ref.0].clone();
                 Self::Type(params.index_push(param))
             }),
 
-            Self::Lifetime(lifetime_ref) => GLOBAL_DATA.with_borrow_lifetimes_mut(|lifetimes| {
+            Self::Lifetime(lifetime_ref) => LIFETIMES.with_borrow_mut(|lifetimes| {
                 let lifetime = lifetimes[lifetime_ref.0].clone();
                 Self::Lifetime(lifetimes.index_push(lifetime))
             }),
@@ -267,7 +267,7 @@ impl Generics {
         let mut param_map = ParamMap::new();
         self.params.iter().for_each(|&param| match param {
             GenericParam::Type(type_param_ref) => {
-                GLOBAL_DATA.with_borrow_type_params(|params| {
+                TYPE_PARAMS.with_borrow(|params| {
                     param_map.insert(
                         params[type_param_ref.0].ident.0.clone(),
                         GenericParam::Type(type_param_ref),
@@ -275,7 +275,7 @@ impl Generics {
                 });
             }
             GenericParam::Lifetime(lifetime_ref) => {
-                GLOBAL_DATA.with_borrow_lifetimes(|lifetimes| {
+                LIFETIMES.with_borrow(|lifetimes| {
                     param_map.insert(
                         lifetimes[lifetime_ref.0].ident.0.clone(),
                         GenericParam::Lifetime(lifetime_ref),
