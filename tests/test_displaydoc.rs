@@ -109,7 +109,7 @@ fn test_displaydoc() {
 
     let expected = quote! {
         impl ::std::fmt::Display for Point {
-            fn fmt(&self, __arg0: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+            fn fmt<'__a1, '__a2>(&'__a1 self, __arg0: &'__a2 mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 let __v0 = self;
                 let __v1 = __arg0;
                 let __v3 = &__v0.x;

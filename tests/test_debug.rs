@@ -15,7 +15,7 @@ fn test_debug() {
 
     let expected = quote! {
         impl ::std::fmt::Debug for Point {
-            fn fmt(&self, __arg0: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+            fn fmt<'__a1 , '__a2>(&'__a1 self, __arg0: &'__a2 mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 /*
                 // TODO: somewhat more intelligent impl
                 match *self {

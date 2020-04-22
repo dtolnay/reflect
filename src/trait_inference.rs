@@ -454,7 +454,7 @@ impl CompleteFunction {
                                     constraints,
                                 ),
                             },
-                            SelfByReference => match parent.parent_kind {
+                            SelfByReference(lifetime_ref) => match parent.parent_kind {
                                 ParentKind::Trait => {
                                     let first_type = first_type.dereference();
                                     if let TypeNode::TypeParam(_) = &first_type.0 {
@@ -464,13 +464,13 @@ impl CompleteFunction {
                                 ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                     Type(TypeNode::Reference {
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: None,
+                                        lifetime: lifetime_ref.0,
                                     }),
                                     first_type,
                                     constraints,
                                 ),
                             },
-                            SelfByReferenceMut => match parent.parent_kind {
+                            SelfByReferenceMut(lifetime_ref) => match parent.parent_kind {
                                 ParentKind::Trait => {
                                     let first_type = first_type.dereference();
                                     if let TypeNode::TypeParam(_) = &first_type.0 {
@@ -480,7 +480,7 @@ impl CompleteFunction {
                                 ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                     Type(TypeNode::ReferenceMut {
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: None,
+                                        lifetime: lifetime_ref.0,
                                     }),
                                     first_type,
                                     constraints,

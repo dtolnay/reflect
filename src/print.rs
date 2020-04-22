@@ -49,7 +49,7 @@ impl ToTokens for Print<TypeNode> {
             ReferenceMut { lifetime, inner } => {
                 let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
-                quote!(&mut #lifetime #inner)
+                quote!(&#lifetime mut #inner)
             }
             Dereference(inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { name, .. } => {

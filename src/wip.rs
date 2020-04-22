@@ -1,6 +1,6 @@
 use crate::{
     Function, GlobalBorrow, GlobalPush, Ident, InvokeRef, MacroInvokeRef, Parent, Path,
-    RuntimeFunction, Type, Value, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
+    RuntimeFunction, Type, TypeNode, Value, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -109,10 +109,20 @@ impl<'a> MakeFunction<'a> {
 
         let node = match match wip.f.sig.receiver {
             SelfByValue if index == 0 => wip.self_ty.clone(),
-            SelfByReference if index == 0 => wip.self_ty.clone().map(|ty| ty.reference()),
-            SelfByReferenceMut if index == 0 => wip.self_ty.clone().map(|ty| ty.reference_mut()),
+            SelfByReference(lifetime_ref) if index == 0 => wip.self_ty.clone().map(|ty| {
+                Type(TypeNode::Reference {
+                    lifetime: lifetime_ref.0,
+                    inner: Box::new(ty.0),
+                })
+            }),
+            SelfByReferenceMut(lifetime_ref) if index == 0 => wip.self_ty.clone().map(|ty| {
+                Type(TypeNode::ReferenceMut {
+                    lifetime: lifetime_ref.0,
+                    inner: Box::new(ty.0),
+                })
+            }),
             NoSelf => None,
-            SelfByValue | SelfByReference | SelfByReferenceMut => {
+            SelfByValue | SelfByReference(_) | SelfByReferenceMut(_) => {
                 index -= 1;
                 None
             }

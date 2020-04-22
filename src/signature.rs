@@ -1,4 +1,8 @@
-use crate::{Generics, ParamMap, Type};
+use crate::{
+    GenericArgument, GenericParam, Generics, GlobalPush, Ident, Lifetime, LifetimeRef, ParamMap,
+    Path, PathArguments, Type, TypeNode, TypeParamBound, LIFETIMES,
+};
+use std::collections::BTreeMap;
 use std::default::Default;
 
 #[derive(Debug, Clone)]
@@ -13,8 +17,37 @@ pub struct Signature {
 pub enum Receiver {
     NoSelf,
     SelfByValue,
-    SelfByReference,
-    SelfByReferenceMut,
+    SelfByReference(OptionLifetime),
+    SelfByReferenceMut(OptionLifetime),
+}
+
+#[derive(Debug, Clone, Copy)]
+#[doc(hidden)]
+pub struct OptionLifetime(pub(crate) Option<LifetimeRef>);
+
+impl Receiver {
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        use Receiver::*;
+        match *self {
+            NoSelf => NoSelf,
+            SelfByValue => SelfByValue,
+            SelfByReference(lifetime_ref) => SelfByReference(OptionLifetime(
+                ref_map
+                    .get(&GenericParam::Lifetime(lifetime_ref.0.unwrap()))
+                    .map(|param| param.lifetime_ref())
+                    .unwrap(),
+            )),
+            SelfByReferenceMut(lifetime_ref) => SelfByReferenceMut(OptionLifetime(
+                ref_map
+                    .get(&GenericParam::Lifetime(lifetime_ref.0.unwrap()))
+                    .map(|param| param.lifetime_ref())
+                    .unwrap(),
+            )),
+        }
+    }
 }
 
 impl Signature {
@@ -32,11 +65,11 @@ impl Signature {
     }
 
     pub fn set_self_by_reference(&mut self) {
-        self.receiver = Receiver::SelfByReference;
+        self.receiver = Receiver::SelfByReference(OptionLifetime(None));
     }
 
     pub fn set_self_by_reference_mut(&mut self) {
-        self.receiver = Receiver::SelfByReferenceMut;
+        self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
     }
 
     pub fn add_input(&mut self, input: Type) {
@@ -57,5 +90,168 @@ impl Signature {
         self.generics
             .get_or_insert(Default::default())
             .set_generic_constraints(constraints, param_map);
+    }
+
+    /// Explicitly insert elided lifetimes
+    /// Should be called by Function::get_function after the all paramters are inserted
+    pub(crate) fn insert_elided_lifetimes(&mut self) {
+        use Receiver::*;
+        use TypeNode::*;
+        // TODO: How does elsion rules work for generic traits with references as parameters?
+        let mut generics = self.generics.get_or_insert(Default::default());
+        // We need to insert the elided lifetimes first in the params so we
+        // temporarily swap the params with an empty Vec, and then extend that
+        // Vec with the old params in the end
+        let params = std::mem::replace(&mut generics.params, Vec::new());
+
+        match &mut self.receiver {
+            NoSelf => {
+                for ty in self.inputs.iter_mut() {
+                    ty.0.insert_new_lifetimes(&mut generics);
+                }
+                if self.inputs.len() == 1 {
+                    match &mut self.inputs[0].0 {
+                        Reference {
+                            lifetime: Some(lifetime_ref),
+                            ..
+                        } => self
+                            .output
+                            .0
+                            .insert_new_lifetimes2(*lifetime_ref, &mut generics),
+                        ReferenceMut {
+                            lifetime: Some(lifetime_ref),
+                            ..
+                        } => self
+                            .output
+                            .0
+                            .insert_new_lifetimes2(*lifetime_ref, &mut generics),
+                        _ => {}
+                    }
+                } else {
+                    self.output.0.insert_new_lifetimes(&mut generics);
+                }
+            }
+            SelfByValue => {
+                for ty in self.inputs.iter_mut() {
+                    ty.0.insert_new_lifetimes(&mut generics);
+                }
+                self.output.0.insert_new_lifetimes(&mut generics);
+            }
+            SelfByReference(lifetime) | SelfByReferenceMut(lifetime) => {
+                let lifetime_ref = if let Some(lifetime_ref) = lifetime.0 {
+                    lifetime_ref
+                } else {
+                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
+                        ident: Ident::new("_"),
+                    });
+                    generics.params.push(GenericParam::Lifetime(lifetime_ref));
+                    lifetime_ref
+                };
+                lifetime.0 = Some(lifetime_ref);
+                for ty in self.inputs.iter_mut() {
+                    ty.0.insert_new_lifetimes(&mut generics);
+                }
+                self.output
+                    .0
+                    .insert_new_lifetimes2(lifetime_ref, &mut generics);
+            }
+        }
+        // Insert the old params back into place
+        generics.params.extend(params);
+
+        if generics.params.is_empty() {
+            self.generics = None;
+        }
+    }
+}
+
+impl TypeNode {
+    fn insert_new_lifetimes(&mut self, generics: &mut Generics) {
+        use TypeNode::*;
+        match self {
+            Reference { inner, lifetime } => {
+                if lifetime.is_none() {
+                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
+                        ident: Ident::new("_"),
+                    });
+                    generics.params.push(GenericParam::Lifetime(lifetime_ref));
+                    *lifetime = Some(lifetime_ref)
+                };
+                inner.insert_new_lifetimes(generics);
+            }
+            ReferenceMut { inner, lifetime } => {
+                if lifetime.is_none() {
+                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
+                        ident: Ident::new("_"),
+                    });
+                    generics.params.push(GenericParam::Lifetime(lifetime_ref));
+                    *lifetime = Some(lifetime_ref)
+                };
+                inner.insert_new_lifetimes(generics);
+            }
+            Tuple(types) => {
+                for ty in types.iter_mut() {
+                    ty.0.insert_new_lifetimes(generics);
+                }
+            }
+            Dereference(node) => node.insert_new_lifetimes(generics),
+            TraitObject(bounds) => {
+                for bound in bounds.iter_mut() {
+                    match bound {
+                        TypeParamBound::Trait(bound) => {
+                            bound.path.insert_new_lifetimes(generics);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Path(path) => path.insert_new_lifetimes(generics),
+            _ => {}
+        }
+    }
+
+    fn insert_new_lifetimes2(&mut self, lifetime_ref: LifetimeRef, generics: &mut Generics) {
+        use TypeNode::*;
+        match self {
+            Reference { inner, lifetime } => {
+                if lifetime.is_none() {
+                    *lifetime = Some(lifetime_ref);
+                };
+                inner.insert_new_lifetimes(generics);
+            }
+            ReferenceMut { inner, lifetime } => {
+                if lifetime.is_none() {
+                    *lifetime = Some(lifetime_ref);
+                };
+                inner.insert_new_lifetimes(generics);
+            }
+            Tuple(types) => {
+                for ty in types.iter_mut() {
+                    ty.0.insert_new_lifetimes2(lifetime_ref, generics);
+                }
+            }
+            node => node.insert_new_lifetimes(generics),
+        }
+    }
+}
+
+impl Path {
+    fn insert_new_lifetimes(&mut self, generics: &mut Generics) {
+        for segment in self.path.iter_mut() {
+            match &mut segment.args {
+                PathArguments::None => {}
+                PathArguments::AngleBracketed(args) => {
+                    for arg in args.args.args.iter_mut() {
+                        match arg {
+                            GenericArgument::Type(ty) => ty.0.insert_new_lifetimes(generics),
+                            _ => {}
+                        }
+                    }
+                }
+                PathArguments::Parenthesized(args) => {
+                    unimplemented!("Path::insert_elided_lifetimes: PathArguments::Parenthesized")
+                }
+            }
+        }
     }
 }

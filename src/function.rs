@@ -21,7 +21,8 @@ impl Function {
         }
     }
 
-    pub fn get_function(name: &str, sig: Signature) -> Function {
+    pub fn get_function(name: &str, mut sig: Signature) -> Function {
+        sig.insert_elided_lifetimes();
         Function {
             parent: None,
             name: name.to_owned(),
@@ -71,7 +72,7 @@ impl Function {
                 name: self.name.clone(),
                 sig: Signature {
                     generics: sig_generics,
-                    receiver: old_sig.receiver,
+                    receiver: old_sig.receiver.clone_with_fresh_generics(&ref_map),
                     inputs: old_sig
                         .inputs
                         .iter()
@@ -93,7 +94,7 @@ impl Function {
                 name: self.name.clone(),
                 sig: Signature {
                     generics: Some(sig_generics),
-                    receiver: old_sig.receiver,
+                    receiver: old_sig.receiver.clone_with_fresh_generics(&ref_map),
                     inputs: old_sig
                         .inputs
                         .iter()

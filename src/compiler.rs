@@ -354,8 +354,20 @@ fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
     match receiver {
         Receiver::NoSelf => None,
         Receiver::SelfByValue => Some(quote!(self)),
-        Receiver::SelfByReference => Some(quote!(&self)),
-        Receiver::SelfByReferenceMut => Some(quote!(&mut self)),
+        Receiver::SelfByReference(lifetime_ref) => {
+            let lifetime = lifetime_ref
+                .0
+                .as_ref()
+                .map(|lifetime_ref| Print::ref_cast(lifetime_ref));
+            Some(quote!(&#lifetime self))
+        }
+        Receiver::SelfByReferenceMut(lifetime_ref) => {
+            let lifetime = lifetime_ref
+                .0
+                .as_ref()
+                .map(|lifetime_ref| Print::ref_cast(lifetime_ref));
+            Some(quote!(&#lifetime mut self))
+        }
     }
 }
 

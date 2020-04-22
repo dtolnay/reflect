@@ -57,7 +57,7 @@ fn test_field_access() {
     // skip_me field should be skipped from the accessing
     let expected = quote! {
         impl ::base::Trait for Test {
-            fn trivial(&self) {
+            fn trivial<'__a1>(&'__a1 self) {
                 let __v0 = self;
                 let __v1 = &__v0.test;
                 let _ = ::base::FieldAccessor::access_field(__v1);
