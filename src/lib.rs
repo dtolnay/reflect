@@ -379,10 +379,7 @@ use crate::global_data::{
     GlobalBorrow, GlobalCounter, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
 };
 use crate::ident::Ident;
-use crate::index::{
-    InvokeRef, LifetimeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypeParamRef, TypedIndex,
-    ValueRef,
-};
+use crate::index::{InvokeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex, ValueRef};
 use crate::node::ValueNode;
 use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};
 use crate::print::Print;

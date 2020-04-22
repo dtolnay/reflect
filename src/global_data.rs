@@ -1,4 +1,4 @@
-use crate::{Invoke, LifetimeRef, MacroInvoke, Push, TypeParamRef, TypedIndex, ValueNode};
+use crate::{Invoke, Lifetime, MacroInvoke, Push, TypeParam, TypedIndex, ValueNode};
 use std::cell::RefCell;
 use std::thread::LocalKey;
 
@@ -57,24 +57,24 @@ pub(crate) trait GlobalCounter<T> {
     fn count(&'static self) -> T;
 }
 
-impl GlobalCounter<LifetimeRef> for LocalKey<RefCell<usize>> {
-    fn count(&'static self) -> LifetimeRef {
+impl GlobalCounter<Lifetime> for LocalKey<RefCell<usize>> {
+    fn count(&'static self) -> Lifetime {
         self.with(|counter| {
             let mut counter = counter.borrow_mut();
             let num = *counter;
             *counter += 1;
-            LifetimeRef(num)
+            Lifetime(num)
         })
     }
 }
 
-impl GlobalCounter<TypeParamRef> for LocalKey<RefCell<usize>> {
-    fn count(&'static self) -> TypeParamRef {
+impl GlobalCounter<TypeParam> for LocalKey<RefCell<usize>> {
+    fn count(&'static self) -> TypeParam {
         self.with(|counter| {
             let mut counter = counter.borrow_mut();
             let num = *counter;
             *counter += 1;
-            TypeParamRef(num)
+            TypeParam(num)
         })
     }
 }

@@ -1,6 +1,4 @@
-use crate::{
-    GlobalCounter, Ident, LifetimeRef, Path, Type, TypeNode, TypeParamRef, LIFETIMES, TYPE_PARAMS,
-};
+use crate::{GlobalCounter, Ident, Path, Type, TypeNode, LIFETIMES, TYPE_PARAMS};
 use proc_macro2::Span;
 use std::collections::BTreeMap;
 use std::default::Default;
@@ -22,16 +20,17 @@ pub struct Generics {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum GenericParam {
-    Lifetime(LifetimeRef),
-    Type(TypeParamRef),
+    Lifetime(Lifetime),
+    Type(TypeParam),
     // Not supported
     Const(ConstParam),
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct TypeParam {
-    pub(crate) ident: Ident,
-}
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub(crate) struct TypeParam(pub usize);
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub(crate) struct Lifetime(pub usize);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GenericConstraint {
@@ -42,7 +41,7 @@ pub(crate) enum GenericConstraint {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct PredicateType {
     /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
-    pub(crate) lifetimes: Vec<LifetimeRef>,
+    pub(crate) lifetimes: Vec<Lifetime>,
     pub(crate) bounded_ty: Type,
     pub(crate) bounds: Vec<TypeParamBound>,
 }
@@ -50,25 +49,20 @@ pub(crate) struct PredicateType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum TypeParamBound {
     Trait(TraitBound),
-    Lifetime(LifetimeRef),
+    Lifetime(Lifetime),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TraitBound {
     /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
-    pub(crate) lifetimes: Vec<LifetimeRef>,
+    pub(crate) lifetimes: Vec<Lifetime>,
     pub(crate) path: Path,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Lifetime {
-    pub(crate) ident: Ident,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct LifetimeDef {
-    pub(crate) lifetime: LifetimeRef,
-    pub(crate) bounds: Vec<LifetimeRef>,
+    pub(crate) lifetime: Lifetime,
+    pub(crate) bounds: Vec<Lifetime>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -84,7 +78,7 @@ pub struct GenericArguments {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum GenericArgument {
     Type(Type),
-    Lifetime(LifetimeRef),
+    Lifetime(Lifetime),
     Binding(Binding),
     Constraint(Constraint),
     Const(Expr),
@@ -116,7 +110,7 @@ impl ParamMap {
     pub(crate) fn new() -> Self {
         let static_lifetime = syn::Ident::new("static", Span::call_site());
         let mut param_map = BTreeMap::new();
-        param_map.insert(static_lifetime, GenericParam::Lifetime(LifetimeRef(0)));
+        param_map.insert(static_lifetime, GenericParam::Lifetime(Lifetime(0)));
         ParamMap { map: param_map }
     }
 
@@ -188,14 +182,14 @@ impl TypeParamBound {
 }
 
 impl GenericParam {
-    pub(crate) fn lifetime_ref(self) -> Option<LifetimeRef> {
+    pub(crate) fn lifetime_ref(self) -> Option<Lifetime> {
         match self {
             Self::Lifetime(lifetime_ref) => Some(lifetime_ref),
             _ => None,
         }
     }
 
-    pub(crate) fn type_param_ref(self) -> Option<TypeParamRef> {
+    pub(crate) fn type_param_ref(self) -> Option<TypeParam> {
         match self {
             Self::Type(type_param_ref) => Some(type_param_ref),
             _ => None,
@@ -326,7 +320,7 @@ impl Default for Generics {
 fn syn_to_bound_lifetimes(
     lifetimes: Option<BoundLifetimes>,
     param_map: &mut ParamMap,
-) -> Vec<LifetimeRef> {
+) -> Vec<Lifetime> {
     lifetimes.map_or_else(Vec::new, |lifetimes| {
         lifetimes
             .lifetimes

@@ -1,5 +1,5 @@
 use crate::{
-    GenericArgument, GenericParam, Generics, GlobalCounter, LifetimeRef, ParamMap, Path,
+    GenericArgument, GenericParam, Generics, GlobalCounter, Lifetime, ParamMap, Path,
     PathArguments, Type, TypeNode, TypeParamBound, LIFETIMES,
 };
 use std::collections::BTreeMap;
@@ -23,7 +23,7 @@ pub enum Receiver {
 
 #[derive(Debug, Clone, Copy)]
 #[doc(hidden)]
-pub struct OptionLifetime(pub(crate) Option<LifetimeRef>);
+pub struct OptionLifetime(pub(crate) Option<Lifetime>);
 
 impl Receiver {
     pub(crate) fn clone_with_fresh_generics(
@@ -199,7 +199,7 @@ impl TypeNode {
         }
     }
 
-    fn insert_new_lifetimes2(&mut self, lifetime_ref: LifetimeRef, generics: &mut Generics) {
+    fn insert_new_lifetimes2(&mut self, lifetime_ref: Lifetime, generics: &mut Generics) {
         use TypeNode::*;
         match self {
             Reference { inner, lifetime } => {

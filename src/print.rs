@@ -1,5 +1,5 @@
 use crate::generics::*;
-use crate::{path, Accessor, LifetimeRef, SimplePath, Type, TypeNode, TypeParamRef};
+use crate::{path, Accessor, Lifetime, SimplePath, Type, TypeNode, TypeParam};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
@@ -100,13 +100,6 @@ impl ToTokens for Print<GenericConstraint> {
 
 impl ToTokens for Print<TypeParam> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = &self.0.ident;
-        ident.to_tokens(tokens);
-    }
-}
-
-impl ToTokens for Print<TypeParamRef> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
         Ident::new(&format!("__T{}", (self.0).0), Span::call_site()).to_tokens(tokens);
     }
 }
@@ -154,14 +147,6 @@ impl ToTokens for Print<PredicateType> {
 }
 
 impl ToTokens for Print<Lifetime> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let apostrophe = Punct::new('\'', Spacing::Joint);
-        tokens.append(apostrophe);
-        self.0.ident.to_tokens(tokens);
-    }
-}
-
-impl ToTokens for Print<LifetimeRef> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let apostrophe = Punct::new('\'', Spacing::Joint);
         tokens.append(apostrophe);

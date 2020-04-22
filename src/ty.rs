@@ -1,6 +1,6 @@
 use crate::{
-    generics, Data, GenericParam, Generics, Ident, LifetimeRef, ParamMap, Path, Print,
-    TypeParamBound, TypeParamRef,
+    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, TypeParam,
+    TypeParamBound,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -19,11 +19,11 @@ pub(crate) enum TypeNode {
     Tuple(Vec<Type>),
     PrimitiveStr,
     Reference {
-        lifetime: Option<LifetimeRef>,
+        lifetime: Option<Lifetime>,
         inner: Box<TypeNode>,
     },
     ReferenceMut {
-        lifetime: Option<LifetimeRef>,
+        lifetime: Option<Lifetime>,
         inner: Box<TypeNode>,
     },
     Dereference(Box<TypeNode>),
@@ -34,7 +34,7 @@ pub(crate) enum TypeNode {
         data: Data<Type>,
     },
     Path(Path),
-    TypeParam(TypeParamRef),
+    TypeParam(TypeParam),
 }
 
 impl Type {
