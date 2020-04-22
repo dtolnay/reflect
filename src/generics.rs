@@ -1,6 +1,6 @@
 use crate::{
-    GlobalBorrow, GlobalPush, Ident, LifetimeRef, Path, Push, SimplePath, Type, TypeNode,
-    TypeParamRef, LIFETIMES, TYPE_PARAMS,
+    GlobalCounter, Ident, LifetimeRef, Path, SimplePath, Type, TypeNode, TypeParamRef, LIFETIMES,
+    TYPE_PARAMS,
 };
 use proc_macro2::Span;
 use std::collections::BTreeMap;
@@ -15,6 +15,10 @@ pub struct Generics {
 
     /// Essentially represents the where clause
     pub(crate) constraints: Vec<GenericConstraint>,
+
+    // A mapping between the parameter identifiers and their GenericParam
+    // representation
+    pub(crate) param_map: ParamMap,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -104,6 +108,7 @@ pub(crate) struct Expr {
     pub(crate) private: (),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParamMap {
     pub(crate) map: BTreeMap<syn::Ident, GenericParam>,
 }
@@ -127,17 +132,20 @@ impl ParamMap {
     pub fn append(&mut self, other: &mut ParamMap) {
         self.map.append(&mut other.map)
     }
-}
 
-impl From<Lifetime> for LifetimeRef {
-    fn from(lifetime: Lifetime) -> LifetimeRef {
-        LIFETIMES.index_push(lifetime)
-    }
-}
+    pub(crate) fn clone_with_fresh_generics(
+        &self,
+        ref_map: &BTreeMap<GenericParam, GenericParam>,
+    ) -> Self {
+        let mut param_map = ParamMap::new();
+        for key in self.map.keys() {
+            let value = self.get(key).unwrap();
 
-impl From<TypeParam> for TypeParamRef {
-    fn from(param: TypeParam) -> TypeParamRef {
-        TYPE_PARAMS.index_push(param)
+            if let Some(value) = ref_map.get(value) {
+                param_map.insert(key.clone(), *value);
+            }
+        }
+        param_map
     }
 }
 
@@ -206,15 +214,9 @@ impl GenericParam {
 
     pub(crate) fn get_fresh_param(self) -> Self {
         match self {
-            Self::Type(type_param_ref) => TYPE_PARAMS.with_borrow_mut(|params| {
-                let param = params[type_param_ref.0].clone();
-                Self::Type(params.index_push(param))
-            }),
+            Self::Type(type_param_ref) => Self::Type(TYPE_PARAMS.count()),
 
-            Self::Lifetime(lifetime_ref) => LIFETIMES.with_borrow_mut(|lifetimes| {
-                let lifetime = lifetimes[lifetime_ref.0].clone();
-                Self::Lifetime(lifetimes.index_push(lifetime))
-            }),
+            Self::Lifetime(lifetime_ref) => Self::Lifetime(LIFETIMES.count()),
 
             Self::Const(_const) => unimplemented!("GenericParam::get_fresh_param: Const"),
         }
@@ -263,47 +265,25 @@ impl GenericConstraint {
 }
 
 impl Generics {
-    pub(crate) fn get_param_map(&self) -> ParamMap {
-        let mut param_map = ParamMap::new();
-        self.params.iter().for_each(|&param| match param {
-            GenericParam::Type(type_param_ref) => {
-                TYPE_PARAMS.with_borrow(|params| {
-                    param_map.insert(
-                        params[type_param_ref.0].ident.0.clone(),
-                        GenericParam::Type(type_param_ref),
-                    )
-                });
-            }
-            GenericParam::Lifetime(lifetime_ref) => {
-                LIFETIMES.with_borrow(|lifetimes| {
-                    param_map.insert(
-                        lifetimes[lifetime_ref.0].ident.0.clone(),
-                        GenericParam::Lifetime(lifetime_ref),
-                    )
-                });
-            }
-            _ => unimplemented!(),
-        });
-        param_map
-    }
-
-    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
         let syn_params = params.iter().map(|param| parse_str(param).unwrap());
-        let (params, constraints, param_map) = syn_to_generic_params(syn_params);
+        let (params, constraints, mut param_map) = syn_to_generic_params(syn_params);
         self.params.extend(params);
         self.constraints.extend(constraints);
-        param_map
+        self.param_map.append(&mut param_map);
+        &mut self.param_map
     }
 
-    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
+    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
         let syn_constraints = constraints
             .iter()
             .map(|constraint| parse_str(constraint).unwrap());
-        let constraints = syn_where_predicates_to_generic_constraints(syn_constraints, param_map);
+        let constraints =
+            syn_where_predicates_to_generic_constraints(syn_constraints, &mut self.param_map);
         self.constraints.extend(constraints);
     }
 
-    pub(crate) fn syn_to_generics(generics: syn::Generics) -> (Self, ParamMap) {
+    pub(crate) fn syn_to_generics(generics: syn::Generics) -> Self {
         let (params, mut constraints, mut param_map) = syn_to_generic_params(generics.params);
         if let Some(where_clause) = generics.where_clause {
             constraints.extend(syn_where_clause_to_generic_constraints(
@@ -311,13 +291,11 @@ impl Generics {
                 &mut param_map,
             ));
         };
-        (
-            Generics {
-                params,
-                constraints,
-            },
+        Generics {
+            params,
+            constraints,
             param_map,
-        )
+        }
     }
 
     pub(crate) fn clone_with_fresh_generics(&self) -> (Self, BTreeMap<GenericParam, GenericParam>) {
@@ -338,6 +316,7 @@ impl Generics {
                     .iter()
                     .map(|constraint| constraint.clone_with_fresh_generics(&ref_map))
                     .collect(),
+                param_map: self.param_map.clone_with_fresh_generics(&ref_map),
             },
             ref_map,
         )
@@ -349,6 +328,7 @@ impl Default for Generics {
         Generics {
             params: Vec::new(),
             constraints: Vec::new(),
+            param_map: ParamMap::new(),
         }
     }
 }
@@ -366,10 +346,7 @@ fn syn_to_bound_lifetimes(
                      lifetime: syn::Lifetime { ident, .. },
                      ..
                  }| {
-                    let lifetime_ref = Lifetime {
-                        ident: Ident::from(ident.clone()),
-                    }
-                    .into();
+                    let lifetime_ref = LIFETIMES.count();
                     param_map.insert(ident, GenericParam::Lifetime(lifetime_ref));
                     lifetime_ref
                 },
@@ -490,24 +467,14 @@ where
 pub(crate) fn param_mapping(param: &syn::GenericParam, param_map: &mut ParamMap) {
     match &param {
         syn::GenericParam::Type(syn::TypeParam { ident, .. }) => {
-            let param = GenericParam::Type(
-                TypeParam {
-                    ident: Ident::from(ident.clone()),
-                }
-                .into(),
-            );
+            let param = GenericParam::Type(TYPE_PARAMS.count());
             param_map.insert(ident.clone(), param);
         }
         syn::GenericParam::Lifetime(syn::LifetimeDef {
             lifetime: syn::Lifetime { ident, .. },
             ..
         }) => {
-            let param = GenericParam::Lifetime(
-                Lifetime {
-                    ident: Ident::from(ident.clone()),
-                }
-                .into(),
-            );
+            let param = GenericParam::Lifetime(LIFETIMES.count());
             param_map.insert(ident.clone(), param);
         }
         syn::GenericParam::Const(_const) => unimplemented!("Generics::param_mapping: Const"),

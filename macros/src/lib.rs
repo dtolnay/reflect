@@ -452,7 +452,7 @@ fn declare_parent(
 
         Some(quote! {
             let mut generics: _reflect::Generics = ::std::default::Default::default();
-            let mut param_map = generics.set_generic_params(&[#(#param_strings),*]);
+            let param_map = generics.set_generic_params(&[#(#param_strings),*]);
         })
     } else {
         None
@@ -465,7 +465,7 @@ fn declare_parent(
             .map(|clause| clause.to_token_stream().to_string());
 
         Some(quote! {
-            generics.set_generic_constraints(&[#(#constraint_strings),*], &mut param_map);
+            generics.set_generic_constraints(&[#(#constraint_strings),*]);
         })
     } else {
         None
@@ -645,13 +645,14 @@ fn declare_function(
 
     let get_parent_param_map = if parent_has_generics {
         Some(quote! {
-            let mut param_map = parent.get_param_map().unwrap();
+            let param_map = &mut parent.get_param_map().unwrap().clone();
         })
     } else {
         None
     };
 
-    let set_sig_params = if !function.generics.params.is_empty() {
+    let function_has_generics = !function.generics.params.is_empty();
+    let set_sig_params = if function_has_generics {
         let param_strings = function
             .generics
             .params
@@ -660,13 +661,15 @@ fn declare_function(
 
         if parent_has_generics {
             Some(quote! {
-                param_map.append(
-                    &mut sig.set_generic_params(&[#(#param_strings),*])
-                );
+                {
+                    let sig_param_map = sig.set_generic_params(&[#(#param_strings),*]);
+                    sig_param_map.append(param_map);
+                    sig_param_map
+                };
             })
         } else {
             Some(quote! {
-                let mut param_map = sig.set_generic_params(&[#(#param_strings),*]);
+                sig.set_generic_params(&[#(#param_strings),*]);
             })
         }
     } else {
@@ -680,19 +683,28 @@ fn declare_function(
             .map(|clause| clause.to_token_stream().to_string());
 
         Some(quote! {
-            sig.set_generic_constraints(&[#(#constraint_strings),*], &mut param_map);
+            sig.set_generic_constraints(&[#(#constraint_strings),*]);
         })
     } else {
         None
     };
 
+    let has_generics = function_has_generics || parent_has_generics;
     let setup_inputs = function.args.iter().map(|arg| {
         let ty = to_runtime_type(arg, mod_path, type_params);
-        quote!(sig.add_input(#ty);)
+        if has_generics {
+            quote!(sig.add_input(|param_map: &mut _reflect::ParamMap| {#ty});)
+        } else {
+            quote!(sig.add_input(#ty);)
+        }
     });
     let set_output = function.ret.as_ref().map(|ty| {
         let ty = to_runtime_type(&ty, mod_path, type_params);
-        quote!(sig.set_output(#ty);)
+        if has_generics {
+            quote!(sig.set_output(|param_map: &mut _reflect::ParamMap| {#ty});)
+        } else {
+            quote!(sig.set_output(#ty);)
+        }
     });
 
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
@@ -789,7 +801,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
                 if type_params.contains(ident) {
                     let type_param = ident.to_string();
                     return quote! {
-                        _reflect::Type::type_param_from_str(#type_param, &mut param_map)
+                        _reflect::Type::type_param_from_str(#type_param, param_map)
                     };
                 }
             }
@@ -813,7 +825,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
                 }
             }) {
                 quote! {
-                    _reflect::Type::get_trait_object(&[#(#bound_strings),*], &mut param_map)
+                    _reflect::Type::get_trait_object(&[#(#bound_strings),*], param_map)
                 }
             } else {
                 quote! {
@@ -866,7 +878,7 @@ fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> Toke
         expand_path_arguments(arguments, mod_path, type_params);
         let path_str = path.to_token_stream().to_string();
         quote! {
-            _reflect::Path::path_from_str(#path_str, &mut param_map)
+            _reflect::Path::path_from_str(#path_str, param_map)
         }
     }
 }

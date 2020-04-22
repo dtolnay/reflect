@@ -1,4 +1,4 @@
-use crate::{Ident, Invoke, Lifetime, MacroInvoke, Push, TypeParam, TypedIndex, ValueNode};
+use crate::{Invoke, LifetimeRef, MacroInvoke, Push, TypeParamRef, TypedIndex, ValueNode};
 use std::cell::RefCell;
 use std::thread::LocalKey;
 
@@ -6,12 +6,8 @@ thread_local! {
     pub(crate) static VALUES: RefCell<Vec<ValueNode>> = RefCell::new(Vec::new());
     pub(crate) static INVOKES: RefCell<Vec<Invoke>> = RefCell::new(Vec::new());
     pub(crate) static MACROS: RefCell<Vec<MacroInvoke>> = RefCell::new(Vec::new());
-    pub(crate) static TYPE_PARAMS: RefCell<Vec<TypeParam>> = RefCell::new(Vec::new());
-    pub(crate) static LIFETIMES: RefCell<Vec<Lifetime>> = {
-        let mut vec = Vec::new();
-        vec.push(Lifetime {ident: Ident::new("static") });
-        RefCell::new(vec)
-    };
+    pub(crate) static TYPE_PARAMS: RefCell<usize> = RefCell::new(0);
+    pub(crate) static LIFETIMES: RefCell<usize> = RefCell::new(1);
 }
 
 pub(crate) trait GlobalBorrow<T> {
@@ -55,4 +51,39 @@ where
     fn index_push(&'static self, element: T) -> T::Index {
         self.with(|data| data.borrow_mut().index_push(element))
     }
+}
+
+pub(crate) trait GlobalCounter<T> {
+    fn count(&'static self) -> T;
+}
+
+impl GlobalCounter<LifetimeRef> for LocalKey<RefCell<usize>> {
+    fn count(&'static self) -> LifetimeRef {
+        self.with(|counter| {
+            let mut counter = counter.borrow_mut();
+            let num = *counter;
+            *counter += 1;
+            LifetimeRef(num)
+        })
+    }
+}
+
+impl GlobalCounter<TypeParamRef> for LocalKey<RefCell<usize>> {
+    fn count(&'static self) -> TypeParamRef {
+        self.with(|counter| {
+            let mut counter = counter.borrow_mut();
+            let num = *counter;
+            *counter += 1;
+            TypeParamRef(num)
+        })
+    }
+}
+
+pub(crate) fn clear() {
+    // It's not safe to reset TYPE_PARAMS and LIFETIMES as this might
+    // interfere with cached values in generic parameters in functions in the
+    // reflect! macro
+    VALUES.with(|data| data.borrow_mut().clear());
+    INVOKES.with(|data| data.borrow_mut().clear());
+    MACROS.with(|data| data.borrow_mut().clear());
 }

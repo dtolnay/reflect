@@ -1,6 +1,6 @@
 use crate::{
-    GenericArgument, GenericParam, Generics, GlobalPush, Ident, Lifetime, LifetimeRef, ParamMap,
-    Path, PathArguments, Type, TypeNode, TypeParamBound, LIFETIMES,
+    GenericArgument, GenericParam, Generics, GlobalCounter, LifetimeRef, ParamMap, Path,
+    PathArguments, Type, TypeNode, TypeParamBound, LIFETIMES,
 };
 use std::collections::BTreeMap;
 use std::default::Default;
@@ -50,6 +50,45 @@ impl Receiver {
     }
 }
 
+pub trait AddInput<T> {
+    fn add_input(&mut self, into_ty: T);
+}
+
+impl AddInput<Type> for Signature {
+    fn add_input(&mut self, into_ty: Type) {
+        self.inputs.push(into_ty);
+    }
+}
+
+impl<F> AddInput<F> for Signature
+where
+    F: Fn(&mut ParamMap) -> Type,
+{
+    fn add_input(&mut self, into_ty: F) {
+        self.inputs
+            .push((into_ty)(&mut self.generics.as_mut().unwrap().param_map));
+    }
+}
+
+pub trait SetOutput<T> {
+    fn set_output(&mut self, into_ty: T);
+}
+
+impl SetOutput<Type> for Signature {
+    fn set_output(&mut self, into_ty: Type) {
+        self.output = into_ty;
+    }
+}
+
+impl<F> SetOutput<F> for Signature
+where
+    F: Fn(&mut ParamMap) -> Type,
+{
+    fn set_output(&mut self, into_ty: F) {
+        self.output = (into_ty)(&mut self.generics.as_mut().unwrap().param_map);
+    }
+}
+
 impl Signature {
     pub fn new() -> Self {
         Signature {
@@ -72,24 +111,29 @@ impl Signature {
         self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
     }
 
-    pub fn add_input(&mut self, input: Type) {
-        self.inputs.push(input);
+    pub fn add_input<T>(&mut self, input: T)
+    where
+        Self: AddInput<T>,
+    {
+        <Self as AddInput<T>>::add_input(self, input);
     }
 
-    pub fn set_output(&mut self, output: Type) {
-        self.output = output;
+    pub fn set_output<T>(&mut self, output: T)
+    where
+        Self: SetOutput<T>,
+    {
+        <Self as SetOutput<T>>::set_output(self, output);
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
         self.generics
             .get_or_insert(Default::default())
             .set_generic_params(params)
     }
 
-    pub fn set_generic_constraints(&mut self, constraints: &[&str], param_map: &mut ParamMap) {
-        self.generics
-            .get_or_insert(Default::default())
-            .set_generic_constraints(constraints, param_map);
+    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+        let generics = self.generics.get_or_insert(Default::default());
+        generics.set_generic_constraints(constraints);
     }
 
     /// Explicitly insert elided lifetimes
@@ -141,9 +185,7 @@ impl Signature {
                 let lifetime_ref = if let Some(lifetime_ref) = lifetime.0 {
                     lifetime_ref
                 } else {
-                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
-                        ident: Ident::new("_"),
-                    });
+                    let lifetime_ref = LIFETIMES.count();
                     generics.params.push(GenericParam::Lifetime(lifetime_ref));
                     lifetime_ref
                 };
@@ -171,9 +213,7 @@ impl TypeNode {
         match self {
             Reference { inner, lifetime } => {
                 if lifetime.is_none() {
-                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
-                        ident: Ident::new("_"),
-                    });
+                    let lifetime_ref = LIFETIMES.count();
                     generics.params.push(GenericParam::Lifetime(lifetime_ref));
                     *lifetime = Some(lifetime_ref)
                 };
@@ -181,9 +221,7 @@ impl TypeNode {
             }
             ReferenceMut { inner, lifetime } => {
                 if lifetime.is_none() {
-                    let lifetime_ref = LIFETIMES.index_push(Lifetime {
-                        ident: Ident::new("_"),
-                    });
+                    let lifetime_ref = LIFETIMES.count();
                     generics.params.push(GenericParam::Lifetime(lifetime_ref));
                     *lifetime = Some(lifetime_ref)
                 };

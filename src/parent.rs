@@ -26,9 +26,11 @@ impl Parent {
         self.generics = Some(generics);
     }
 
-    pub fn get_param_map(&self) -> Option<ParamMap> {
-        self.generics
-            .as_ref()
-            .map(|generics| generics.get_param_map())
+    pub fn get_param_map(&self) -> Option<&ParamMap> {
+        if let Some(generics) = &self.generics {
+            Some(&generics.param_map)
+        } else {
+            None
+        }
     }
 }

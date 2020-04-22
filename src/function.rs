@@ -59,6 +59,7 @@ impl Function {
                     .iter()
                     .map(|constraint| constraint.clone_with_fresh_generics(&ref_map))
                     .collect(),
+                param_map: generics.param_map.clone_with_fresh_generics(&ref_map),
             });
             let old_parent = self.parent.as_ref().unwrap();
             let old_sig = &self.sig;

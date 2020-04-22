@@ -1,6 +1,7 @@
 use crate::{
-    Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics, Ident,
-    Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct, WipFunction,
+    global_data, Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics,
+    Ident, Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct,
+    WipFunction,
 };
 use proc_macro2::TokenStream;
 use syn::DeriveInput;
@@ -11,6 +12,7 @@ where
 {
     let input = input.into();
     let output = derive2(input, run);
+    global_data::clear();
     output.into()
 }
 
@@ -34,49 +36,51 @@ fn syn_to_type(input: DeriveInput) -> Type {
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
-    let (generics, mut param_map) = Generics::syn_to_generics(input.generics);
+    let mut generics = Generics::syn_to_generics(input.generics);
+
+    let data = match input.data {
+        syn::Data::Struct(data) => match data.fields {
+            syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
+                fields: fields
+                    .named
+                    .into_iter()
+                    .map(|field| Field {
+                        attrs: field.attrs,
+                        accessor: Accessor::Name(Ident::from(field.ident.unwrap())),
+                        element: Type::syn_to_type(field.ty, &mut generics.param_map),
+                    })
+                    .collect(),
+                attrs,
+            })),
+            syn::Fields::Unnamed(fields) => Data::Struct(Struct::Tuple(TupleStruct {
+                fields: fields
+                    .unnamed
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, field)| Field {
+                        attrs: field.attrs,
+                        accessor: Accessor::Index(i),
+                        element: Type::syn_to_type(field.ty, &mut generics.param_map),
+                    })
+                    .collect(),
+                attrs,
+            })),
+            syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { attrs })),
+        },
+        syn::Data::Enum(data) => {
+            // FIXME convert enum variants
+            Data::Enum(Enum {
+                variants: Vec::new(),
+                attrs,
+            })
+        }
+        syn::Data::Union(_) => unimplemented!("union"),
+    };
 
     Type(TypeNode::DataStructure {
         name: Ident::from(input.ident),
         generics,
-        data: match input.data {
-            syn::Data::Struct(data) => match data.fields {
-                syn::Fields::Named(fields) => Data::Struct(Struct::Struct(StructStruct {
-                    fields: fields
-                        .named
-                        .into_iter()
-                        .map(|field| Field {
-                            attrs: field.attrs,
-                            accessor: Accessor::Name(Ident::from(field.ident.unwrap())),
-                            element: Type::syn_to_type(field.ty, &mut param_map),
-                        })
-                        .collect(),
-                    attrs,
-                })),
-                syn::Fields::Unnamed(fields) => Data::Struct(Struct::Tuple(TupleStruct {
-                    fields: fields
-                        .unnamed
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, field)| Field {
-                            attrs: field.attrs,
-                            accessor: Accessor::Index(i),
-                            element: Type::syn_to_type(field.ty, &mut param_map),
-                        })
-                        .collect(),
-                    attrs,
-                })),
-                syn::Fields::Unit => Data::Struct(Struct::Unit(UnitStruct { attrs })),
-            },
-            syn::Data::Enum(data) => {
-                // FIXME convert enum variants
-                Data::Enum(Enum {
-                    variants: Vec::new(),
-                    attrs,
-                })
-            }
-            syn::Data::Union(_) => unimplemented!("union"),
-        },
+        data,
     })
 }
 

@@ -359,7 +359,7 @@ pub use crate::derive::derive;
 pub use crate::execution::Execution;
 pub use crate::field::{Field, Fields};
 pub use crate::function::Function;
-pub use crate::generics::{GenericArguments, Generics};
+pub use crate::generics::{GenericArguments, Generics, ParamMap};
 pub use crate::module::Module;
 pub use crate::parent::{Parent, ParentKind};
 pub use crate::path::Path;
@@ -372,11 +372,11 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, ParamMap, PredicateType,
-    TraitBound, TypeParam, TypeParamBound,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, PredicateType, TraitBound,
+    TypeParam, TypeParamBound,
 };
 use crate::global_data::{
-    GlobalBorrow, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
+    GlobalBorrow, GlobalCounter, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
 };
 use crate::ident::Ident;
 use crate::index::{
