@@ -1,10 +1,50 @@
 use crate::{Generics, ParamMap, Path};
+use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub struct Parent {
     pub(crate) path: Path,
-    pub(crate) generics: Option<Generics>,
+    pub(crate) generics: Generics,
     pub(crate) parent_kind: ParentKind,
+}
+
+pub struct ParentBuilder {
+    pub(crate) path: Option<Path>,
+    pub(crate) generics: Generics,
+    pub(crate) parent_kind: ParentKind,
+}
+
+impl ParentBuilder {
+    pub fn new(parent_kind: ParentKind) -> Self {
+        ParentBuilder {
+            path: None,
+            generics: Default::default(),
+            parent_kind,
+        }
+    }
+
+    pub fn into_parent(self) -> Parent {
+        Parent {
+            path: self.path.unwrap(),
+            generics: self.generics,
+            parent_kind: self.parent_kind,
+        }
+    }
+
+    pub fn set_path<F>(&mut self, into_path: F)
+    where
+        F: FnOnce(&mut ParamMap) -> Path,
+    {
+        self.path = Some((into_path)(&mut self.generics.param_map))
+    }
+
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
+        self.generics.set_generic_params(params)
+    }
+
+    pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
+        self.generics.set_generic_constraints(constraints)
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -14,23 +54,7 @@ pub enum ParentKind {
 }
 
 impl Parent {
-    pub fn new(ty: Path, parent_kind: ParentKind) -> Self {
-        Self {
-            path: ty,
-            generics: None,
-            parent_kind,
-        }
-    }
-
-    pub fn set_generics(&mut self, generics: Generics) {
-        self.generics = Some(generics);
-    }
-
-    pub fn get_param_map(&self) -> Option<&ParamMap> {
-        if let Some(generics) = &self.generics {
-            Some(&generics.param_map)
-        } else {
-            None
-        }
+    pub fn get_param_map(&self) -> &ParamMap {
+        &self.generics.param_map
     }
 }

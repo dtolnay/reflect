@@ -112,16 +112,6 @@ impl Type {
         ))
     }
 
-    /// Get a trait object without generics
-    pub fn get_simple_trait_object(type_param_bounds: &[&str]) -> Self {
-        Type(TypeNode::TraitObject(
-            type_param_bounds
-                .iter()
-                .map(|bound| TypeParamBound::get_simple_type_param_bound(bound))
-                .collect(),
-        ))
-    }
-
     pub fn type_param_from_str(type_param: &str, param_map: &mut ParamMap) -> Self {
         let ident = parse_str(type_param).unwrap();
         if let Some(&param) = param_map.get(&ident) {

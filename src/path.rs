@@ -77,12 +77,6 @@ impl Path {
         )
     }
 
-    pub fn simple_path_from_str(path: &str) -> Self {
-        parse_str::<SimplePath>(path)
-            .expect("simple_path_from_str: Not a simple path")
-            .path
-    }
-
     pub(crate) fn syn_to_path(path: syn::Path, param_map: &mut ParamMap) -> Self {
         let global = path.leading_colon.is_some();
         let path: Vec<_> = path

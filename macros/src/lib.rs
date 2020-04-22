@@ -451,8 +451,7 @@ fn declare_parent(
             .map(|param| param.to_token_stream().to_string());
 
         Some(quote! {
-            let mut generics: _reflect::Generics = ::std::default::Default::default();
-            let param_map = generics.set_generic_params(&[#(#param_strings),*]);
+            parent_builder.set_generic_params(&[#(#param_strings),*]);
         })
     } else {
         None
@@ -465,7 +464,7 @@ fn declare_parent(
             .map(|clause| clause.to_token_stream().to_string());
 
         Some(quote! {
-            generics.set_generic_constraints(&[#(#constraint_strings),*]);
+            parent_builder.set_generic_constraints(&[#(#constraint_strings),*]);
         })
     } else {
         None
@@ -492,25 +491,16 @@ fn declare_parent(
         type_params,
     );
 
-    let set_generics = if !parent_generics.params.is_empty() {
-        Some(quote! {
-            parent.set_generics(generics);
-        })
-    } else {
-        None
-    };
-
     quote! {
         impl _reflect::runtime::RuntimeParent for #parent {
             fn SELF(self) -> ::std::rc::Rc<_reflect::Parent> {
                 thread_local! {
                     static PARENT: ::std::rc::Rc<_reflect::Parent> = {
+                        let mut parent_builder = _reflect::ParentBuilder::new(#parent_kind);
                         #set_parent_params
                         #set_parent_constraints
-                        let path = #get_runtime_path;
-                        let mut parent = _reflect::Parent::new(path, #parent_kind);
-                        #set_generics
-                        ::std::rc::Rc::new(parent)
+                        parent_builder.set_path(|param_map: &mut _reflect::ParamMap| #get_runtime_path);
+                        ::std::rc::Rc::new(parent_builder.into_parent())
                     };
                 }
                 PARENT.with(::std::rc::Rc::clone)
@@ -645,7 +635,7 @@ fn declare_function(
 
     let get_parent_param_map = if parent_has_generics {
         Some(quote! {
-            let param_map = &mut parent.get_param_map().unwrap().clone();
+            let param_map = &mut parent.get_param_map().clone();
         })
     } else {
         None
@@ -689,22 +679,13 @@ fn declare_function(
         None
     };
 
-    let has_generics = function_has_generics || parent_has_generics;
     let setup_inputs = function.args.iter().map(|arg| {
         let ty = to_runtime_type(arg, mod_path, type_params);
-        if has_generics {
-            quote!(sig.add_input(|param_map: &mut _reflect::ParamMap| {#ty});)
-        } else {
-            quote!(sig.add_input(#ty);)
-        }
+        quote!(sig.add_input(|param_map: &mut _reflect::ParamMap| {#ty});)
     });
     let set_output = function.ret.as_ref().map(|ty| {
         let ty = to_runtime_type(&ty, mod_path, type_params);
-        if has_generics {
-            quote!(sig.set_output(|param_map: &mut _reflect::ParamMap| {#ty});)
-        } else {
-            quote!(sig.set_output(#ty);)
-        }
+        quote!(sig.set_output(|param_map: &mut _reflect::ParamMap| {#ty});)
     });
 
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))
@@ -813,24 +794,9 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
                 .bounds
                 .iter()
                 .map(|bound| bound.to_token_stream().to_string());
-            if type_trait_objects.bounds.iter().any(|bound| match bound {
-                TypeParamBound::Lifetime(_) => true,
-                TypeParamBound::Trait(trait_bound) => {
-                    trait_bound.lifetimes.is_some()
-                        || trait_bound
-                            .path
-                            .segments
-                            .iter()
-                            .any(|segment| !segment.arguments.is_empty())
-                }
-            }) {
-                quote! {
-                    _reflect::Type::get_trait_object(&[#(#bound_strings),*], param_map)
-                }
-            } else {
-                quote! {
-                    _reflect::Type::get_simple_trait_object(&[#(#bound_strings),*])
-                }
+
+            quote! {
+                _reflect::Type::get_trait_object(&[#(#bound_strings),*], param_map)
             }
         }
         Type::Reference(inner) => {
@@ -857,7 +823,7 @@ fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &[&Ident]) ->
     }
 }
 
-fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
+fn to_runtime_path_str(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> String {
     let mut path = path.clone();
 
     // Check if path is defined in current module
@@ -868,18 +834,15 @@ fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> Toke
         path = full_path
     }
 
-    if path.segments.last().unwrap().arguments.is_empty() {
-        let path_str = path.to_token_stream().to_string();
-        quote! {
-            _reflect::Path::simple_path_from_str(#path_str)
-        }
-    } else {
-        let arguments = &mut path.segments.last_mut().unwrap().arguments;
-        expand_path_arguments(arguments, mod_path, type_params);
-        let path_str = path.to_token_stream().to_string();
-        quote! {
-            _reflect::Path::path_from_str(#path_str, param_map)
-        }
+    let arguments = &mut path.segments.last_mut().unwrap().arguments;
+    expand_path_arguments(arguments, mod_path, type_params);
+    path.to_token_stream().to_string()
+}
+
+fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
+    let path_str = to_runtime_path_str(path, mod_path, type_params);
+    quote! {
+        _reflect::Path::path_from_str(#path_str, param_map)
     }
 }
 

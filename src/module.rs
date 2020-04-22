@@ -1,4 +1,4 @@
-use crate::{GlobalPush, MacroInvoke, Path, Type, TypeNode, Value, ValueNode, MACROS, VALUES};
+use crate::{GlobalPush, MacroInvoke, Path, Value, ValueNode, MACROS, VALUES};
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -19,15 +19,6 @@ impl Module {
         Module {
             path: self.path.get_simple_path(name),
         }
-    }
-
-    /// Get a simple path without any generics
-    pub fn get_simple_path(&self, name: &str) -> Path {
-        self.path.get_simple_path(name)
-    }
-
-    pub fn get_simple_type(&self, name: &str) -> Type {
-        Type(TypeNode::Path(self.get_simple_path(name)))
     }
 
     pub fn invoke_macro(&self, name: &str, values: &[Value]) -> Value {

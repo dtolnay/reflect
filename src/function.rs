@@ -38,13 +38,13 @@ impl Function {
     }
 
     pub fn clone_with_fresh_generics(self: Rc<Self>) -> Rc<Self> {
-        if let Some((parent_generics, mut ref_map)) = self.parent.as_ref().and_then(|parent| {
-            parent
-                .generics
-                .as_ref()
-                .map(|generics| generics.clone_with_fresh_generics())
-        }) {
-            let sig_generics = self.sig.generics.as_ref().map(|generics| Generics {
+        if let Some((parent_generics, mut ref_map)) = self
+            .parent
+            .as_ref()
+            .map(|parent| parent.generics.clone_with_fresh_generics())
+        {
+            let generics = &self.sig.generics;
+            let sig_generics = Generics {
                 params: generics
                     .params
                     .iter()
@@ -60,14 +60,14 @@ impl Function {
                     .map(|constraint| constraint.clone_with_fresh_generics(&ref_map))
                     .collect(),
                 param_map: generics.param_map.clone_with_fresh_generics(&ref_map),
-            });
+            };
             let old_parent = self.parent.as_ref().unwrap();
             let old_sig = &self.sig;
 
             Rc::new(Function {
                 parent: Some(Rc::new(Parent {
                     path: old_parent.path.clone_with_fresh_generics(&ref_map),
-                    generics: Some(parent_generics),
+                    generics: parent_generics,
                     parent_kind: old_parent.parent_kind,
                 })),
                 name: self.name.clone(),
@@ -82,19 +82,15 @@ impl Function {
                     output: old_sig.output.clone_with_fresh_generics(&ref_map),
                 },
             })
-        } else if let Some((sig_generics, ref_map)) = self
-            .sig
-            .generics
-            .as_ref()
-            .map(|generics| generics.clone_with_fresh_generics())
-        {
+        } else if !self.sig.generics.params.is_empty() {
+            let (sig_generics, ref_map) = self.sig.generics.clone_with_fresh_generics();
             let old_sig = &self.sig;
 
             Rc::new(Function {
                 parent: self.parent.clone(),
                 name: self.name.clone(),
                 sig: Signature {
-                    generics: Some(sig_generics),
+                    generics: sig_generics,
                     receiver: old_sig.receiver.clone_with_fresh_generics(&ref_map),
                     inputs: old_sig
                         .inputs

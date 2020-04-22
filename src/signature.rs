@@ -7,7 +7,7 @@ use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub struct Signature {
-    pub(crate) generics: Option<Generics>,
+    pub(crate) generics: Generics,
     pub(crate) receiver: Receiver,
     pub(crate) inputs: Vec<Type>,
     pub(crate) output: Type,
@@ -50,49 +50,10 @@ impl Receiver {
     }
 }
 
-pub trait AddInput<T> {
-    fn add_input(&mut self, into_ty: T);
-}
-
-impl AddInput<Type> for Signature {
-    fn add_input(&mut self, into_ty: Type) {
-        self.inputs.push(into_ty);
-    }
-}
-
-impl<F> AddInput<F> for Signature
-where
-    F: Fn(&mut ParamMap) -> Type,
-{
-    fn add_input(&mut self, into_ty: F) {
-        self.inputs
-            .push((into_ty)(&mut self.generics.as_mut().unwrap().param_map));
-    }
-}
-
-pub trait SetOutput<T> {
-    fn set_output(&mut self, into_ty: T);
-}
-
-impl SetOutput<Type> for Signature {
-    fn set_output(&mut self, into_ty: Type) {
-        self.output = into_ty;
-    }
-}
-
-impl<F> SetOutput<F> for Signature
-where
-    F: Fn(&mut ParamMap) -> Type,
-{
-    fn set_output(&mut self, into_ty: F) {
-        self.output = (into_ty)(&mut self.generics.as_mut().unwrap().param_map);
-    }
-}
-
 impl Signature {
     pub fn new() -> Self {
         Signature {
-            generics: None,
+            generics: Generics::default(),
             receiver: Receiver::NoSelf,
             inputs: Vec::new(),
             output: Type::unit(),
@@ -111,29 +72,26 @@ impl Signature {
         self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
     }
 
-    pub fn add_input<T>(&mut self, input: T)
+    pub fn add_input<F>(&mut self, into_ty: F)
     where
-        Self: AddInput<T>,
+        F: FnOnce(&mut ParamMap) -> Type,
     {
-        <Self as AddInput<T>>::add_input(self, input);
+        self.inputs.push((into_ty)(&mut self.generics.param_map));
     }
 
-    pub fn set_output<T>(&mut self, output: T)
+    pub fn set_output<F>(&mut self, into_ty: F)
     where
-        Self: SetOutput<T>,
+        F: FnOnce(&mut ParamMap) -> Type,
     {
-        <Self as SetOutput<T>>::set_output(self, output);
+        self.output = (into_ty)(&mut self.generics.param_map);
     }
 
     pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
-        self.generics
-            .get_or_insert(Default::default())
-            .set_generic_params(params)
+        self.generics.set_generic_params(params)
     }
 
     pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
-        let generics = self.generics.get_or_insert(Default::default());
-        generics.set_generic_constraints(constraints);
+        self.generics.set_generic_constraints(constraints);
     }
 
     /// Explicitly insert elided lifetimes
@@ -142,7 +100,7 @@ impl Signature {
         use Receiver::*;
         use TypeNode::*;
         // TODO: How does elsion rules work for generic traits with references as parameters?
-        let mut generics = self.generics.get_or_insert(Default::default());
+        let mut generics = &mut self.generics;
         // We need to insert the elided lifetimes first in the params so we
         // temporarily swap the params with an empty Vec, and then extend that
         // Vec with the old params in the end
@@ -200,10 +158,6 @@ impl Signature {
         }
         // Insert the old params back into place
         generics.params.extend(params);
-
-        if generics.params.is_empty() {
-            self.generics = None;
-        }
     }
 }
 

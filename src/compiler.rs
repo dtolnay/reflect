@@ -112,7 +112,7 @@ impl CompleteImpl {
             return !generics.params.is_empty();
         }
         if let Some(parent) = &self.trait_ty {
-            return parent.generics.is_some();
+            return !parent.generics.params.is_empty();
         }
         false
     }
@@ -122,7 +122,8 @@ impl CompleteFunction {
     fn compile(&self) -> TokenStream {
         let name = Ident::new(&self.f.name);
 
-        let (params, where_clause) = if let Some(generics) = &self.f.sig.generics {
+        let generics = &self.f.sig.generics;
+        let (params, where_clause) = if !generics.params.is_empty() {
             let params = generics.params.iter().map(Print::ref_cast);
             let params = Some(quote!(<#(#params),*>));
             let where_clause = if generics.constraints.is_empty() {

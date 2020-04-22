@@ -1,6 +1,5 @@
 use crate::{
-    GlobalCounter, Ident, LifetimeRef, Path, SimplePath, Type, TypeNode, TypeParamRef, LIFETIMES,
-    TYPE_PARAMS,
+    GlobalCounter, Ident, LifetimeRef, Path, Type, TypeNode, TypeParamRef, LIFETIMES, TYPE_PARAMS,
 };
 use proc_macro2::Span;
 use std::collections::BTreeMap;
@@ -156,15 +155,6 @@ impl TypeParamBound {
                 .expect("TypeParamBound::get_type_param_bound: Not a TypeParamBound"),
             param_map,
         )
-    }
-
-    pub(crate) fn get_simple_type_param_bound(path: &str) -> Self {
-        TypeParamBound::Trait(TraitBound {
-            lifetimes: Vec::new(),
-            path: parse_str::<SimplePath>(path)
-                .expect("TypeParamBound::get_simple_type_param_bound: Not a simple path")
-                .path,
-        })
     }
 
     pub(crate) fn clone_with_fresh_generics(

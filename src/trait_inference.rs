@@ -358,10 +358,12 @@ impl CompleteImpl {
 
         // trait generics
         if let Some((generics, path)) = self.trait_ty.as_ref().and_then(|trait_ty| {
-            trait_ty
-                .generics
-                .as_ref()
-                .map(|generics| (generics, &trait_ty.path))
+            let generics = &trait_ty.generics;
+            if generics.params.is_empty() {
+                None
+            } else {
+                Some((generics, &trait_ty.path))
+            }
         }) {
             generics.constraints.iter().for_each(|constraint| {
                 constraints.insert(constraint.clone());
@@ -506,8 +508,7 @@ impl CompleteFunction {
 
                 // Add parent constraints
                 // FIXME: Add constraints from parent type
-                if let Some(generics) = parent.as_ref().and_then(|parent| parent.generics.as_ref())
-                {
+                if let Some(generics) = parent.as_ref().map(|parent| &parent.generics) {
                     generics.constraints.iter().for_each(|constraint| {
                         if !constraints.contains(constraint) {
                             constraints.insert(constraint.clone());
@@ -517,13 +518,11 @@ impl CompleteFunction {
 
                 // Add function constraints
                 // FIXME: Add constraints from types in signature
-                if let Some(generics) = sig.generics.as_ref() {
-                    generics.constraints.iter().for_each(|constraint| {
-                        if !constraints.contains(constraint) {
-                            constraints.insert(constraint.clone());
-                        };
-                    })
-                }
+                sig.generics.constraints.iter().for_each(|constraint| {
+                    if !constraints.contains(constraint) {
+                        constraints.insert(constraint.clone());
+                    };
+                })
             }
         });
     }
