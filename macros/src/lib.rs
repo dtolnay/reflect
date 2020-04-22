@@ -145,7 +145,7 @@ impl ItemMod {
         let name: Ident = input.parse()?;
         let mut path = mod_path.clone();
         path.segments.push(PathSegment {
-            ident: name.clone(),
+            ident: name,
             arguments: PathArguments::None,
         });
         let items = ItemMod::parse_items(input, &path.clone())?;
@@ -441,7 +441,7 @@ fn declare_parent(
     parent_generics: &Generics,
     parent_type: &PathSegment,
     mod_path: &Path,
-    type_params: &Vec<&Ident>,
+    type_params: &[&Ident],
     parent_kind: ParentKind,
 ) -> TokenStream2 {
     let set_parent_params = if !parent_generics.params.is_empty() {
@@ -521,7 +521,7 @@ fn declare_parent(
 
 fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
     let parent = &item.segment.ident;
-    let type_params = &item
+    let type_params: &Vec<_> = &item
         .generics
         .params
         .iter()
@@ -567,7 +567,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     });
     let parent = &item.segment.ident;
 
-    let type_params = &item
+    let type_params: &Vec<_> = &item
         .generics
         .params
         .iter()
@@ -613,7 +613,7 @@ fn declare_function(
     parent_has_generics: bool,
     function: &Function,
     mod_path: &Path,
-    type_params: &Vec<&Ident>,
+    type_params: &[&Ident],
 ) -> TokenStream2 {
     let name = &function.name;
     let name_str = name.to_string();
@@ -629,7 +629,7 @@ fn declare_function(
             sig.set_self_by_reference_mut();
         }),
     };
-    let type_params = &function
+    let type_params: &Vec<_> = &function
         .generics
         .params
         .iter()
@@ -640,7 +640,7 @@ fn declare_function(
                 None
             }
         })
-        .chain(type_params.iter().map(|ident| *ident))
+        .chain(type_params.iter().copied())
         .collect();
 
     let get_parent_param_map = if parent_has_generics {
@@ -773,7 +773,7 @@ fn declare_macro(item: &ItemMacro) -> TokenStream2 {
     }
 }
 
-fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
+fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
     match ty {
         Type::Tuple(types) => {
             let types = types
@@ -836,7 +836,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &Vec<&Ident>) -> Tok
     }
 }
 
-fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
+fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
     let path = to_runtime_path(path, mod_path, type_params);
     quote! {
         _reflect::runtime::RuntimeType::SELF(
@@ -845,7 +845,7 @@ fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>)
     }
 }
 
-fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> TokenStream2 {
+fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
     let mut path = path.clone();
 
     // Check if path is defined in current module
@@ -872,11 +872,7 @@ fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &Vec<&Ident>) -> T
 }
 
 /// Expand module defined types inside of a PathArgumet as fully qualified paths
-fn expand_path_arguments(
-    arguments: &mut PathArguments,
-    mod_path: &Path,
-    type_params: &Vec<&Ident>,
-) {
+fn expand_path_arguments(arguments: &mut PathArguments, mod_path: &Path, type_params: &[&Ident]) {
     match arguments {
         PathArguments::None => {}
         PathArguments::AngleBracketed(generic_args) => {
@@ -912,7 +908,7 @@ fn expand_path_arguments(
 }
 
 /// Expand module defined types inside of the PathArguments inside of a type
-fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &Vec<&Ident>) {
+fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &[&Ident]) {
     use syn::Type::*;
     match ty {
         Path(type_path) => expand_path(&mut type_path.path, mod_path, type_params),
@@ -936,7 +932,7 @@ fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &Vec<&Ident>) {
 
 /// If path is an type defined in the current module, make the fully qualified
 /// type for that path
-fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &Vec<&Ident>) {
+fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &[&Ident]) {
     // Expand path arguments if any
     let path_arguments = &mut path.segments.last_mut().unwrap().arguments;
     expand_path_arguments(path_arguments, mod_path, type_params);

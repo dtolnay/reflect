@@ -8,6 +8,7 @@ use crate::{
 // default one, and because it has a hasher with a defalt seed, which is
 // useful for testing purposes, and consistent output between compiles.
 use seahash::SeaHasher;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 use std::iter::Extend;
@@ -106,7 +107,7 @@ impl TypeEqualitySetRef {
                 let set = &type_equality_sets.sets[self.0].set;
                 let mut iterator = set.iter().peekable();
                 let first = iterator.next().unwrap().clone().0;
-                let most_concrete = if let None = iterator.peek() {
+                let most_concrete = if iterator.peek().is_none() {
                     first.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
                 } else {
                     iterator.fold(first, |current_most_concrete, ty| {
@@ -142,7 +143,7 @@ impl TypeEqualitySets {
     }
 
     pub(crate) fn get_set_ref(&self, ty: &Type) -> Option<TypeEqualitySetRef> {
-        self.set_map.get(ty).map(|&set_ref| set_ref)
+        self.set_map.get(ty).copied()
     }
 
     fn new_set(&mut self, ty: Type) -> TypeEqualitySetRef {
@@ -259,20 +260,23 @@ impl TypeEqualitySets {
             (Path(path1), Path(path2)) => {
                 self.insert_path_arguments_as_equal_to(path1, path2, constraints);
             }
-            (TraitObject(bounds1), TraitObject(bounds2)) => bounds1
-                .iter()
-                .zip(bounds2.iter())
-                .for_each(|bounds| match bounds {
-                    (TypeParamBound::Trait(trait_bound1), TypeParamBound::Trait(trait_bound2)) => {
-                        self.insert_path_arguments_as_equal_to(
-                            &trait_bound1.path,
-                            &trait_bound2.path,
-                            constraints,
-                        );
-                    }
-                    //FIXME properly deal with lifetimes
-                    _ => (),
-                }),
+            (TraitObject(bounds1), TraitObject(bounds2)) => {
+                bounds1.iter().zip(bounds2.iter()).for_each(
+                    |bounds| {
+                        if let (
+                            TypeParamBound::Trait(trait_bound1),
+                            TypeParamBound::Trait(trait_bound2),
+                        ) = bounds
+                        {
+                            self.insert_path_arguments_as_equal_to(
+                                &trait_bound1.path,
+                                &trait_bound2.path,
+                                constraints,
+                            );
+                        }
+                    }, //FIXME properly deal with lifetimes
+                )
+            }
             _ => (),
         }
     }
@@ -544,7 +548,7 @@ fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut
 /// for T is Option<V> and U is already the most concrete type it can be. We
 /// then return a set containing V, and U
 fn get_relevant_generic_params(
-    original_generic_params: &Vec<GenericParam>,
+    original_generic_params: &[GenericParam],
     most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
     type_equality_sets: &mut TypeEqualitySets,
 ) -> BTreeSet<GenericParam> {
@@ -1087,43 +1091,49 @@ impl Path {
             (PathArguments::AngleBracketed(args1), PathArguments::AngleBracketed(args2)) => {
                 let args1 = &mut args1.args.args;
                 let args2 = &mut args2.args.args;
-                if args1.len() < args2.len() {
-                    TypeNode::Path(path1)
-                        .make_most_concrete(most_concrete_type_map, type_equality_sets)
-                } else if args1.len() > args2.len() {
-                    TypeNode::Path(path2)
-                        .make_most_concrete(most_concrete_type_map, type_equality_sets)
-                } else {
-                    // Assume we are dealing with the same type path
-                    let args = args1
-                        .iter()
-                        .zip(args2.iter())
-                        .map(|arg_pair| match arg_pair {
-                            (GenericArgument::Type(ty1), GenericArgument::Type(ty2)) => {
-                                GenericArgument::Type(Type(TypeNode::make_most_concrete_from_pair(
-                                    ty1.clone().0,
-                                    ty2.clone().0,
-                                    most_concrete_type_map,
-                                    type_equality_sets,
-                                )))
-                            }
-                            // FIXME: Deal with lifetimes
-                            (
-                                GenericArgument::Lifetime(lifetime_ref1),
-                                GenericArgument::Lifetime(lifetime_ref2),
-                            ) => GenericArgument::Lifetime((*lifetime_ref1).min(*lifetime_ref2)),
-                            _ => unimplemented!(
-                                "Path::make_most_concrete_from_pair: GenericArgument"
-                            ),
-                        })
-                        .collect();
+                match args1.len().cmp(&args2.len()) {
+                    Ordering::Less => TypeNode::Path(path1)
+                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
 
-                    if path1.global || path1_len < path2_len {
-                        *args1 = args;
-                        TypeNode::Path(path1)
-                    } else {
-                        *args2 = args;
-                        TypeNode::Path(path2)
+                    Ordering::Greater => TypeNode::Path(path2)
+                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
+
+                    Ordering::Equal => {
+                        // Assume we are dealing with the same type path
+                        let args = args1
+                            .iter()
+                            .zip(args2.iter())
+                            .map(|arg_pair| match arg_pair {
+                                (GenericArgument::Type(ty1), GenericArgument::Type(ty2)) => {
+                                    GenericArgument::Type(Type(
+                                        TypeNode::make_most_concrete_from_pair(
+                                            ty1.clone().0,
+                                            ty2.clone().0,
+                                            most_concrete_type_map,
+                                            type_equality_sets,
+                                        ),
+                                    ))
+                                }
+                                // FIXME: Deal with lifetimes
+                                (
+                                    GenericArgument::Lifetime(lifetime_ref1),
+                                    GenericArgument::Lifetime(lifetime_ref2),
+                                ) => {
+                                    GenericArgument::Lifetime((*lifetime_ref1).min(*lifetime_ref2))
+                                }
+                                _ => unimplemented!(
+                                    "Path::make_most_concrete_from_pair: GenericArgument"
+                                ),
+                            })
+                            .collect();
+
+                        if path1.global || path1_len < path2_len {
+                            *args1 = args;
+                            TypeNode::Path(path1)
+                        } else {
+                            *args2 = args;
+                            TypeNode::Path(path2)
+                        }
                     }
                 }
             }

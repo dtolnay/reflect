@@ -78,7 +78,7 @@ impl Type {
             TypeNode::Reference { lifetime, inner } => {
                 Type((**inner).clone()).data().map(|field| {
                     Type(TypeNode::Reference {
-                        lifetime: lifetime.clone(),
+                        lifetime: *lifetime,
                         inner: Box::new(field.element.0),
                     })
                 })
@@ -86,7 +86,7 @@ impl Type {
             TypeNode::ReferenceMut { lifetime, inner } => {
                 Type((**inner).clone()).data().map(|field| {
                     Type(TypeNode::ReferenceMut {
-                        lifetime: lifetime.clone(),
+                        lifetime: *lifetime,
                         inner: Box::new(field.element.0),
                     })
                 })
@@ -125,11 +125,11 @@ impl Type {
     pub fn type_param_from_str(type_param: &str, param_map: &mut ParamMap) -> Self {
         let ident = parse_str(type_param).unwrap();
         if let Some(&param) = param_map.get(&ident) {
-            return Type(TypeNode::TypeParam(
+            Type(TypeNode::TypeParam(
                 param
                     .type_param_ref()
                     .expect("Type::type_param_from_str: Not a type param ref"),
-            ));
+            ))
         } else {
             panic!("Type::type_param_from_str: Not a type param ref")
         }

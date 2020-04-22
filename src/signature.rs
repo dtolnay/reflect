@@ -197,11 +197,8 @@ impl TypeNode {
             Dereference(node) => node.insert_new_lifetimes(generics),
             TraitObject(bounds) => {
                 for bound in bounds.iter_mut() {
-                    match bound {
-                        TypeParamBound::Trait(bound) => {
-                            bound.path.insert_new_lifetimes(generics);
-                        }
-                        _ => {}
+                    if let TypeParamBound::Trait(bound) = bound {
+                        bound.path.insert_new_lifetimes(generics);
                     }
                 }
             }
@@ -242,9 +239,8 @@ impl Path {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
                     for arg in args.args.args.iter_mut() {
-                        match arg {
-                            GenericArgument::Type(ty) => ty.0.insert_new_lifetimes(generics),
-                            _ => {}
+                        if let GenericArgument::Type(ty) = arg {
+                            ty.0.insert_new_lifetimes(generics)
                         }
                     }
                 }
