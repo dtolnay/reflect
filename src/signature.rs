@@ -99,7 +99,6 @@ impl Signature {
     pub(crate) fn insert_elided_lifetimes(&mut self) {
         use Receiver::*;
         use TypeNode::*;
-        // TODO: How does elsion rules work for generic traits with references as parameters?
         let mut generics = &mut self.generics;
         // We need to insert the elided lifetimes first in the params so we
         // temporarily swap the params with an empty Vec, and then extend that
@@ -115,15 +114,15 @@ impl Signature {
                     match &mut self.inputs[0].0 {
                         Reference {
                             lifetime: Some(lifetime_ref),
-                            ..
-                        } => self
+                            inner,
+                        } if !inner.is_reference() => self
                             .output
                             .0
                             .insert_new_lifetimes2(*lifetime_ref, &mut generics),
                         ReferenceMut {
                             lifetime: Some(lifetime_ref),
-                            ..
-                        } => self
+                            inner,
+                        } if !inner.is_reference() => self
                             .output
                             .0
                             .insert_new_lifetimes2(*lifetime_ref, &mut generics),
@@ -219,7 +218,24 @@ impl TypeNode {
                     ty.0.insert_new_lifetimes2(lifetime_ref, generics);
                 }
             }
-            node => node.insert_new_lifetimes(generics),
+            Dereference(node) => node.insert_new_lifetimes2(lifetime_ref, generics),
+            TraitObject(bounds) => {
+                for bound in bounds.iter_mut() {
+                    if let TypeParamBound::Trait(bound) = bound {
+                        bound.path.insert_new_lifetimes2(lifetime_ref, generics);
+                    }
+                }
+            }
+            Path(path) => path.insert_new_lifetimes2(lifetime_ref, generics),
+            _ => {}
+        }
+    }
+
+    fn is_reference(&self) -> bool {
+        use TypeNode::*;
+        match self {
+            Reference { .. } | ReferenceMut { .. } => true,
+            _ => false,
         }
     }
 }
@@ -233,6 +249,24 @@ impl Path {
                     for arg in args.args.args.iter_mut() {
                         if let GenericArgument::Type(ty) = arg {
                             ty.0.insert_new_lifetimes(generics)
+                        }
+                    }
+                }
+                PathArguments::Parenthesized(args) => {
+                    unimplemented!("Path::insert_elided_lifetimes: PathArguments::Parenthesized")
+                }
+            }
+        }
+    }
+
+    fn insert_new_lifetimes2(&mut self, lifetime_ref: Lifetime, generics: &mut Generics) {
+        for segment in self.path.iter_mut() {
+            match &mut segment.args {
+                PathArguments::None => {}
+                PathArguments::AngleBracketed(args) => {
+                    for arg in args.args.args.iter_mut() {
+                        if let GenericArgument::Type(ty) = arg {
+                            ty.0.insert_new_lifetimes2(lifetime_ref, generics)
                         }
                     }
                 }
