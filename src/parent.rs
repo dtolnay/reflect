@@ -31,9 +31,9 @@ impl ParentBuilder {
         }
     }
 
-    pub fn set_path<F>(&mut self, into_path: F)
+    pub fn set_path<'a, F>(&'a mut self, into_path: F)
     where
-        F: FnOnce(&mut ParamMap) -> Path,
+        F: FnOnce(&'a mut ParamMap) -> Path,
     {
         self.path = Some((into_path)(&mut self.generics.param_map))
     }

@@ -72,16 +72,16 @@ impl Signature {
         self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
     }
 
-    pub fn add_input<F>(&mut self, into_ty: F)
+    pub fn add_input<'a, F>(&'a mut self, into_ty: F)
     where
-        F: FnOnce(&mut ParamMap) -> Type,
+        F: FnOnce(&'a mut ParamMap) -> Type,
     {
         self.inputs.push((into_ty)(&mut self.generics.param_map));
     }
 
-    pub fn set_output<F>(&mut self, into_ty: F)
+    pub fn set_output<'a, F>(&'a mut self, into_ty: F)
     where
-        F: FnOnce(&mut ParamMap) -> Type,
+        F: FnOnce(&'a mut ParamMap) -> Type,
     {
         self.output = (into_ty)(&mut self.generics.param_map);
     }
