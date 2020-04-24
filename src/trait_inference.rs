@@ -99,17 +99,9 @@ impl LifetimeSubtypeMap {
             subtype_matrix[idx] = true;
         }
 
-        for subtype in 0..subtype_matrix.size {
-            for supertype in 0..subtype_matrix.size {
-                if subtype_matrix[(subtype, supertype)] && !reached[(subtype, supertype)] {
-                    Self::transitive_closure_dfs(
-                        &mut subtype_matrix,
-                        &mut reached,
-                        subtype,
-                        supertype,
-                    );
-                }
-            }
+        for i in 0..subtype_matrix.size {
+            // Every type is a subtype of itself
+            Self::transitive_closure_dfs(&mut subtype_matrix, &mut reached, i, i);
         }
 
         // Update self with transitive closure
@@ -140,9 +132,10 @@ impl LifetimeSubtypeMap {
         supertype: usize,
     ) {
         reached[(subtype, supertype)] = true;
-        for supertype in 0..subtype_matrix.size {
-            if subtype_matrix[(subtype, supertype)] && !reached[(subtype, supertype)] {
-                Self::transitive_closure_dfs(subtype_matrix, reached, subtype, supertype);
+        for i in subtype..subtype_matrix.size {
+            // if i is a supertype of supertype then i is a supertype of subtype
+            if subtype_matrix[(supertype, i)] && !reached[(supertype, i)] {
+                Self::transitive_closure_dfs(subtype_matrix, reached, subtype, i);
             }
         }
     }
