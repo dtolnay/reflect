@@ -14,6 +14,25 @@ pub struct ParentBuilder {
     pub(crate) parent_kind: ParentKind,
 }
 
+pub trait SetPath<'a, P> {
+    fn set_path(&'a mut self, into_path: P);
+}
+
+impl<'a> SetPath<'a, Path> for ParentBuilder {
+    fn set_path(&'a mut self, into_path: Path) {
+        self.path = Some(into_path);
+    }
+}
+
+impl<'a, F> SetPath<'a, F> for ParentBuilder
+where
+    F: FnOnce(&'a mut ParamMap) -> Path,
+{
+    fn set_path(&'a mut self, into_path: F) {
+        self.path = Some((into_path)(&mut self.generics.param_map));
+    }
+}
+
 impl ParentBuilder {
     pub fn new(parent_kind: ParentKind) -> Self {
         ParentBuilder {
@@ -31,11 +50,13 @@ impl ParentBuilder {
         }
     }
 
-    pub fn set_path<'a, F>(&'a mut self, into_path: F)
+    /// Set the path of the Parent.
+    /// P can be either a Path or a type implementing FnOnce(&'a mut ParamMap) -> Path
+    pub fn set_path<'a, P>(&'a mut self, into_path: P)
     where
-        F: FnOnce(&'a mut ParamMap) -> Path,
+        Self: SetPath<'a, P>,
     {
-        self.path = Some((into_path)(&mut self.generics.param_map))
+        <Self as SetPath<'a, P>>::set_path(self, into_path);
     }
 
     pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {

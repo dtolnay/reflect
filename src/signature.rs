@@ -25,6 +25,14 @@ pub enum Receiver {
 #[doc(hidden)]
 pub struct OptionLifetime(pub(crate) Option<Lifetime>);
 
+pub trait AddInput<'a, T> {
+    fn add_input(&'a mut self, into_input: T);
+}
+
+pub trait SetOutput<'a, T> {
+    fn set_output(&'a mut self, into_output: T);
+}
+
 impl Receiver {
     pub(crate) fn clone_with_fresh_generics(
         &self,
@@ -50,6 +58,36 @@ impl Receiver {
     }
 }
 
+impl<'a> AddInput<'a, Type> for Signature {
+    fn add_input(&'a mut self, into_input: Type) {
+        self.inputs.push(into_input)
+    }
+}
+
+impl<'a, F> AddInput<'a, F> for Signature
+where
+    F: FnOnce(&'a mut ParamMap) -> Type,
+{
+    fn add_input(&'a mut self, into_input: F) {
+        self.inputs.push((into_input)(&mut self.generics.param_map))
+    }
+}
+
+impl<'a> SetOutput<'a, Type> for Signature {
+    fn set_output(&'a mut self, into_output: Type) {
+        self.output = into_output;
+    }
+}
+
+impl<'a, F> SetOutput<'a, F> for Signature
+where
+    F: FnOnce(&'a mut ParamMap) -> Type,
+{
+    fn set_output(&'a mut self, into_output: F) {
+        self.output = (into_output)(&mut self.generics.param_map);
+    }
+}
+
 impl Signature {
     pub fn new() -> Self {
         Signature {
@@ -72,18 +110,22 @@ impl Signature {
         self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
     }
 
-    pub fn add_input<'a, F>(&'a mut self, into_ty: F)
+    /// Add input type to signature.
+    /// T can be either a Type or a type implementing FnOnce(&'a mut ParamMap) -> Type
+    pub fn add_input<'a, T>(&'a mut self, into_input: T)
     where
-        F: FnOnce(&'a mut ParamMap) -> Type,
+        Self: AddInput<'a, T>,
     {
-        self.inputs.push((into_ty)(&mut self.generics.param_map));
+        <Self as AddInput<'a, T>>::add_input(self, into_input);
     }
 
-    pub fn set_output<'a, F>(&'a mut self, into_ty: F)
+    /// Set output type to signature.
+    /// T can be either a Type or a type implementing FnOnce(&'a mut ParamMap) -> Type
+    pub fn set_output<'a, T>(&'a mut self, into_output: T)
     where
-        F: FnOnce(&'a mut ParamMap) -> Type,
+        Self: SetOutput<'a, T>,
     {
-        self.output = (into_ty)(&mut self.generics.param_map);
+        <Self as SetOutput<'a, T>>::set_output(self, into_output);
     }
 
     pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
