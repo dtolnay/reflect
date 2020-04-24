@@ -30,7 +30,6 @@ pub(crate) enum ValueNode {
 }
 
 impl ValueNode {
-    // FIXME: Not safe to call when a node has been moved outside a WipFunction
     pub fn get_type(&self) -> Type {
         match self {
             ValueNode::Tuple(types) => Type(TypeNode::Tuple(
@@ -62,6 +61,8 @@ impl ValueNode {
         }
     }
 
+    // FIXME: Consider generating invocations to std::any::type_name(), and
+    // resolving generic parameters during the type and trait inference stage.
     pub fn get_type_name(&self) -> Self {
         match self {
             ValueNode::Tuple(types) => {

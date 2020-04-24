@@ -1,8 +1,8 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Parent, ParentKind, Path,
-    PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
-    TypeParamBound, INVOKES,
+    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Lifetime, Parent, ParentKind,
+    Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef,
+    TypeNode, TypeParamBound, INVOKES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -12,6 +12,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 use std::iter::Extend;
+use std::ops::{Index, IndexMut};
 use std::rc::Rc;
 
 /// A set of types that are considered to be equal. An example of how it is used:
@@ -41,6 +42,145 @@ pub(crate) struct TraitInferenceResult {
     pub(crate) generic_params: BTreeSet<GenericParam>,
     pub(crate) data_struct_args: GenericArguments,
     pub(crate) trait_args: GenericArguments,
+}
+
+/// A mapping between a lifetime and it's subtypes
+pub(crate) struct LifetimeSubtypeMap {
+    subtypes: BTreeSet<(Lifetime, Lifetime)>,
+}
+
+/// N x N bool matrix
+pub(crate) struct BoolMatrix {
+    size: usize,
+    matrix: Vec<bool>,
+}
+
+impl BoolMatrix {
+    fn new(size: usize) -> Self {
+        BoolMatrix {
+            size,
+            matrix: vec![false; size * size],
+        }
+    }
+}
+
+impl Index<(usize, usize)> for BoolMatrix {
+    type Output = bool;
+    fn index(&self, (row, column): (usize, usize)) -> &Self::Output {
+        &self.matrix[self.size * row + column]
+    }
+}
+
+impl IndexMut<(usize, usize)> for BoolMatrix {
+    fn index_mut(&mut self, (row, column): (usize, usize)) -> &mut Self::Output {
+        &mut self.matrix[self.size * row + column]
+    }
+}
+
+impl LifetimeSubtypeMap {
+    fn new() -> Self {
+        LifetimeSubtypeMap {
+            subtypes: BTreeSet::new(),
+        }
+    }
+
+    fn insert(&mut self, subtype: Lifetime, supertype: Lifetime) {
+        self.subtypes.insert((subtype, supertype));
+    }
+
+    fn transitive_closure(&mut self) {
+        let (mapping, index_lifetime_mapping) = self.create_mapping();
+        let size = mapping.len();
+        let mut subtype_matrix = BoolMatrix::new(size);
+        let mut reached = BoolMatrix::new(size);
+
+        // Setting initial states
+        for idx in mapping {
+            subtype_matrix[idx] = true;
+        }
+
+        for subtype in 0..subtype_matrix.size {
+            for supertype in 0..subtype_matrix.size {
+                if subtype_matrix[(subtype, supertype)] && !reached[(subtype, supertype)] {
+                    Self::transitive_closure_dfs(
+                        &mut subtype_matrix,
+                        &mut reached,
+                        subtype,
+                        supertype,
+                    );
+                }
+            }
+        }
+
+        // Update self with transitive closure
+        for subtype_index in 0..reached.size {
+            let subtype = if let Some(&subtype) = index_lifetime_mapping.get(&subtype_index) {
+                subtype
+            } else {
+                continue;
+            };
+            for supertype_index in 0..reached.size {
+                let supertype =
+                    if let Some(&supertype) = index_lifetime_mapping.get(&supertype_index) {
+                        supertype
+                    } else {
+                        continue;
+                    };
+                if reached[(subtype_index, supertype_index)] {
+                    self.subtypes.insert((subtype, supertype));
+                }
+            }
+        }
+    }
+
+    fn transitive_closure_dfs(
+        subtype_matrix: &mut BoolMatrix,
+        reached: &mut BoolMatrix,
+        subtype: usize,
+        supertype: usize,
+    ) {
+        reached[(subtype, supertype)] = true;
+        for supertype in 0..subtype_matrix.size {
+            if subtype_matrix[(subtype, supertype)] && !reached[(subtype, supertype)] {
+                Self::transitive_closure_dfs(subtype_matrix, reached, subtype, supertype);
+            }
+        }
+    }
+
+    /// Map all lifetimes to a unique index starting at zero
+    /// The static lifetime always gets mapped to 0
+    fn create_mapping(&self) -> (Vec<(usize, usize)>, BTreeMap<usize, Lifetime>) {
+        let mut lifetime_index_mapping = BTreeMap::new();
+        let mut index_lifetime_mapping = BTreeMap::new();
+        let mut mapping = Vec::new();
+        let mut counter: usize = 1;
+
+        // Map the static lifetime to 0
+        lifetime_index_mapping.insert(Lifetime(0), 0);
+        for (subtype, supertype) in self.subtypes.iter() {
+            let subtype = if let Some(&subtype) = lifetime_index_mapping.get(subtype) {
+                subtype
+            } else {
+                lifetime_index_mapping.insert(*subtype, counter);
+                let subtype = counter;
+                counter += 1;
+                subtype
+            };
+            let supertype = if let Some(&supertype) = lifetime_index_mapping.get(supertype) {
+                supertype
+            } else {
+                lifetime_index_mapping.insert(*supertype, counter);
+                let supertype = counter;
+                counter += 1;
+                supertype
+            };
+            mapping.push((subtype, supertype));
+        }
+        for (lifetime, index) in lifetime_index_mapping {
+            index_lifetime_mapping.insert(index, lifetime);
+        }
+        (mapping, index_lifetime_mapping)
+    }
 }
 
 impl ConstraintSet {
