@@ -156,10 +156,10 @@ impl TypeParamBound {
         ref_map: &BTreeMap<GenericParam, GenericParam>,
     ) -> Self {
         match self {
-            TypeParamBound::Lifetime(lifetime_ref) => TypeParamBound::Lifetime(
+            TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(
                 ref_map
-                    .get(&GenericParam::Lifetime(*lifetime_ref))
-                    .and_then(|param| param.lifetime_ref())
+                    .get(&GenericParam::Lifetime(*lifetime))
+                    .and_then(|param| param.lifetime())
                     .unwrap(),
             ),
 
@@ -167,10 +167,10 @@ impl TypeParamBound {
                 lifetimes: bound
                     .lifetimes
                     .iter()
-                    .map(|lifetime_ref| {
+                    .map(|lifetime| {
                         ref_map
-                            .get(&GenericParam::Lifetime(*lifetime_ref))
-                            .and_then(|param| param.lifetime_ref())
+                            .get(&GenericParam::Lifetime(*lifetime))
+                            .and_then(|param| param.lifetime())
                             .unwrap()
                     })
                     .collect(),
@@ -182,25 +182,25 @@ impl TypeParamBound {
 }
 
 impl GenericParam {
-    pub(crate) fn lifetime_ref(self) -> Option<Lifetime> {
+    pub(crate) fn lifetime(self) -> Option<Lifetime> {
         match self {
-            Self::Lifetime(lifetime_ref) => Some(lifetime_ref),
+            Self::Lifetime(lifetime) => Some(lifetime),
             _ => None,
         }
     }
 
-    pub(crate) fn type_param_ref(self) -> Option<TypeParam> {
+    pub(crate) fn type_param(self) -> Option<TypeParam> {
         match self {
-            Self::Type(type_param_ref) => Some(type_param_ref),
+            Self::Type(type_param) => Some(type_param),
             _ => None,
         }
     }
 
     pub(crate) fn get_fresh_param(self) -> Self {
         match self {
-            Self::Type(type_param_ref) => Self::Type(TYPE_PARAMS.count()),
+            Self::Type(type_param) => Self::Type(TYPE_PARAMS.count()),
 
-            Self::Lifetime(lifetime_ref) => Self::Lifetime(LIFETIMES.count()),
+            Self::Lifetime(lifetime) => Self::Lifetime(LIFETIMES.count()),
 
             Self::Const(_const) => unimplemented!("GenericParam::get_fresh_param: Const"),
         }
@@ -217,10 +217,10 @@ impl GenericConstraint {
                 lifetimes: predicate
                     .lifetimes
                     .iter()
-                    .map(|lifetime_ref| {
+                    .map(|lifetime| {
                         ref_map
-                            .get(&GenericParam::Lifetime(*lifetime_ref))
-                            .and_then(|param| param.lifetime_ref())
+                            .get(&GenericParam::Lifetime(*lifetime))
+                            .and_then(|param| param.lifetime())
                             .unwrap()
                     })
                     .collect(),
@@ -236,10 +236,10 @@ impl GenericConstraint {
                 bounds: lifetime_def
                     .bounds
                     .iter()
-                    .map(|lifetime_ref| {
+                    .map(|lifetime| {
                         ref_map
-                            .get(&GenericParam::Lifetime(*lifetime_ref))
-                            .and_then(|param| param.lifetime_ref())
+                            .get(&GenericParam::Lifetime(*lifetime))
+                            .and_then(|param| param.lifetime())
                             .unwrap()
                     })
                     .collect(),
@@ -330,9 +330,9 @@ fn syn_to_bound_lifetimes(
                      lifetime: syn::Lifetime { ident, .. },
                      ..
                  }| {
-                    let lifetime_ref = LIFETIMES.count();
-                    param_map.insert(ident, GenericParam::Lifetime(lifetime_ref));
-                    lifetime_ref
+                    let lifetime = LIFETIMES.count();
+                    param_map.insert(ident, GenericParam::Lifetime(lifetime));
+                    lifetime
                 },
             )
             .collect()
@@ -371,14 +371,14 @@ where
         }) => GenericConstraint::Lifetime(LifetimeDef {
             lifetime: param_map
                 .get(&ident)
-                .and_then(|param| GenericParam::lifetime_ref(*param))
+                .and_then(|param| GenericParam::lifetime(*param))
                 .expect("syn_where_predicates_to_generic_constraints: {:?} is not a lifetime ref"),
             bounds: bounds
                 .into_iter()
                 .map(|syn::Lifetime { ident, .. }| {
                     param_map
                         .get(&ident)
-                        .and_then(|&param| GenericParam::lifetime_ref(param))
+                        .and_then(|&param| GenericParam::lifetime(param))
                         .expect("syn_where_predicates_to_generic_constraints: Not a lifetime ref")
                 })
                 .collect(),
@@ -409,7 +409,7 @@ where
                         lifetimes: Vec::new(),
                         bounded_ty: Type(TypeNode::TypeParam(
                             param
-                                .type_param_ref()
+                                .type_param()
                                 .expect("syn_to_generic_params: Not a type param ref"),
                         )),
                         bounds: syn_to_type_param_bounds(bounds, &mut param_map).collect(),
@@ -427,14 +427,14 @@ where
                     constraints.push(GenericConstraint::Lifetime(LifetimeDef {
                         lifetime: param_map
                             .get(&ident)
-                            .and_then(|param| GenericParam::lifetime_ref(*param))
+                            .and_then(|param| GenericParam::lifetime(*param))
                             .expect("syn_to_generic_params: Not a lifetime ref"),
                         bounds: bounds
                             .into_iter()
                             .map(|syn::Lifetime { ident, .. }| {
                                 param_map
                                     .get(&ident)
-                                    .and_then(|param| GenericParam::lifetime_ref(*param))
+                                    .and_then(|param| GenericParam::lifetime(*param))
                                     .expect("syn_to_generic_params: Not a lifetime ref")
                             })
                             .collect(),
@@ -491,7 +491,7 @@ pub(crate) fn syn_to_type_param_bound(
         syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(
             param_map
                 .get(&lifetime.ident)
-                .and_then(|&param| GenericParam::lifetime_ref(param))
+                .and_then(|&param| GenericParam::lifetime(param))
                 .expect("syn_to_type_param_bounds: Not a lifetime ref"),
         ),
     }
@@ -525,7 +525,7 @@ impl GenericArgument {
             syn::GenericArgument::Lifetime(lifetime) => GenericArgument::Lifetime(
                 param_map
                     .get(&lifetime.ident)
-                    .and_then(|&param| GenericParam::lifetime_ref(param))
+                    .and_then(|&param| GenericParam::lifetime(param))
                     .expect("syn_to_generic_argument: Not a lifetime ref"),
             ),
 
@@ -553,10 +553,10 @@ impl GenericArgument {
     ) -> Self {
         match self {
             Self::Type(ty) => Self::Type(ty.clone_with_fresh_generics(ref_map)),
-            Self::Lifetime(lifetime_ref) => Self::Lifetime(
+            Self::Lifetime(lifetime) => Self::Lifetime(
                 ref_map
-                    .get(&GenericParam::Lifetime(*lifetime_ref))
-                    .and_then(|param| param.lifetime_ref())
+                    .get(&GenericParam::Lifetime(*lifetime))
+                    .and_then(|param| param.lifetime())
                     .unwrap(),
             ),
             Self::Binding(binding) => Self::Binding(Binding {

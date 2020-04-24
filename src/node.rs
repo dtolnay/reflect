@@ -7,9 +7,9 @@ use crate::{
 pub(crate) enum ValueNode {
     Tuple(Vec<ValueRef>),
     Str(String),
-    // TODO: Add lifetime_ref parameter
+    // TODO: Add lifetime parameter
     Reference(ValueRef),
-    // TODO: Add lifetime_ref parameter
+    // TODO: Add lifetime parameter
     ReferenceMut(ValueRef),
     Dereference(ValueRef),
     Binding {

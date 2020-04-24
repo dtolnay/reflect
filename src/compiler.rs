@@ -355,18 +355,18 @@ fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
     match receiver {
         Receiver::NoSelf => None,
         Receiver::SelfByValue => Some(quote!(self)),
-        Receiver::SelfByReference(lifetime_ref) => {
-            let lifetime = lifetime_ref
+        Receiver::SelfByReference(lifetime) => {
+            let lifetime = lifetime
                 .0
                 .as_ref()
-                .map(|lifetime_ref| Print::ref_cast(lifetime_ref));
+                .map(|lifetime| Print::ref_cast(lifetime));
             Some(quote!(&#lifetime self))
         }
-        Receiver::SelfByReferenceMut(lifetime_ref) => {
-            let lifetime = lifetime_ref
+        Receiver::SelfByReferenceMut(lifetime) => {
+            let lifetime = lifetime
                 .0
                 .as_ref()
-                .map(|lifetime_ref| Print::ref_cast(lifetime_ref));
+                .map(|lifetime| Print::ref_cast(lifetime));
             Some(quote!(&#lifetime mut self))
         }
     }

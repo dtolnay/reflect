@@ -117,7 +117,7 @@ impl Type {
         if let Some(&param) = param_map.get(&ident) {
             Type(TypeNode::TypeParam(
                 param
-                    .type_param_ref()
+                    .type_param()
                     .expect("Type::type_param_from_str: Not a type param ref"),
             ))
         } else {
@@ -136,7 +136,7 @@ impl Type {
                     if let Some(&param) = param_map.get(ident) {
                         return Type(TypeNode::TypeParam(
                             param
-                                .type_param_ref()
+                                .type_param()
                                 .expect("syn_to_type: Not a type param ref"),
                         ));
                     }
@@ -149,7 +149,7 @@ impl Type {
                 let lifetime = reference.lifetime.map(|lifetime| {
                     param_map
                         .get(&lifetime.ident)
-                        .and_then(|&param| GenericParam::lifetime_ref(param))
+                        .and_then(|&param| GenericParam::lifetime(param))
                         .expect("syn_to_type: Not a lifetime ref")
                 });
                 if reference.mutability.is_some() {
@@ -209,9 +209,9 @@ impl TypeNode {
                 Print::ref_cast(path).to_tokens(&mut tokens);
                 tokens.to_string()
             }
-            TypeNode::TypeParam(type_param_ref) => {
+            TypeNode::TypeParam(type_param) => {
                 let mut tokens = TokenStream::new();
-                Print::ref_cast(type_param_ref).to_tokens(&mut tokens);
+                Print::ref_cast(type_param).to_tokens(&mut tokens);
                 tokens.to_string()
             }
 
@@ -237,20 +237,20 @@ impl TypeNode {
             PrimitiveStr => PrimitiveStr,
 
             Reference { lifetime, inner } => Reference {
-                lifetime: lifetime.map(|lifetime_ref| {
+                lifetime: lifetime.map(|lifetime| {
                     ref_map
-                        .get(&GenericParam::Lifetime(lifetime_ref))
-                        .and_then(|param| param.lifetime_ref())
+                        .get(&GenericParam::Lifetime(lifetime))
+                        .and_then(|param| param.lifetime())
                         .unwrap()
                 }),
                 inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
             },
 
             ReferenceMut { lifetime, inner } => ReferenceMut {
-                lifetime: lifetime.map(|lifetime_ref| {
+                lifetime: lifetime.map(|lifetime| {
                     ref_map
-                        .get(&GenericParam::Lifetime(lifetime_ref))
-                        .and_then(|param| param.lifetime_ref())
+                        .get(&GenericParam::Lifetime(lifetime))
+                        .and_then(|param| param.lifetime())
                         .unwrap()
                 }),
                 inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
@@ -273,10 +273,10 @@ impl TypeNode {
 
             Path(path) => Path(path.clone_with_fresh_generics(ref_map)),
 
-            TypeParam(type_param_ref) => TypeParam(
+            TypeParam(type_param) => TypeParam(
                 ref_map
-                    .get(&GenericParam::Type(*type_param_ref))
-                    .and_then(|param| param.type_param_ref())
+                    .get(&GenericParam::Type(*type_param))
+                    .and_then(|param| param.type_param())
                     .unwrap(),
             ),
         }

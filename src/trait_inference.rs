@@ -460,7 +460,7 @@ impl CompleteFunction {
                                     constraints,
                                 ),
                             },
-                            SelfByReference(lifetime_ref) => match parent.parent_kind {
+                            SelfByReference(lifetime) => match parent.parent_kind {
                                 ParentKind::Trait => {
                                     let first_type = first_type.dereference();
                                     if let TypeNode::TypeParam(_) = &first_type.0 {
@@ -470,13 +470,13 @@ impl CompleteFunction {
                                 ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                     Type(TypeNode::Reference {
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: lifetime_ref.0,
+                                        lifetime: lifetime.0,
                                     }),
                                     first_type,
                                     constraints,
                                 ),
                             },
-                            SelfByReferenceMut(lifetime_ref) => match parent.parent_kind {
+                            SelfByReferenceMut(lifetime) => match parent.parent_kind {
                                 ParentKind::Trait => {
                                     let first_type = first_type.dereference();
                                     if let TypeNode::TypeParam(_) = &first_type.0 {
@@ -486,7 +486,7 @@ impl CompleteFunction {
                                 ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
                                     Type(TypeNode::ReferenceMut {
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: lifetime_ref.0,
+                                        lifetime: lifetime.0,
                                     }),
                                     first_type,
                                     constraints,
@@ -557,11 +557,11 @@ fn get_relevant_generic_params(
     original_generic_params
         .iter()
         .for_each(|param| match *param {
-            GenericParam::Type(type_param_ref) => {
-                let type_param_ref = param.type_param_ref().unwrap();
-                let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param_ref)));
+            GenericParam::Type(type_param) => {
+                let type_param = param.type_param().unwrap();
+                let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param)));
                 let set_ref = set_ref
-                    .unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param_ref))));
+                    .unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param))));
 
                 let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
                 node.inner_params(type_equality_sets, &mut relevant_generic_params)
@@ -590,7 +590,7 @@ fn get_data_struct_args(
                     TypeNode::TypeParam(ty)
                         .make_most_concrete(most_concrete_type_map, type_equality_sets),
                 )),
-                GenericParam::Lifetime(lifetime_ref) => GenericArgument::Lifetime(lifetime_ref),
+                GenericParam::Lifetime(lifetime) => GenericArgument::Lifetime(lifetime),
                 GenericParam::Const(_) => unimplemented!(),
             })
             .collect(),
@@ -735,8 +735,8 @@ impl TypeNode {
     ) -> bool {
         use TypeNode::*;
         match self {
-            TypeParam(type_param_ref) => {
-                relevant_generic_params.contains(&GenericParam::Type(*type_param_ref))
+            TypeParam(type_param) => {
+                relevant_generic_params.contains(&GenericParam::Type(*type_param))
             }
             Reference { lifetime, inner } => {
                 inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
@@ -903,8 +903,8 @@ impl TypeNode {
             Path(path) => {
                 path.inner_params(type_equality_sets, relevant_generic_params);
             }
-            TypeParam(type_param_ref) => {
-                relevant_generic_params.insert(GenericParam::Type(*type_param_ref));
+            TypeParam(type_param) => {
+                relevant_generic_params.insert(GenericParam::Type(*type_param));
             }
             _ => {}
         }
@@ -993,9 +993,8 @@ impl Path {
                             GenericArgument::Type(ty) => {
                                 ty.0.inner_params(type_equality_sets, relevant_generic_params)
                             }
-                            GenericArgument::Lifetime(lifetime_ref) => {
-                                relevant_generic_params
-                                    .insert(GenericParam::Lifetime(*lifetime_ref));
+                            GenericArgument::Lifetime(lifetime) => {
+                                relevant_generic_params.insert(GenericParam::Lifetime(*lifetime));
                             }
                             _ => unimplemented!(),
                         }
