@@ -91,34 +91,34 @@ impl LifetimeSubtypeMap {
     fn transitive_closure(&mut self) {
         let (mapping, index_lifetime_mapping) = self.create_mapping();
         let size = mapping.len();
-        let mut subtype_matrix = BoolMatrix::new(size);
-        let mut reached = BoolMatrix::new(size);
+        let mut subtype_graph = BoolMatrix::new(size);
+        let mut transitive_closure = BoolMatrix::new(size);
 
         // Setting initial states
         for idx in mapping {
-            subtype_matrix[idx] = true;
+            subtype_graph[idx] = true;
         }
 
-        for i in 0..subtype_matrix.size {
+        for i in 0..subtype_graph.size {
             // Every type is a subtype of itself
-            Self::transitive_closure_dfs(&mut subtype_matrix, &mut reached, i, i);
+            Self::transitive_closure_dfs(&mut subtype_graph, &mut transitive_closure, i, i);
         }
 
         // Update self with transitive closure
-        for subtype_index in 0..reached.size {
+        for subtype_index in 0..transitive_closure.size {
             let subtype = if let Some(&subtype) = index_lifetime_mapping.get(&subtype_index) {
                 subtype
             } else {
                 continue;
             };
-            for supertype_index in 0..reached.size {
+            for supertype_index in 0..transitive_closure.size {
                 let supertype =
                     if let Some(&supertype) = index_lifetime_mapping.get(&supertype_index) {
                         supertype
                     } else {
                         continue;
                     };
-                if reached[(subtype_index, supertype_index)] {
+                if transitive_closure[(subtype_index, supertype_index)] {
                     self.subtypes.insert((subtype, supertype));
                 }
             }
@@ -126,16 +126,16 @@ impl LifetimeSubtypeMap {
     }
 
     fn transitive_closure_dfs(
-        subtype_matrix: &mut BoolMatrix,
-        reached: &mut BoolMatrix,
+        subtype_graph: &mut BoolMatrix,
+        transitive_closure: &mut BoolMatrix,
         subtype: usize,
         supertype: usize,
     ) {
-        reached[(subtype, supertype)] = true;
-        for i in subtype..subtype_matrix.size {
+        transitive_closure[(subtype, supertype)] = true;
+        for i in subtype..subtype_graph.size {
             // if i is a supertype of supertype then i is a supertype of subtype
-            if subtype_matrix[(supertype, i)] && !reached[(supertype, i)] {
-                Self::transitive_closure_dfs(subtype_matrix, reached, subtype, i);
+            if subtype_graph[(supertype, i)] && !transitive_closure[(supertype, i)] {
+                Self::transitive_closure_dfs(subtype_graph, transitive_closure, subtype, i);
             }
         }
     }
