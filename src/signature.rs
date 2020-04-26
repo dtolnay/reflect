@@ -1,6 +1,8 @@
 use crate::{
     GenericArgument, GenericParam, Generics, GlobalCounter, Lifetime, ParamMap, Path,
-    PathArguments, Type, TypeNode, TypeParamBound, LIFETIMES,
+    PathArguments, Type,
+    TypeNode::{self, *},
+    TypeParamBound, LIFETIMES,
 };
 use std::collections::BTreeMap;
 use std::default::Default;
@@ -140,8 +142,7 @@ impl Signature {
     /// Should be called by Function::get_function after the all paramters are inserted
     pub(crate) fn insert_elided_lifetimes(&mut self) {
         use Receiver::*;
-        use TypeNode::*;
-        let mut generics = &mut self.generics;
+        let generics = &mut self.generics;
         // We need to insert the elided lifetimes first in the params so we
         // temporarily swap the params with an empty Vec, and then extend that
         // Vec with the old params in the end
@@ -150,7 +151,7 @@ impl Signature {
         match &mut self.receiver {
             NoSelf => {
                 for ty in self.inputs.iter_mut() {
-                    ty.0.insert_new_lifetimes(&mut generics);
+                    ty.0.insert_new_lifetimes(&mut generics.params);
                 }
                 if self.inputs.len() == 1 {
                     match &mut self.inputs[0].0 {
@@ -160,25 +161,25 @@ impl Signature {
                         } if !inner.is_reference() => self
                             .output
                             .0
-                            .insert_new_lifetimes2(*lifetime, &mut generics),
+                            .insert_new_lifetimes2(*lifetime, &mut generics.params),
                         ReferenceMut {
                             lifetime: Some(lifetime),
                             inner,
                         } if !inner.is_reference() => self
                             .output
                             .0
-                            .insert_new_lifetimes2(*lifetime, &mut generics),
+                            .insert_new_lifetimes2(*lifetime, &mut generics.params),
                         _ => {}
                     }
                 } else {
-                    self.output.0.insert_new_lifetimes(&mut generics);
+                    self.output.0.insert_new_lifetimes(&mut generics.params);
                 }
             }
             SelfByValue => {
                 for ty in self.inputs.iter_mut() {
-                    ty.0.insert_new_lifetimes(&mut generics);
+                    ty.0.insert_new_lifetimes(&mut generics.params);
                 }
-                self.output.0.insert_new_lifetimes(&mut generics);
+                self.output.0.insert_new_lifetimes(&mut generics.params);
             }
             SelfByReference(option_lifetime) | SelfByReferenceMut(option_lifetime) => {
                 let lifetime = if let Some(lifetime) = option_lifetime.0 {
@@ -190,9 +191,11 @@ impl Signature {
                 };
                 option_lifetime.0 = Some(lifetime);
                 for ty in self.inputs.iter_mut() {
-                    ty.0.insert_new_lifetimes(&mut generics);
+                    ty.0.insert_new_lifetimes(&mut generics.params);
                 }
-                self.output.0.insert_new_lifetimes2(lifetime, &mut generics);
+                self.output
+                    .0
+                    .insert_new_lifetimes2(lifetime, &mut generics.params);
             }
         }
         // Insert the old params back into place
@@ -201,78 +204,75 @@ impl Signature {
 }
 
 impl TypeNode {
-    fn insert_new_lifetimes(&mut self, generics: &mut Generics) {
-        use TypeNode::*;
+    fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
         match self {
             Reference { inner, lifetime } => {
                 if lifetime.is_none() {
                     let new_lifetime = LIFETIMES.count();
-                    generics.params.push(GenericParam::Lifetime(new_lifetime));
+                    params.push(GenericParam::Lifetime(new_lifetime));
                     *lifetime = Some(new_lifetime)
                 };
-                inner.insert_new_lifetimes(generics);
+                inner.insert_new_lifetimes(params);
             }
             ReferenceMut { inner, lifetime } => {
                 if lifetime.is_none() {
                     let new_lifetime = LIFETIMES.count();
-                    generics.params.push(GenericParam::Lifetime(new_lifetime));
+                    params.push(GenericParam::Lifetime(new_lifetime));
                     *lifetime = Some(new_lifetime)
                 };
-                inner.insert_new_lifetimes(generics);
+                inner.insert_new_lifetimes(params);
             }
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.0.insert_new_lifetimes(generics);
+                    ty.0.insert_new_lifetimes(params);
                 }
             }
-            Dereference(node) => node.insert_new_lifetimes(generics),
+            Dereference(node) => node.insert_new_lifetimes(params),
             TraitObject(bounds) => {
                 for bound in bounds.iter_mut() {
                     if let TypeParamBound::Trait(bound) = bound {
-                        bound.path.insert_new_lifetimes(generics);
+                        bound.path.insert_new_lifetimes(params);
                     }
                 }
             }
-            Path(path) => path.insert_new_lifetimes(generics),
+            Path(path) => path.insert_new_lifetimes(params),
             _ => {}
         }
     }
 
-    fn insert_new_lifetimes2(&mut self, new_lifetime: Lifetime, generics: &mut Generics) {
-        use TypeNode::*;
+    fn insert_new_lifetimes2(&mut self, new_lifetime: Lifetime, params: &mut Vec<GenericParam>) {
         match self {
             Reference { inner, lifetime } => {
                 if lifetime.is_none() {
                     *lifetime = Some(new_lifetime);
                 };
-                inner.insert_new_lifetimes(generics);
+                inner.insert_new_lifetimes(params);
             }
             ReferenceMut { inner, lifetime } => {
                 if lifetime.is_none() {
                     *lifetime = Some(new_lifetime);
                 };
-                inner.insert_new_lifetimes(generics);
+                inner.insert_new_lifetimes(params);
             }
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.0.insert_new_lifetimes2(new_lifetime, generics);
+                    ty.0.insert_new_lifetimes2(new_lifetime, params);
                 }
             }
-            Dereference(node) => node.insert_new_lifetimes2(new_lifetime, generics),
+            Dereference(node) => node.insert_new_lifetimes2(new_lifetime, params),
             TraitObject(bounds) => {
                 for bound in bounds.iter_mut() {
                     if let TypeParamBound::Trait(bound) = bound {
-                        bound.path.insert_new_lifetimes2(new_lifetime, generics);
+                        bound.path.insert_new_lifetimes2(new_lifetime, params);
                     }
                 }
             }
-            Path(path) => path.insert_new_lifetimes2(new_lifetime, generics),
+            Path(path) => path.insert_new_lifetimes2(new_lifetime, params),
             _ => {}
         }
     }
 
     fn is_reference(&self) -> bool {
-        use TypeNode::*;
         match self {
             Reference { .. } | ReferenceMut { .. } => true,
             _ => false,
@@ -281,14 +281,14 @@ impl TypeNode {
 }
 
 impl Path {
-    fn insert_new_lifetimes(&mut self, generics: &mut Generics) {
+    fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
         for segment in self.path.iter_mut() {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
                     for arg in args.args.args.iter_mut() {
                         if let GenericArgument::Type(ty) = arg {
-                            ty.0.insert_new_lifetimes(generics)
+                            ty.0.insert_new_lifetimes(params)
                         }
                     }
                 }
@@ -299,14 +299,14 @@ impl Path {
         }
     }
 
-    fn insert_new_lifetimes2(&mut self, lifetime: Lifetime, generics: &mut Generics) {
+    fn insert_new_lifetimes2(&mut self, lifetime: Lifetime, params: &mut Vec<GenericParam>) {
         for segment in self.path.iter_mut() {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
                     for arg in args.args.args.iter_mut() {
                         if let GenericArgument::Type(ty) = arg {
-                            ty.0.insert_new_lifetimes2(lifetime, generics)
+                            ty.0.insert_new_lifetimes2(lifetime, params)
                         }
                     }
                 }
