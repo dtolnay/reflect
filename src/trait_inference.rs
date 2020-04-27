@@ -2,7 +2,7 @@ use crate::{
     CompleteFunction, CompleteImpl, GenericArgument, GenericArguments, GenericConstraint,
     GenericParam, GlobalBorrow, Lifetime, LifetimeDef, LifetimeEqualitySetRef, Parent, ParentKind,
     Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef,
-    TypeNode, TypeParamBound, TypedIndex, INVOKES,
+    TypeNode, TypeParamBound, TypedIndex, INVOKES, VALUES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -819,25 +819,63 @@ impl CompleteFunction {
                     )
                 });
 
-                // Add parent constraints
-                // FIXME: Add constraints from parent type
-                if let Some(generics) = parent.as_ref().map(|parent| &parent.generics) {
-                    generics.constraints.iter().for_each(|constraint| {
-                        if !constraints.contains(constraint) {
-                            constraints.insert(constraint.clone());
-                        };
-                    })
-                };
-
-                // Add function constraints
-                // FIXME: Add constraints from types in signature
-                sig.generics.constraints.iter().for_each(|constraint| {
-                    if !constraints.contains(constraint) {
-                        constraints.insert(constraint.clone());
-                    };
-                })
+                self.add_constraints(constraints);
             }
         });
+
+        self.set_output_equal_to_last_value(
+            constraints,
+            type_equality_sets,
+            lifetime_equality_sets,
+            subtypes,
+        );
+    }
+
+    fn add_constraints(&self, constraints: &mut ConstraintSet) {
+        // Add parent constraints
+        // FIXME: Add constraints from parent type
+        if let Some(generics) = self.f.parent.as_ref().map(|parent| &parent.generics) {
+            generics.constraints.iter().for_each(|constraint| {
+                if !constraints.contains(constraint) {
+                    constraints.insert(constraint.clone());
+                };
+            })
+        };
+
+        // Add function constraints
+        // FIXME: Add constraints from types in signature
+        self.f
+            .sig
+            .generics
+            .constraints
+            .iter()
+            .for_each(|constraint| {
+                if !constraints.contains(constraint) {
+                    constraints.insert(constraint.clone());
+                };
+            })
+    }
+
+    fn set_output_equal_to_last_value(
+        &self,
+        constraints: &mut ConstraintSet,
+        type_equality_sets: &mut TypeEqualitySets,
+        lifetime_equality_sets: &mut LifetimeEqualitySets,
+        subtypes: &mut LifetimeSubtypeMap,
+    ) {
+        // The type of the outgoing value must be the same as the return value
+        if self.values.end.0 > self.values.start.0 {
+            let return_value_type =
+                VALUES.with_borrow(|values| values[self.values.end.0 - 1].get_type());
+
+            type_equality_sets.insert_types_as_equal(
+                self.f.sig.output.0.clone(),
+                return_value_type.0,
+                constraints,
+                lifetime_equality_sets,
+                subtypes,
+            )
+        }
     }
 }
 
