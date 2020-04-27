@@ -1,4 +1,4 @@
-use crate::{Invoke, MacroInvoke, TypeEqualitySet, ValueNode};
+use crate::{Invoke, LifetimeEqualitySet, MacroInvoke, TypeEqualitySet, ValueNode};
 
 pub(crate) trait Push {
     type Element: TypedIndex;
@@ -20,6 +20,7 @@ where
 pub(crate) trait TypedIndex {
     type Index;
     fn index(i: usize) -> Self::Index;
+    fn from_index(i: Self::Index) -> usize;
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -30,6 +31,10 @@ impl TypedIndex for ValueNode {
 
     fn index(i: usize) -> Self::Index {
         ValueRef(i)
+    }
+
+    fn from_index(i: Self::Index) -> usize {
+        i.0
     }
 }
 
@@ -42,6 +47,10 @@ impl TypedIndex for Invoke {
     fn index(i: usize) -> Self::Index {
         InvokeRef(i)
     }
+
+    fn from_index(i: Self::Index) -> usize {
+        i.0
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -53,9 +62,14 @@ impl TypedIndex for MacroInvoke {
     fn index(i: usize) -> Self::Index {
         MacroInvokeRef(i)
     }
+
+    fn from_index(i: Self::Index) -> usize {
+        i.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+
 pub(crate) struct TypeEqualitySetRef(pub usize);
 
 impl TypedIndex for TypeEqualitySet {
@@ -63,5 +77,24 @@ impl TypedIndex for TypeEqualitySet {
 
     fn index(i: usize) -> Self::Index {
         TypeEqualitySetRef(i)
+    }
+
+    fn from_index(i: Self::Index) -> usize {
+        i.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub(crate) struct LifetimeEqualitySetRef(pub usize);
+
+impl TypedIndex for LifetimeEqualitySet {
+    type Index = LifetimeEqualitySetRef;
+
+    fn index(i: usize) -> Self::Index {
+        LifetimeEqualitySetRef(i)
+    }
+
+    fn from_index(i: Self::Index) -> usize {
+        i.0
     }
 }

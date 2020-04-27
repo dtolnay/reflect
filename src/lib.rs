@@ -372,19 +372,22 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, PredicateType, TraitBound,
-    TypeParam, TypeParamBound,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, LifetimeDef, PredicateType,
+    TraitBound, TypeParam, TypeParamBound,
 };
 use crate::global_data::{
     GlobalBorrow, GlobalCounter, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
 };
 use crate::ident::Ident;
-use crate::index::{InvokeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex, ValueRef};
+use crate::index::{
+    InvokeRef, LifetimeEqualitySetRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex,
+    ValueRef,
+};
 use crate::node::ValueNode;
-use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};
+use crate::path::{PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
-use crate::trait_inference::TypeEqualitySet;
+use crate::trait_inference::{LifetimeEqualitySet, TypeEqualitySet};
 use crate::ty::TypeNode;
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

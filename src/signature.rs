@@ -158,14 +158,14 @@ impl Signature {
                         Reference {
                             lifetime: Some(lifetime),
                             inner,
-                        } if !inner.is_reference() => self
+                        } if !inner.has_lifetimes() => self
                             .output
                             .0
                             .insert_new_lifetimes2(*lifetime, &mut generics.params),
                         ReferenceMut {
                             lifetime: Some(lifetime),
                             inner,
-                        } if !inner.is_reference() => self
+                        } if !inner.has_lifetimes() => self
                             .output
                             .0
                             .insert_new_lifetimes2(*lifetime, &mut generics.params),
@@ -272,9 +272,16 @@ impl TypeNode {
         }
     }
 
-    fn is_reference(&self) -> bool {
+    fn has_lifetimes(&self) -> bool {
         match self {
             Reference { .. } | ReferenceMut { .. } => true,
+            Tuple(types) => types.iter().any(|ty| ty.0.has_lifetimes()),
+            Dereference(node) => node.has_lifetimes(),
+            TraitObject(bounds) => bounds.iter().any(|bound| match bound {
+                TypeParamBound::Trait(bound) => bound.path.has_lifetimes(),
+                TypeParamBound::Lifetime(_) => true,
+            }),
+            Path(path) => path.has_lifetimes(),
             _ => false,
         }
     }
@@ -311,9 +318,23 @@ impl Path {
                     }
                 }
                 PathArguments::Parenthesized(args) => {
-                    unimplemented!("Path::insert_elided_lifetimes: PathArguments::Parenthesized")
+                    unimplemented!("Path::insert_elided_lifetimes2: PathArguments::Parenthesized")
                 }
             }
         }
+    }
+
+    fn has_lifetimes(&self) -> bool {
+        self.path.iter().any(|segment| match &segment.args {
+            PathArguments::None => false,
+            PathArguments::AngleBracketed(args) => args.args.args.iter().any(|arg| match arg {
+                GenericArgument::Type(ty) => ty.0.has_lifetimes(),
+                GenericArgument::Lifetime(_) => true,
+                _ => unimplemented!(),
+            }),
+            PathArguments::Parenthesized(args) => {
+                unimplemented!("Path::has_lifetimes: PathArguments::Parenthesized")
+            }
+        })
     }
 }

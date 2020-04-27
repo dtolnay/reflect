@@ -1,8 +1,8 @@
 use crate::{
-    AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Lifetime, Parent, ParentKind,
+    CompleteFunction, CompleteImpl, GenericArgument, GenericArguments, GenericConstraint,
+    GenericParam, GlobalBorrow, Lifetime, LifetimeDef, LifetimeEqualitySetRef, Parent, ParentKind,
     Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef,
-    TypeNode, TypeParamBound, INVOKES,
+    TypeNode, TypeParamBound, TypedIndex, INVOKES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -11,9 +11,14 @@ use seahash::SeaHasher;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
+use std::hash::Hash;
 use std::iter::Extend;
 use std::ops::{Index, IndexMut};
 use std::rc::Rc;
+
+pub(crate) struct EqualitySet<T> {
+    pub(crate) set: HashSet<T, BuildHasherDefault<SeaHasher>>,
+}
 
 /// A set of types that are considered to be equal. An example of how it is used:
 /// Say we have a function: fn func<T>(maybe: Option<T>) {}, and we call this
@@ -22,19 +27,31 @@ use std::rc::Rc;
 /// In set one, we have { Option<T>, ::std::option::Option<String>, .. }
 /// In set two, we have { T, String, .. }. Both sets may contain more than two
 /// types, since more than two types may be considered equal
-pub(crate) struct TypeEqualitySet {
-    pub(crate) set: HashSet<Type, BuildHasherDefault<SeaHasher>>,
-}
+pub(crate) type TypeEqualitySet = EqualitySet<Type>;
+
+pub(crate) type LifetimeEqualitySet = EqualitySet<Lifetime>;
 
 /// A set of constraints used in the where clause in the final impl
 pub(crate) struct ConstraintSet {
     pub(crate) set: HashSet<GenericConstraint, BuildHasherDefault<SeaHasher>>,
 }
 
+pub(crate) struct EqualitySets<SetRef, T> {
+    pub(crate) set_map: HashMap<T, SetRef, BuildHasherDefault<SeaHasher>>,
+    pub(crate) sets: Vec<EqualitySet<T>>,
+}
+
 // A mapping between types and it's corresponding set of equal types
-pub(crate) struct TypeEqualitySets {
-    pub(crate) set_map: HashMap<Type, TypeEqualitySetRef, BuildHasherDefault<SeaHasher>>,
-    pub(crate) sets: Vec<TypeEqualitySet>,
+pub(crate) type TypeEqualitySets = EqualitySets<TypeEqualitySetRef, Type>;
+
+// A mapping between types and it's corresponding set of equal types
+pub(crate) type LifetimeEqualitySets = EqualitySets<LifetimeEqualitySetRef, Lifetime>;
+
+pub(crate) struct ConcreteMapsAndSets {
+    most_concrete_type_map: BTreeMap<TypeEqualitySetRef, TypeNode>,
+    most_concrete_lifetime_map: BTreeMap<LifetimeEqualitySetRef, Lifetime>,
+    type_equality_sets: TypeEqualitySets,
+    lifetime_equality_sets: LifetimeEqualitySets,
 }
 
 pub(crate) struct TraitInferenceResult {
@@ -88,9 +105,24 @@ impl LifetimeSubtypeMap {
         self.subtypes.insert((subtype, supertype));
     }
 
+    fn insert_as_equal(&mut self, subtype: Lifetime, supertype: Lifetime) {
+        self.insert(subtype, supertype);
+        self.insert(supertype, subtype);
+    }
+
+    fn add_lifetime_bounds(&mut self, constraints: &ConstraintSet) {
+        constraints.set.iter().for_each(|constraint| {
+            if let GenericConstraint::Lifetime(lifetime_def) = constraint {
+                lifetime_def
+                    .bounds
+                    .iter()
+                    .for_each(|&supertype| self.insert(lifetime_def.lifetime, supertype))
+            }
+        });
+    }
+
     fn transitive_closure(&mut self) {
-        let (mapping, index_lifetime_mapping) = self.create_mapping();
-        let size = mapping.len();
+        let (mapping, index_lifetime_mapping, size) = self.create_mapping();
         let mut subtype_graph = BoolMatrix::new(size);
         let mut transitive_closure = BoolMatrix::new(size);
 
@@ -142,7 +174,7 @@ impl LifetimeSubtypeMap {
 
     /// Map all lifetimes to a unique index starting at zero
     /// The static lifetime always gets mapped to 0
-    fn create_mapping(&self) -> (Vec<(usize, usize)>, BTreeMap<usize, Lifetime>) {
+    fn create_mapping(&self) -> (Vec<(usize, usize)>, BTreeMap<usize, Lifetime>, usize) {
         let mut lifetime_index_mapping = BTreeMap::new();
         let mut index_lifetime_mapping = BTreeMap::new();
         let mut mapping = Vec::new();
@@ -172,7 +204,7 @@ impl LifetimeSubtypeMap {
         for (lifetime, index) in lifetime_index_mapping {
             index_lifetime_mapping.insert(index, lifetime);
         }
-        (mapping, index_lifetime_mapping)
+        (mapping, index_lifetime_mapping, counter)
     }
 }
 
@@ -190,21 +222,45 @@ impl ConstraintSet {
     fn contains(&self, constraint: &GenericConstraint) -> bool {
         self.set.contains(constraint)
     }
+
+    fn filter_constraints(
+        self,
+        relevant_generic_params: &BTreeSet<GenericParam>,
+        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+    ) -> Self {
+        ConstraintSet {
+            set: self
+                .set
+                .into_iter()
+                .map(|mut constraint| {
+                    let is_relevant =
+                        constraint.make_relevant(concrete_maps_and_sets, relevant_generic_params);
+                    (constraint, is_relevant)
+                })
+                .filter_map(
+                    |(constraint, is_relevant)| if is_relevant { Some(constraint) } else { None },
+                )
+                .collect(),
+        }
+    }
 }
 
-impl TypeEqualitySet {
+impl<T> EqualitySet<T>
+where
+    T: Eq + Hash,
+{
     fn new() -> Self {
-        TypeEqualitySet {
+        EqualitySet {
             set: HashSet::default(),
         }
     }
 
-    fn contains(&self, ty: &Type) -> bool {
-        self.set.contains(ty)
+    fn contains(&self, t: &T) -> bool {
+        self.set.contains(t)
     }
 
-    fn insert(&mut self, ty: Type) -> bool {
-        self.set.insert(ty)
+    fn insert(&mut self, t: T) -> bool {
+        self.set.insert(t)
     }
 }
 
@@ -217,12 +273,8 @@ impl TypeEqualitySetRef {
     /// concrete than U, and thus Option<String> is more concrete than Option<U>,
     /// and thus the most concrete type we can get startng from the first set
     /// is Option<String>
-    fn make_most_concrete(
-        &self,
-        most_concrete_type_map: &mut BTreeMap<Self, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> TypeNode {
-        let most_concrete = most_concrete_type_map.get(self);
+    fn make_most_concrete(&self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) -> TypeNode {
+        let most_concrete = concrete_maps_and_sets.most_concrete_type_map.get(self);
         match most_concrete {
             Some(node) => node.clone(),
             None => {
@@ -235,69 +287,134 @@ impl TypeEqualitySetRef {
                 // that is the same set as the current one, so we need a way to break the
                 // loop. Since this method always checks the most_concrete_type_map first,
                 // it will just return Infer, in case we have a self referential loop.
-                most_concrete_type_map.insert(*self, TypeNode::Infer);
+                concrete_maps_and_sets
+                    .most_concrete_type_map
+                    .insert(*self, TypeNode::Infer);
 
-                let set = &type_equality_sets.sets[self.0].set;
+                let set = std::mem::replace(
+                    &mut concrete_maps_and_sets.type_equality_sets.sets[self.0].set,
+                    HashSet::default(),
+                );
                 let mut iterator = set.iter().peekable();
-                let first = iterator.next().unwrap().clone().0;
+                let mut first = iterator.next().unwrap().clone().0;
                 let most_concrete = if iterator.peek().is_none() {
-                    first.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+                    first.make_most_concrete_inner(concrete_maps_and_sets);
+                    first
                 } else {
                     iterator.fold(first, |current_most_concrete, ty| {
                         TypeNode::make_most_concrete_from_pair(
                             current_most_concrete,
                             ty.clone().0,
-                            most_concrete_type_map,
-                            type_equality_sets,
+                            concrete_maps_and_sets,
                         )
                     })
                 };
-                most_concrete_type_map.insert(*self, most_concrete.clone());
+                concrete_maps_and_sets
+                    .most_concrete_type_map
+                    .insert(*self, most_concrete.clone());
+
+                concrete_maps_and_sets.type_equality_sets.sets[self.0].set = set;
                 most_concrete
             }
         }
     }
 }
 
-impl TypeEqualitySets {
+impl<SetRef, T> EqualitySets<SetRef, T>
+where
+    SetRef: Copy,
+    T: Eq + Hash + Clone,
+    EqualitySet<T>: TypedIndex<Index = SetRef>,
+{
     fn new() -> Self {
-        TypeEqualitySets {
+        EqualitySets {
             set_map: HashMap::default(),
             sets: Vec::new(),
         }
     }
 
-    fn contains_key(&self, ty: &Type) -> bool {
-        self.set_map.contains_key(ty)
+    fn contains_key(&self, t: &T) -> bool {
+        self.set_map.contains_key(t)
     }
 
-    fn get_set(&self, ty: &Type) -> Option<&TypeEqualitySet> {
-        self.set_map.get(ty).map(|set_ref| &self.sets[set_ref.0])
+    fn get_set(&self, t: &T) -> Option<&EqualitySet<T>> {
+        self.set_map
+            .get(t)
+            .map(|set_ref| &self.sets[<EqualitySet<T> as TypedIndex>::from_index(*set_ref)])
     }
 
-    pub(crate) fn get_set_ref(&self, ty: &Type) -> Option<TypeEqualitySetRef> {
-        self.set_map.get(ty).copied()
+    pub(crate) fn get_set_ref(&self, t: &T) -> Option<SetRef> {
+        self.set_map.get(t).copied()
     }
 
-    fn new_set(&mut self, ty: Type) -> TypeEqualitySetRef {
-        let mut set = TypeEqualitySet::new();
-        set.insert(ty.clone());
+    fn new_set(&mut self, t: T) -> SetRef {
+        let mut set = EqualitySet::new();
+        set.insert(t.clone());
         let set_ref = self.sets.index_push(set);
 
-        self.set_map.insert(ty, set_ref);
+        self.set_map.insert(t, set_ref);
         set_ref
     }
 
+    fn insert_as_equal(&mut self, t1: T, t2: T) {
+        match (self.set_map.get(&t1), self.set_map.get(&t2)) {
+            (Some(&set_ref1), Some(&set_ref2)) => {
+                let set2 = std::mem::replace(
+                    &mut self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref2)],
+                    EqualitySet::new(),
+                );
+                let set1 = &mut self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref1)];
+                for t in set2.set.iter() {
+                    if let Some(set_ref) = self.set_map.get_mut(t) {
+                        *set_ref = set_ref1
+                    }
+                }
+                set1.set.extend(set2.set);
+            }
+            (Some(&set_ref), None) => {
+                self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref)].insert(t2.clone());
+                self.set_map.insert(t2, set_ref);
+            }
+            (None, Some(&set_ref)) => {
+                self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref)].insert(t1.clone());
+                self.set_map.insert(t1, set_ref);
+            }
+            (None, None) => {
+                let mut set = EqualitySet::new();
+                set.insert(t2.clone());
+                set.insert(t1.clone());
+                let set_ref = self.sets.index_push(set);
+                self.set_map.insert(t2, set_ref);
+                self.set_map.insert(t1, set_ref);
+            }
+        }
+    }
+}
+
+impl TypeEqualitySets {
     /// Insert two types as equal to eachother, and in case of TraitObjects, e.g.
     /// ty1: T, ty2: dyn Clone, insert T: Clone as constraint.
-    fn insert_as_equal_to(&mut self, ty1: Type, ty2: Type, constraints: &mut ConstraintSet) {
+    fn insert_types_as_equal(
+        &mut self,
+        ty1: Type,
+        ty2: Type,
+        constraints: &mut ConstraintSet,
+        lifetime_equality_sets: &mut LifetimeEqualitySets,
+        subtypes: &mut LifetimeSubtypeMap,
+    ) {
         use TypeNode::*;
         match (&ty1.0, &ty2.0) {
             (TraitObject(bounds1), TraitObject(bounds2)) => {
                 if bounds1.len() != bounds2.len() {
-                    panic!("TypeEqualitySets::insert_as_equal_to: TraitObjects have different number of bounds")
+                    panic!("TypeEqualitySets::insert_types_as_equal: TraitObjects have different number of bounds")
                 }
-                return self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
+                return self.insert_inner_type_as_equal_to(
+                    &ty1,
+                    &ty2,
+                    constraints,
+                    lifetime_equality_sets,
+                    subtypes,
+                );
             }
             (TraitObject(bounds), _) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
@@ -317,51 +434,60 @@ impl TypeEqualitySets {
             }
             // A reference and a mutable reference are not equal, but a mutable reference may conform to a
             // normal reference, so the inner types may be considered equal
-            (Reference { inner: inner1, .. }, ReferenceMut { inner: inner2, .. }) => {
-                return self.insert_as_equal_to(
+            (
+                Reference {
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                ReferenceMut {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => {
+                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
+                }
+                return self.insert_types_as_equal(
                     Type(*inner1.clone()),
                     Type(*inner2.clone()),
                     constraints,
-                )
+                    lifetime_equality_sets,
+                    subtypes,
+                );
             }
-            (ReferenceMut { inner: inner1, .. }, Reference { inner: inner2, .. }) => {
-                return self.insert_as_equal_to(
+            (
+                ReferenceMut {
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                Reference {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => {
+                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
+                }
+                return self.insert_types_as_equal(
                     Type(*inner1.clone()),
                     Type(*inner2.clone()),
                     constraints,
-                )
+                    lifetime_equality_sets,
+                    subtypes,
+                );
             }
             _ => (),
         }
-        self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints);
-        match (self.set_map.get(&ty1), self.set_map.get(&ty2)) {
-            (Some(&set_ref1), Some(&set_ref2)) => {
-                let set2 = std::mem::replace(&mut self.sets[set_ref2.0], TypeEqualitySet::new());
-                let set1 = &mut self.sets[set_ref1.0];
-                for ty in set2.set.iter() {
-                    if let Some(set_ref) = self.set_map.get_mut(ty) {
-                        *set_ref = set_ref1
-                    }
-                }
-                set1.set.extend(set2.set);
-            }
-            (Some(&set_ref), None) => {
-                self.sets[set_ref.0].insert(ty2.clone());
-                self.set_map.insert(ty2, set_ref);
-            }
-            (None, Some(&set_ref)) => {
-                self.sets[set_ref.0].insert(ty1.clone());
-                self.set_map.insert(ty1, set_ref);
-            }
-            (None, None) => {
-                let mut set = TypeEqualitySet::new();
-                set.insert(ty2.clone());
-                set.insert(ty1.clone());
-                let set_ref = self.sets.index_push(set);
-                self.set_map.insert(ty2, set_ref);
-                self.set_map.insert(ty1, set_ref);
-            }
-        }
+        self.insert_inner_type_as_equal_to(
+            &ty1,
+            &ty2,
+            constraints,
+            lifetime_equality_sets,
+            subtypes,
+        );
+        self.insert_as_equal(ty1, ty2)
     }
 
     /// Insert the inner types of two types as equal to eachother
@@ -372,44 +498,98 @@ impl TypeEqualitySets {
         ty1: &Type,
         ty2: &Type,
         constraints: &mut ConstraintSet,
+        lifetime_equality_sets: &mut LifetimeEqualitySets,
+        subtypes: &mut LifetimeSubtypeMap,
     ) {
         use TypeNode::*;
         match (&ty1.0, &ty2.0) {
             (Tuple(types1), Tuple(types2)) => {
                 if types1.len() == types2.len() {
-                    types1.iter().zip(types2.iter()).for_each(|(ty1, t2)| {
-                        self.insert_as_equal_to(ty1.clone(), t2.clone(), constraints)
+                    types1.iter().zip(types2.iter()).for_each(|(ty1, ty2)| {
+                        self.insert_types_as_equal(
+                            ty1.clone(),
+                            ty2.clone(),
+                            constraints,
+                            lifetime_equality_sets,
+                            subtypes,
+                        )
                     })
                 } else {
                     panic!("TypeEqualitySets::insert_inner_type_as_equal_to: Tuples have different number of arguments")
                 }
             }
-            (Reference { inner: inner1, .. }, Reference { inner: inner2, .. }) => {
-                self.insert_as_equal_to(Type(*inner1.clone()), Type(*inner2.clone()), constraints)
-            }
-            (ReferenceMut { inner: inner1, .. }, ReferenceMut { inner: inner2, .. }) => {
-                self.insert_as_equal_to(Type(*inner1.clone()), Type(*inner2.clone()), constraints)
-            }
-            (Path(path1), Path(path2)) => {
-                self.insert_path_arguments_as_equal_to(path1, path2, constraints);
-            }
-            (TraitObject(bounds1), TraitObject(bounds2)) => {
-                bounds1.iter().zip(bounds2.iter()).for_each(
-                    |bounds| {
-                        if let (
-                            TypeParamBound::Trait(trait_bound1),
-                            TypeParamBound::Trait(trait_bound2),
-                        ) = bounds
-                        {
-                            self.insert_path_arguments_as_equal_to(
-                                &trait_bound1.path,
-                                &trait_bound2.path,
-                                constraints,
-                            );
-                        }
-                    }, //FIXME properly deal with lifetimes
+            (
+                Reference {
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                Reference {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => {
+                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
+                }
+                self.insert_types_as_equal(
+                    Type(*inner1.clone()),
+                    Type(*inner2.clone()),
+                    constraints,
+                    lifetime_equality_sets,
+                    subtypes,
                 )
             }
+            (
+                ReferenceMut {
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                ReferenceMut {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => {
+                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
+                }
+                self.insert_types_as_equal(
+                    Type(*inner1.clone()),
+                    Type(*inner2.clone()),
+                    constraints,
+                    lifetime_equality_sets,
+                    subtypes,
+                )
+            }
+            (Path(path1), Path(path2)) => {
+                self.insert_path_arguments_as_equal_to(
+                    path1,
+                    path2,
+                    constraints,
+                    lifetime_equality_sets,
+                    subtypes,
+                );
+            }
+            (TraitObject(bounds1), TraitObject(bounds2)) => bounds1
+                .iter()
+                .zip(bounds2.iter())
+                .for_each(|bounds| match bounds {
+                    (TypeParamBound::Trait(trait_bound1), TypeParamBound::Trait(trait_bound2)) => {
+                        self.insert_path_arguments_as_equal_to(
+                            &trait_bound1.path,
+                            &trait_bound2.path,
+                            constraints,
+                            lifetime_equality_sets,
+                            subtypes,
+                        );
+                    }
+                    (TypeParamBound::Lifetime(lifetime1), TypeParamBound::Lifetime(lifetime2)) => {
+                        subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                        lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
+                    }
+                    _ => panic!("TraitObjects have different bound types"),
+                }),
             _ => (),
         }
     }
@@ -435,6 +615,8 @@ impl TypeEqualitySets {
         path1: &Path,
         path2: &Path,
         constraints: &mut ConstraintSet,
+        lifetime_equality_sets: &mut LifetimeEqualitySets,
+        subtypes: &mut LifetimeSubtypeMap,
     ) {
         let (segment1, segment2) = (
             &path1.path[path1.path.len() - 1],
@@ -450,8 +632,20 @@ impl TypeEqualitySets {
                     .iter()
                     .zip(args2.args.args.iter())
                     .for_each(|args| match args {
-                        (GenericArgument::Type(ty1), GenericArgument::Type(ty2)) => {
-                            self.insert_as_equal_to(ty1.clone(), ty2.clone(), constraints)
+                        (GenericArgument::Type(ty1), GenericArgument::Type(ty2)) => self
+                            .insert_types_as_equal(
+                                ty1.clone(),
+                                ty2.clone(),
+                                constraints,
+                                lifetime_equality_sets,
+                                subtypes,
+                            ),
+                        (
+                            GenericArgument::Lifetime(lifetime1),
+                            GenericArgument::Lifetime(lifetime2),
+                        ) => {
+                            subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                            lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
                         }
                         _ => {
                             unimplemented!("TypeEqualitySets::insert_inner_type_as_equal_to: Path")
@@ -471,12 +665,14 @@ impl TypeEqualitySets {
 
 impl CompleteImpl {
     pub(crate) fn compute_trait_bounds(&self) -> TraitInferenceResult {
+        // TODO: Split into more functions
         let mut constraints = ConstraintSet::new();
         let mut type_equality_sets = TypeEqualitySets::new();
+        let mut lifetime_equality_sets = LifetimeEqualitySets::new();
         let mut original_generic_params = Vec::new();
         let mut original_data_struct_args = Vec::new();
         let mut original_trait_args = Vec::new();
-        let mut most_concrete_type_map = BTreeMap::new();
+        let mut subtypes = LifetimeSubtypeMap::new();
 
         // data structure generics
         if let Type(TypeNode::DataStructure { ref generics, .. }) = self.ty {
@@ -514,40 +710,30 @@ impl CompleteImpl {
         };
 
         self.functions.iter().for_each(|function| {
-            function.compute_trait_bounds(&mut constraints, &mut type_equality_sets)
+            function.compute_trait_bounds(
+                &mut constraints,
+                &mut type_equality_sets,
+                &mut lifetime_equality_sets,
+                &mut subtypes,
+            )
         });
 
-        let relevant_generic_params = get_relevant_generic_params(
+        subtypes.add_lifetime_bounds(&constraints);
+        subtypes.transitive_closure();
+
+        let (relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
             &original_generic_params,
-            &mut most_concrete_type_map,
-            &mut type_equality_sets,
+            type_equality_sets,
+            lifetime_equality_sets,
         );
 
-        let constraints = constraints
-            .set
-            .into_iter()
-            .filter_map(|constraint| {
-                constraint.make_relevant(
-                    &mut most_concrete_type_map,
-                    &type_equality_sets,
-                    &relevant_generic_params,
-                )
-            })
-            .collect();
+        let constraints =
+            constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
 
-        let constraints = ConstraintSet { set: constraints };
+        let data_struct_args =
+            get_data_struct_args(original_data_struct_args, &mut concrete_maps_and_sets);
 
-        let data_struct_args = get_data_struct_args(
-            original_data_struct_args,
-            &mut most_concrete_type_map,
-            &type_equality_sets,
-        );
-
-        let trait_args = get_trait_args(
-            original_trait_args,
-            &mut most_concrete_type_map,
-            &type_equality_sets,
-        );
+        let trait_args = get_trait_args(original_trait_args, &mut concrete_maps_and_sets);
 
         TraitInferenceResult {
             constraints,
@@ -563,6 +749,8 @@ impl CompleteFunction {
         &self,
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
+        lifetime_equality_sets: &mut LifetimeEqualitySets,
+        subtypes: &mut LifetimeSubtypeMap,
     ) {
         use Receiver::*;
         INVOKES.with_borrow(|invokes| {
@@ -587,11 +775,14 @@ impl CompleteFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                    Type(TypeNode::Path(parent.path.clone())),
-                                    first_type,
-                                    constraints,
-                                ),
+                                ParentKind::DataStructure => type_equality_sets
+                                    .insert_types_as_equal(
+                                        Type(TypeNode::Path(parent.path.clone())),
+                                        first_type,
+                                        constraints,
+                                        lifetime_equality_sets,
+                                        subtypes,
+                                    ),
                             },
                             SelfByReference(lifetime) => match parent.parent_kind {
                                 ParentKind::Trait => {
@@ -600,14 +791,17 @@ impl CompleteFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                    Type(TypeNode::Reference {
-                                        inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: lifetime.0,
-                                    }),
-                                    first_type,
-                                    constraints,
-                                ),
+                                ParentKind::DataStructure => type_equality_sets
+                                    .insert_types_as_equal(
+                                        Type(TypeNode::Reference {
+                                            inner: Box::new(TypeNode::Path(parent.path.clone())),
+                                            lifetime: lifetime.0,
+                                        }),
+                                        first_type,
+                                        constraints,
+                                        lifetime_equality_sets,
+                                        subtypes,
+                                    ),
                             },
                             SelfByReferenceMut(lifetime) => match parent.parent_kind {
                                 ParentKind::Trait => {
@@ -616,14 +810,17 @@ impl CompleteFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::DataStructure => type_equality_sets.insert_as_equal_to(
-                                    Type(TypeNode::ReferenceMut {
-                                        inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: lifetime.0,
-                                    }),
-                                    first_type,
-                                    constraints,
-                                ),
+                                ParentKind::DataStructure => type_equality_sets
+                                    .insert_types_as_equal(
+                                        Type(TypeNode::ReferenceMut {
+                                            inner: Box::new(TypeNode::Path(parent.path.clone())),
+                                            lifetime: lifetime.0,
+                                        }),
+                                        first_type,
+                                        constraints,
+                                        lifetime_equality_sets,
+                                        subtypes,
+                                    ),
                             },
                             NoSelf => unreachable!(),
                         }
@@ -632,10 +829,12 @@ impl CompleteFunction {
                 };
 
                 sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
-                    type_equality_sets.insert_as_equal_to(
+                    type_equality_sets.insert_types_as_equal(
                         ty.clone(),
                         val.node().get_type(),
                         constraints,
+                        lifetime_equality_sets,
+                        subtypes,
                     )
                 });
 
@@ -681,48 +880,77 @@ fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut
 /// then return a set containing V, and U
 fn get_relevant_generic_params(
     original_generic_params: &[GenericParam],
-    most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-    type_equality_sets: &mut TypeEqualitySets,
-) -> BTreeSet<GenericParam> {
+    type_equality_sets: TypeEqualitySets,
+    lifetime_equality_sets: LifetimeEqualitySets,
+) -> (BTreeSet<GenericParam>, ConcreteMapsAndSets) {
     use TypeNode::*;
     let mut relevant_generic_params = BTreeSet::new();
+    let most_concrete_type_map = BTreeMap::new();
+    let most_concrete_lifetime_map = BTreeMap::new();
 
-    original_generic_params
-        .iter()
-        .for_each(|param| match *param {
+    let mut concrete_maps_and_sets = ConcreteMapsAndSets {
+        most_concrete_type_map: most_concrete_type_map,
+        most_concrete_lifetime_map: most_concrete_lifetime_map,
+        type_equality_sets,
+        lifetime_equality_sets,
+    };
+
+    for param in original_generic_params.iter() {
+        match param {
             GenericParam::Type(type_param) => {
                 let type_param = param.type_param().unwrap();
-                let set_ref = type_equality_sets.get_set_ref(&Type(TypeParam(type_param)));
-                let set_ref = set_ref
-                    .unwrap_or_else(|| type_equality_sets.new_set(Type(TypeParam(type_param))));
+                let set_ref = concrete_maps_and_sets
+                    .type_equality_sets
+                    .get_set_ref(&Type(TypeParam(type_param)));
+                let set_ref = set_ref.unwrap_or_else(|| {
+                    concrete_maps_and_sets
+                        .type_equality_sets
+                        .new_set(Type(TypeParam(type_param)))
+                });
 
-                let node = set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets);
-                node.inner_params(type_equality_sets, &mut relevant_generic_params)
+                let node = set_ref.make_most_concrete(&mut concrete_maps_and_sets);
+                node.inner_params(
+                    &mut concrete_maps_and_sets.type_equality_sets,
+                    &mut relevant_generic_params,
+                )
             }
-            // FIXME: Properly handle lifetimes
-            lifetime @ GenericParam::Lifetime(_) => {
-                relevant_generic_params.insert(lifetime);
+
+            GenericParam::Lifetime(lifetime) => {
+                let set_ref = concrete_maps_and_sets
+                    .lifetime_equality_sets
+                    .get_set_ref(&lifetime);
+                let set_ref = set_ref.unwrap_or_else(|| {
+                    concrete_maps_and_sets
+                        .lifetime_equality_sets
+                        .new_set(*lifetime)
+                });
+                let lifetime = set_ref.make_most_concrete(
+                    &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                    &concrete_maps_and_sets.lifetime_equality_sets,
+                );
+                relevant_generic_params.insert(GenericParam::Lifetime(lifetime));
             }
 
             GenericParam::Const(_) => unimplemented!(),
-        });
+        }
+    }
 
-    relevant_generic_params
+    (relevant_generic_params, concrete_maps_and_sets)
 }
 
 fn get_data_struct_args(
     original_data_struct_args: Vec<GenericParam>,
-    most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-    type_equality_sets: &TypeEqualitySets,
+    concrete_maps_and_sets: &mut ConcreteMapsAndSets,
 ) -> GenericArguments {
     GenericArguments {
         args: original_data_struct_args
             .into_iter()
             .map(|arg| match arg {
-                GenericParam::Type(ty) => GenericArgument::Type(Type(
-                    TypeNode::TypeParam(ty)
-                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
-                )),
+                GenericParam::Type(ty) => {
+                    let mut node = TypeNode::TypeParam(ty);
+                    node.make_most_concrete(concrete_maps_and_sets);
+                    GenericArgument::Type(Type(node))
+                }
                 GenericParam::Lifetime(lifetime) => GenericArgument::Lifetime(lifetime),
                 GenericParam::Const(_) => unimplemented!(),
             })
@@ -732,19 +960,24 @@ fn get_data_struct_args(
 
 fn get_trait_args(
     original_trait_args: Vec<GenericArgument>,
-    most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-    type_equality_sets: &TypeEqualitySets,
+    concrete_maps_and_sets: &mut ConcreteMapsAndSets,
 ) -> GenericArguments {
     GenericArguments {
         args: original_trait_args
             .into_iter()
             .map(|arg| match arg {
-                GenericArgument::Type(ty) => GenericArgument::Type(Type(
-                    ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets),
-                )),
+                GenericArgument::Type(mut ty) => {
+                    ty.0.make_most_concrete(concrete_maps_and_sets);
+                    GenericArgument::Type(Type(ty.0))
+                }
 
-                // FIXME: properly handle lifetimes
-                lifetime @ GenericArgument::Lifetime(_) => lifetime,
+                GenericArgument::Lifetime(mut lifetime) => {
+                    lifetime.make_most_concrete(
+                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                        &mut concrete_maps_and_sets.lifetime_equality_sets,
+                    );
+                    GenericArgument::Lifetime(lifetime)
+                }
 
                 _ => unimplemented!(),
             })
@@ -756,7 +989,7 @@ impl GenericConstraint {
     /// This method tries to make a constraint that uses the correctly
     /// inferred types based on the analysis done so far. There is a chance
     /// that the constraint is not relevant at all, and thus it returns
-    /// Option<Self> instead if just Self.
+    /// true if it is relevant, or false otherwise.
     ///
     /// Example of a not relevat constraint is: `T: Clone`, where T is
     /// inferred to be String. String is a concrete type, and therefore does
@@ -775,16 +1008,18 @@ impl GenericConstraint {
     /// currently ignored by this method, and will return a None in that case,
     /// but it might be supported in the future.
     fn make_relevant(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
         relevant_generic_params: &BTreeSet<GenericParam>,
-    ) -> Option<Self> {
-        let most_concrete = self.make_most_concrete(most_concrete_type_map, type_equality_sets);
-        if most_concrete.is_relevant(type_equality_sets, relevant_generic_params) {
-            Some(most_concrete)
+    ) -> bool {
+        self.make_most_concrete(concrete_maps_and_sets);
+        if self.is_relevant(
+            &mut concrete_maps_and_sets.type_equality_sets,
+            &relevant_generic_params,
+        ) {
+            true
         } else {
-            None
+            false
         }
     }
 
@@ -798,25 +1033,19 @@ impl GenericConstraint {
                 pred_ty.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
             }
 
-            //FIXME: Properly handle lifetimes
-            GenericConstraint::Lifetime(_) => true,
+            GenericConstraint::Lifetime(lifetime) => {
+                lifetime.is_relevant_for_constraint(relevant_generic_params)
+            }
         }
     }
 
-    fn make_most_concrete(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
+    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
         match self {
-            GenericConstraint::Type(pred_ty) => GenericConstraint::Type(
-                pred_ty.make_most_concrete(most_concrete_type_map, type_equality_sets),
+            GenericConstraint::Type(pred_ty) => pred_ty.make_most_concrete(concrete_maps_and_sets),
+            GenericConstraint::Lifetime(lifetime) => lifetime.make_most_concrete(
+                &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                &concrete_maps_and_sets.lifetime_equality_sets,
             ),
-            GenericConstraint::Lifetime(_) =>
-            //FIXME: Properly handle lifetimes
-            {
-                self
-            }
         }
     }
 }
@@ -835,28 +1064,19 @@ impl PredicateType {
             })
     }
 
-    fn make_most_concrete(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
-        let bounded_ty = self
-            .bounded_ty
-            .0
-            .make_most_concrete(most_concrete_type_map, type_equality_sets);
+    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+        self.bounded_ty.0.make_most_concrete(concrete_maps_and_sets);
 
-        let bounds = self
-            .bounds
-            .into_iter()
-            .map(|bound| bound.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
-            .collect();
+        self.bounds
+            .iter_mut()
+            .for_each(|bound| bound.make_most_concrete_inner(concrete_maps_and_sets));
 
-        PredicateType {
-            bounded_ty: Type(bounded_ty),
-            bounds,
-            // FIXME: lifetimes
-            lifetimes: self.lifetimes,
-        }
+        self.lifetimes.iter_mut().for_each(|lifetime| {
+            lifetime.make_most_concrete(
+                &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                &concrete_maps_and_sets.lifetime_equality_sets,
+            );
+        });
     }
 }
 
@@ -881,16 +1101,10 @@ impl TypeNode {
         }
     }
 
-    fn make_most_concrete(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
-        let ty = Type(self);
-        if let Some(set_ref) = type_equality_sets.get_set_ref(&ty) {
-            set_ref.make_most_concrete(most_concrete_type_map, type_equality_sets)
-        } else {
-            ty.0
+    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+        let ty = &mut Type(self.clone());
+        if let Some(set_ref) = concrete_maps_and_sets.type_equality_sets.get_set_ref(ty) {
+            *self = set_ref.make_most_concrete(concrete_maps_and_sets);
         }
     }
 
@@ -900,30 +1114,30 @@ impl TypeNode {
     fn make_most_concrete_from_pair(
         ty1: TypeNode,
         ty2: TypeNode,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
+        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
     ) -> Self {
         use TypeNode::*;
         match (ty1, ty2) {
-            (Infer, node) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            (Infer, mut node) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
-            (node, Infer) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            (mut node, Infer) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
             (PrimitiveStr, _) => PrimitiveStr,
             (_, PrimitiveStr) => PrimitiveStr,
-            (Path(path1), Path(path2)) => crate::Path::make_most_concrete_from_pair(
-                path1,
-                path2,
-                most_concrete_type_map,
-                type_equality_sets,
-            ),
-            (Path(path), _) => {
-                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
+            (Path(path1), Path(path2)) => {
+                crate::Path::make_most_concrete_from_pair(path1, path2, concrete_maps_and_sets)
             }
-            (_, Path(path)) => {
-                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
+            (Path(mut path), _) => {
+                path.make_most_concrete_inner(concrete_maps_and_sets);
+                Path(path)
+            }
+            (_, Path(mut path)) => {
+                path.make_most_concrete_inner(concrete_maps_and_sets);
+                Path(path)
             }
             (Tuple(types1), Tuple(types2)) if types1.len() == types2.len() => Tuple(
                 types1
@@ -933,46 +1147,67 @@ impl TypeNode {
                         Type(TypeNode::make_most_concrete_from_pair(
                             ty1.0,
                             ty2.0,
-                            most_concrete_type_map,
-                            type_equality_sets,
+                            concrete_maps_and_sets,
                         ))
                     })
                     .collect(),
             ),
-            (Reference { inner: inner1, .. }, Reference { inner: inner2, .. }) => Reference {
+            (
+                Reference {
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                Reference {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => Reference {
                 inner: Box::new(TypeNode::make_most_concrete_from_pair(
                     *inner1,
                     *inner2,
-                    most_concrete_type_map,
-                    type_equality_sets,
+                    concrete_maps_and_sets,
                 )),
-                // FIXME: deal with lifetimes
-                lifetime: None,
+                lifetime: lifetime1
+                    .and_then(|lifetime1| lifetime2.map(|lifetime2| lifetime1.min(lifetime2)))
+                    .or(lifetime1)
+                    .or(lifetime2),
             },
-            (ReferenceMut { inner: inner1, .. }, ReferenceMut { inner: inner2, .. }) => {
+            (
                 ReferenceMut {
-                    inner: Box::new(TypeNode::make_most_concrete_from_pair(
-                        *inner1,
-                        *inner2,
-                        most_concrete_type_map,
-                        type_equality_sets,
-                    )),
-                    // FIXME: deal with lifetimes
-                    lifetime: None,
-                }
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                ReferenceMut {
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => ReferenceMut {
+                inner: Box::new(TypeNode::make_most_concrete_from_pair(
+                    *inner1,
+                    *inner2,
+                    concrete_maps_and_sets,
+                )),
+                lifetime: lifetime1
+                    .and_then(|lifetime1| lifetime2.map(|lifetime2| lifetime1.min(lifetime2)))
+                    .or(lifetime1)
+                    .or(lifetime2),
+            },
+            (TraitObject(_), mut node) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
-            (TraitObject(_), node) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
-            }
-            (node, TraitObject(_)) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            (mut node, TraitObject(_)) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
             (TypeParam(ref1), TypeParam(ref2)) => TypeParam(ref1.min(ref2)),
-            (TypeParam(_), node) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            (TypeParam(_), mut node) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
-            (node, TypeParam(_)) => {
-                node.make_most_concrete_inner(most_concrete_type_map, type_equality_sets)
+            (mut node, TypeParam(_)) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets);
+                node
             }
             (node1, node2) => panic!(
                 "TypeNode: make_most_concrete_pair: incompatible types \n{:#?}\nand\n{:#?}",
@@ -981,37 +1216,34 @@ impl TypeNode {
         }
     }
 
-    fn make_most_concrete_inner(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
+    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
         use TypeNode::*;
         match self {
-            Tuple(types) => Tuple(
-                types
-                    .into_iter()
-                    .map(|ty| {
-                        Type(ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets))
-                    })
-                    .collect(),
-            ),
-            Reference { inner, lifetime } => Reference {
-                inner: Box::new(
-                    inner.make_most_concrete(most_concrete_type_map, type_equality_sets),
-                ),
-                lifetime,
-            },
-            ReferenceMut { inner, lifetime } => ReferenceMut {
-                inner: Box::new(
-                    inner.make_most_concrete(most_concrete_type_map, type_equality_sets),
-                ),
-                lifetime,
-            },
-            Path(path) => {
-                Path(path.make_most_concrete_inner(most_concrete_type_map, type_equality_sets))
+            Tuple(types) => types.iter_mut().for_each(|ty| {
+                ty.0.make_most_concrete(concrete_maps_and_sets);
+            }),
+            Reference { inner, lifetime } => {
+                inner.make_most_concrete(concrete_maps_and_sets);
+
+                if let Some(lifetime) = lifetime {
+                    lifetime.make_most_concrete(
+                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                        &mut concrete_maps_and_sets.lifetime_equality_sets,
+                    );
+                }
             }
-            node => node,
+            ReferenceMut { inner, lifetime } => {
+                inner.make_most_concrete(concrete_maps_and_sets);
+
+                if let Some(lifetime) = lifetime {
+                    lifetime.make_most_concrete(
+                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
+                        &mut concrete_maps_and_sets.lifetime_equality_sets,
+                    );
+                }
+            }
+            Path(path) => path.make_most_concrete_inner(concrete_maps_and_sets),
+            node => {}
         }
     }
 
@@ -1044,6 +1276,63 @@ impl TypeNode {
     }
 }
 
+impl Lifetime {
+    fn make_most_concrete(
+        &mut self,
+        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
+        lifetime_equality_sets: &LifetimeEqualitySets,
+    ) {
+        if let Some(set_ref) = lifetime_equality_sets.get_set_ref(&self) {
+            *self = set_ref.make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
+        }
+    }
+
+    fn is_relevant_for_constraint(&self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
+        self == &Lifetime(0) || relevant_generic_params.contains(&GenericParam::Lifetime(*self))
+    }
+}
+
+impl LifetimeEqualitySetRef {
+    fn make_most_concrete(
+        self,
+        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
+        lifetime_equality_sets: &LifetimeEqualitySets,
+    ) -> Lifetime {
+        if let Some(lifetime) = most_concrete_lifetime_map.get(&self) {
+            *lifetime
+        } else {
+            let lifetimes = &lifetime_equality_sets.sets[self.0];
+            let lifetime = *lifetimes.set.iter().min().unwrap();
+            most_concrete_lifetime_map.insert(self, lifetime);
+            lifetime
+        }
+    }
+}
+
+impl LifetimeDef {
+    fn make_most_concrete(
+        &mut self,
+        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
+        lifetime_equality_sets: &LifetimeEqualitySets,
+    ) {
+        self.lifetime
+            .make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
+
+        self.bounds.iter_mut().for_each(|lifetime| {
+            lifetime.make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
+        });
+    }
+
+    fn is_relevant_for_constraint(&self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
+        self.lifetime
+            .is_relevant_for_constraint(relevant_generic_params)
+            && self
+                .bounds
+                .iter()
+                .all(|lifetime| lifetime.is_relevant_for_constraint(relevant_generic_params))
+    }
+}
+
 impl TypeParamBound {
     fn is_relevant_for_constraint(
         &self,
@@ -1065,24 +1354,16 @@ impl TypeParamBound {
         }
     }
 
-    fn make_most_concrete_inner(
-        self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
+    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
         match self {
             TypeParamBound::Trait(bound) => {
-                TypeParamBound::Trait(TraitBound {
-                    path: bound
-                        .path
-                        .make_most_concrete_inner(most_concrete_type_map, type_equality_sets),
-                    // FIXME: properly deal with lifetimes
-                    lifetimes: bound.lifetimes,
-                })
+                bound.path.make_most_concrete_inner(concrete_maps_and_sets);
+                // FIXME: properly deal with lifetimes
+                // bound.lifetimes
             }
 
             // FIXME: properly deal with lifetimes
-            bound @ TypeParamBound::Lifetime(_) => bound,
+            bound @ TypeParamBound::Lifetime(_) => {}
         }
     }
 }
@@ -1140,43 +1421,26 @@ impl Path {
         }
     }
 
-    fn make_most_concrete_inner(
-        mut self,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
-    ) -> Self {
+    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
         let path_len = self.path.len();
         let segment = &mut self.path[path_len - 1];
-        let mut path_arguments = std::mem::replace(&mut segment.args, PathArguments::None);
-        path_arguments = match path_arguments {
-            PathArguments::None => PathArguments::None,
+        match &mut segment.args {
+            PathArguments::None => {}
             PathArguments::AngleBracketed(args) => {
-                let args = args
-                    .args
-                    .args
-                    .into_iter()
-                    .map(|arg| match arg {
-                        GenericArgument::Type(ty) => GenericArgument::Type(Type(
-                            ty.0.make_most_concrete(most_concrete_type_map, type_equality_sets),
-                        )),
-                        GenericArgument::Lifetime(lifetime) => {
-                            // FIXME: Lifetime
-                            unimplemented!("Path::make_most_concrete_inner: Lifetime")
-                        }
-                        _ => unimplemented!(),
-                    })
-                    .collect();
+                args.args.args.iter_mut().for_each(|arg| match arg {
+                    GenericArgument::Type(ty) => ty.0.make_most_concrete(concrete_maps_and_sets),
 
-                PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                    args: GenericArguments { args },
-                })
+                    GenericArgument::Lifetime(lifetime) => {
+                        // FIXME: Lifetime
+                        unimplemented!("Path::make_most_concrete_inner: Lifetime")
+                    }
+                    _ => unimplemented!(),
+                });
             }
             PathArguments::Parenthesized(_) => {
                 unimplemented!("Path::make_most_concrete_inner: Parenthesized")
             }
         };
-        std::mem::replace(&mut segment.args, path_arguments);
-        self
     }
 
     /// Compares two paths, and makes the most concrete path based on the two.
@@ -1205,8 +1469,7 @@ impl Path {
     fn make_most_concrete_from_pair(
         mut path1: Path,
         mut path2: Path,
-        most_concrete_type_map: &mut BTreeMap<TypeEqualitySetRef, TypeNode>,
-        type_equality_sets: &TypeEqualitySets,
+        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
     ) -> TypeNode {
         let path1_len = path1.path.len();
         let path2_len = path2.path.len();
@@ -1223,11 +1486,17 @@ impl Path {
                 let args1 = &mut args1.args.args;
                 let args2 = &mut args2.args.args;
                 match args1.len().cmp(&args2.len()) {
-                    Ordering::Less => TypeNode::Path(path1)
-                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
+                    Ordering::Less => {
+                        let mut node = TypeNode::Path(path1);
+                        node.make_most_concrete(concrete_maps_and_sets);
+                        node
+                    }
 
-                    Ordering::Greater => TypeNode::Path(path2)
-                        .make_most_concrete(most_concrete_type_map, type_equality_sets),
+                    Ordering::Greater => {
+                        let mut node = TypeNode::Path(path2);
+                        node.make_most_concrete(concrete_maps_and_sets);
+                        node
+                    }
 
                     Ordering::Equal => {
                         // Assume we are dealing with the same type path
@@ -1240,8 +1509,7 @@ impl Path {
                                         TypeNode::make_most_concrete_from_pair(
                                             ty1.clone().0,
                                             ty2.clone().0,
-                                            most_concrete_type_map,
-                                            type_equality_sets,
+                                            concrete_maps_and_sets,
                                         ),
                                     ))
                                 }
