@@ -55,6 +55,36 @@ impl Type {
         })
     }
 
+    pub fn reference_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
+        let lifetime: syn::Lifetime = syn::parse_str(lifetime)
+            .expect("Type::reference_with_lifetime: couldn't parse lifetime");
+        let lifetime = param_map
+            .get(&lifetime.ident)
+            .and_then(|param| param.lifetime())
+            .expect("Type::reference_with_lifetime: invalid lifetime");
+
+        Type(TypeNode::Reference {
+            is_mut: false,
+            lifetime: Some(lifetime),
+            inner: Box::new(self.0.clone()),
+        })
+    }
+
+    pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
+        let lifetime: syn::Lifetime = syn::parse_str(lifetime)
+            .expect("Type::reference_with_lifetime: couldn't parse lifetime");
+        let lifetime = param_map
+            .get(&lifetime.ident)
+            .and_then(|param| param.lifetime())
+            .expect("Type::reference_with_lifetime: invalid lifetime");
+
+        Type(TypeNode::Reference {
+            is_mut: true,
+            lifetime: Some(lifetime),
+            inner: Box::new(self.0.clone()),
+        })
+    }
+
     pub fn reference_mut(&self) -> Self {
         Type(TypeNode::Reference {
             is_mut: true,

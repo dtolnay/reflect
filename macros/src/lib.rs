@@ -71,8 +71,11 @@ enum Type {
     Tuple(Vec<Type>),
     Path(Path),
     TraitObject(TypeTraitObject),
-    Reference(Box<Type>),
-    ReferenceMut(Box<Type>),
+    Reference {
+        is_mut: bool,
+        lifetime: Option<Lifetime>,
+        inner: Box<Type>,
+    },
 }
 
 enum ParentKind {
@@ -326,13 +329,15 @@ impl Parse for Type {
             }
         } else if lookahead.peek(Token![&]) {
             input.parse::<Token![&]>()?;
+            let lifetime: Option<Lifetime> = input.parse()?;
             let mut_token: Option<Token![mut]> = input.parse()?;
             let inner: Type = input.parse()?;
-            if mut_token.is_some() {
-                Ok(Type::ReferenceMut(Box::new(inner)))
-            } else {
-                Ok(Type::Reference(Box::new(inner)))
-            }
+
+            Ok(Type::Reference {
+                is_mut: mut_token.is_some(),
+                lifetime,
+                inner: Box::new(inner),
+            })
         } else if lookahead.peek(Token![dyn]) {
             Ok(Type::TraitObject(input.parse()?))
         } else if lookahead.peek(Ident) || lookahead.peek(Token![::]) {
@@ -799,16 +804,37 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
                 _reflect::Type::get_trait_object(&[#(#bound_strings),*], param_map)
             }
         }
-        Type::Reference(inner) => {
+        // FIXME: add lifetimes
+        Type::Reference {
+            is_mut,
+            lifetime,
+            inner,
+        } if !is_mut => {
             let inner = to_runtime_type(inner, mod_path, type_params);
-            quote! {
-                #inner.reference()
+            if let Some(lifetime) = lifetime {
+                let lifetime_str = lifetime.to_string();
+                quote! {
+                    #inner.reference_with_lifetime(#lifetime_str, param_map)
+                }
+            } else {
+                quote! {
+                    #inner.reference()
+                }
             }
         }
-        Type::ReferenceMut(inner) => {
+        Type::Reference {
+            lifetime, inner, ..
+        } => {
             let inner = to_runtime_type(inner, mod_path, type_params);
-            quote! {
-                #inner.reference_mut()
+            if let Some(lifetime) = lifetime {
+                let lifetime_str = lifetime.to_string();
+                quote! {
+                    #inner.reference_mut_with_lifetime(#lifetime_str, param_map)
+                }
+            } else {
+                quote! {
+                    #inner.reference_mut()
+                }
             }
         }
     }
