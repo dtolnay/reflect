@@ -10,6 +10,7 @@ use crate::{
 use seahash::SeaHasher;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::convert::identity;
 use std::hash::BuildHasherDefault;
 use std::hash::Hash;
 use std::iter::Extend;
@@ -52,6 +53,12 @@ pub(crate) struct ConcreteMapsAndSets {
     most_concrete_lifetime_map: BTreeMap<LifetimeEqualitySetRef, Lifetime>,
     type_equality_sets: TypeEqualitySets,
     lifetime_equality_sets: LifetimeEqualitySets,
+}
+
+pub(crate) struct OriginalGenercs {
+    original_generic_params: Vec<GenericParam>,
+    original_data_struct_args: Vec<GenericParam>,
+    original_trait_args: Vec<GenericArgument>,
 }
 
 pub(crate) struct TraitInferenceResult {
@@ -235,11 +242,13 @@ impl ConstraintSet {
                 .map(|mut constraint| {
                     let is_relevant =
                         constraint.make_relevant(concrete_maps_and_sets, relevant_generic_params);
-                    (constraint, is_relevant)
+                    if is_relevant {
+                        Some(constraint)
+                    } else {
+                        None
+                    }
                 })
-                .filter_map(
-                    |(constraint, is_relevant)| if is_relevant { Some(constraint) } else { None },
-                )
+                .filter_map(identity)
                 .collect(),
         }
     }
@@ -291,10 +300,9 @@ impl TypeEqualitySetRef {
                     .most_concrete_type_map
                     .insert(*self, TypeNode::Infer);
 
-                let set = std::mem::replace(
-                    &mut concrete_maps_and_sets.type_equality_sets.sets[self.0].set,
-                    HashSet::default(),
-                );
+                // Temprorarily take the set out of the equlity set to avoid borrowing issues
+                let set =
+                    std::mem::take(&mut concrete_maps_and_sets.type_equality_sets.sets[self.0].set);
                 let mut iterator = set.iter().peekable();
                 let mut first = iterator.next().unwrap().clone();
                 let most_concrete = if iterator.peek().is_none() {
@@ -313,6 +321,7 @@ impl TypeEqualitySetRef {
                     .most_concrete_type_map
                     .insert(*self, most_concrete.clone());
 
+                // insert the set back in again
                 concrete_maps_and_sets.type_equality_sets.sets[self.0].set = set;
                 most_concrete
             }
@@ -625,14 +634,55 @@ impl TypeEqualitySets {
 
 impl CompleteImpl {
     pub(crate) fn compute_trait_bounds(&self) -> TraitInferenceResult {
-        // TODO: Split into more functions
         let mut constraints = ConstraintSet::new();
         let mut type_equality_sets = TypeEqualitySets::new();
         let mut lifetime_equality_sets = LifetimeEqualitySets::new();
+        let mut subtypes = LifetimeSubtypeMap::new();
+
+        let OriginalGenercs {
+            original_generic_params,
+            original_data_struct_args,
+            original_trait_args,
+        } = self.get_original_generics(&mut constraints);
+
+        self.functions.iter().for_each(|function| {
+            function.compute_trait_bounds(
+                &mut constraints,
+                &mut type_equality_sets,
+                &mut lifetime_equality_sets,
+                &mut subtypes,
+            )
+        });
+
+        subtypes.add_lifetime_bounds(&constraints);
+        subtypes.transitive_closure();
+
+        let (relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
+            &original_generic_params,
+            type_equality_sets,
+            lifetime_equality_sets,
+        );
+
+        let constraints =
+            constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
+
+        let data_struct_args =
+            get_data_struct_args(original_data_struct_args, &mut concrete_maps_and_sets);
+
+        let trait_args = get_trait_args(original_trait_args, &mut concrete_maps_and_sets);
+
+        TraitInferenceResult {
+            constraints,
+            generic_params: relevant_generic_params,
+            data_struct_args,
+            trait_args,
+        }
+    }
+
+    fn get_original_generics(&self, constraints: &mut ConstraintSet) -> OriginalGenercs {
         let mut original_generic_params = Vec::new();
         let mut original_data_struct_args = Vec::new();
         let mut original_trait_args = Vec::new();
-        let mut subtypes = LifetimeSubtypeMap::new();
 
         // data structure generics
         if let Type(TypeNode::DataStructure { ref generics, .. }) = self.ty {
@@ -669,37 +719,10 @@ impl CompleteImpl {
             }
         };
 
-        self.functions.iter().for_each(|function| {
-            function.compute_trait_bounds(
-                &mut constraints,
-                &mut type_equality_sets,
-                &mut lifetime_equality_sets,
-                &mut subtypes,
-            )
-        });
-
-        subtypes.add_lifetime_bounds(&constraints);
-        subtypes.transitive_closure();
-
-        let (relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
-            &original_generic_params,
-            type_equality_sets,
-            lifetime_equality_sets,
-        );
-
-        let constraints =
-            constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
-
-        let data_struct_args =
-            get_data_struct_args(original_data_struct_args, &mut concrete_maps_and_sets);
-
-        let trait_args = get_trait_args(original_trait_args, &mut concrete_maps_and_sets);
-
-        TraitInferenceResult {
-            constraints,
-            generic_params: relevant_generic_params,
-            data_struct_args,
-            trait_args,
+        OriginalGenercs {
+            original_generic_params,
+            original_data_struct_args,
+            original_trait_args,
         }
     }
 }
@@ -831,8 +854,8 @@ fn get_relevant_generic_params(
     let most_concrete_lifetime_map = BTreeMap::new();
 
     let mut concrete_maps_and_sets = ConcreteMapsAndSets {
-        most_concrete_type_map: most_concrete_type_map,
-        most_concrete_lifetime_map: most_concrete_lifetime_map,
+        most_concrete_type_map,
+        most_concrete_lifetime_map,
         type_equality_sets,
         lifetime_equality_sets,
     };
@@ -916,7 +939,7 @@ fn get_trait_args(
                 GenericArgument::Lifetime(mut lifetime) => {
                     lifetime.make_most_concrete(
                         &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                        &mut concrete_maps_and_sets.lifetime_equality_sets,
+                        &concrete_maps_and_sets.lifetime_equality_sets,
                     );
                     GenericArgument::Lifetime(lifetime)
                 }
@@ -955,14 +978,10 @@ impl GenericConstraint {
         relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         self.make_most_concrete(concrete_maps_and_sets);
-        if self.is_relevant(
-            &mut concrete_maps_and_sets.type_equality_sets,
+        self.is_relevant(
+            &concrete_maps_and_sets.type_equality_sets,
             &relevant_generic_params,
-        ) {
-            true
-        } else {
-            false
-        }
+        )
     }
 
     fn is_relevant(
@@ -1153,7 +1172,7 @@ impl TypeNode {
                 if let Some(lifetime) = lifetime {
                     lifetime.make_most_concrete(
                         &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                        &mut concrete_maps_and_sets.lifetime_equality_sets,
+                        &concrete_maps_and_sets.lifetime_equality_sets,
                     );
                 }
             }
