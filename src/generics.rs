@@ -212,6 +212,7 @@ impl GenericConstraint {
         &self,
         ref_map: &BTreeMap<GenericParam, GenericParam>,
     ) -> Self {
+        // FIXME: bug when parsing lifetimes
         match self {
             Self::Type(predicate) => Self::Type(PredicateType {
                 lifetimes: predicate
@@ -526,7 +527,10 @@ impl GenericArgument {
                 param_map
                     .get(&lifetime.ident)
                     .and_then(|&param| GenericParam::lifetime(param))
-                    .expect("syn_to_generic_argument: Not a lifetime ref"),
+                    .expect(&format!(
+                        "syn_to_generic_argument: Not a lifetime ref {:?}",
+                        lifetime.ident
+                    )),
             ),
 
             syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {
