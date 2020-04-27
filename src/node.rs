@@ -8,9 +8,10 @@ pub(crate) enum ValueNode {
     Tuple(Vec<ValueRef>),
     Str(String),
     // TODO: Add lifetime parameter
-    Reference(ValueRef),
-    // TODO: Add lifetime parameter
-    ReferenceMut(ValueRef),
+    Reference {
+        is_mut: bool,
+        value: ValueRef,
+    },
     Dereference(ValueRef),
     Binding {
         name: Ident,
@@ -39,13 +40,10 @@ impl ValueNode {
                     .collect(),
             )),
             ValueNode::Str(_) => Type(TypeNode::PrimitiveStr),
-            ValueNode::Reference(v) => Type(TypeNode::Reference {
+            ValueNode::Reference { is_mut, value } => Type(TypeNode::Reference {
+                is_mut: *is_mut,
                 lifetime: None,
-                inner: Box::new(v.node().get_type().0),
-            }),
-            ValueNode::ReferenceMut(v) => Type(TypeNode::ReferenceMut {
-                lifetime: None,
-                inner: Box::new(v.node().get_type().0),
+                inner: Box::new(value.node().get_type().0),
             }),
             ValueNode::Binding { ty, .. } => ty.clone(),
             ValueNode::Destructure {
@@ -81,8 +79,7 @@ impl ValueNode {
             }
             ValueNode::Str(_) => ValueNode::Str(String::from("str")),
             ValueNode::DataStructure { name, .. } => ValueNode::Str(name.to_owned()),
-            ValueNode::Reference(v) => v.node().get_type_name(),
-            ValueNode::ReferenceMut(v) => v.node().get_type_name(),
+            ValueNode::Reference { value, .. } => value.node().get_type_name(),
             ValueNode::Binding { ty, .. } => ValueNode::Str(ty.0.get_name()),
             ValueNode::Destructure {
                 parent,

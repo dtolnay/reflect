@@ -19,10 +19,7 @@ pub(crate) enum TypeNode {
     Tuple(Vec<Type>),
     PrimitiveStr,
     Reference {
-        lifetime: Option<Lifetime>,
-        inner: Box<TypeNode>,
-    },
-    ReferenceMut {
+        is_mut: bool,
         lifetime: Option<Lifetime>,
         inner: Box<TypeNode>,
     },
@@ -52,13 +49,15 @@ impl Type {
 
     pub fn reference(&self) -> Self {
         Type(TypeNode::Reference {
+            is_mut: false,
             lifetime: None,
             inner: Box::new(self.0.clone()),
         })
     }
 
     pub fn reference_mut(&self) -> Self {
-        Type(TypeNode::ReferenceMut {
+        Type(TypeNode::Reference {
+            is_mut: true,
             lifetime: None,
             inner: Box::new(self.0.clone()),
         })
@@ -67,7 +66,6 @@ impl Type {
     pub fn dereference(&self) -> Self {
         match &self.0 {
             TypeNode::Reference { inner, .. } => Type((**inner).clone()),
-            TypeNode::ReferenceMut { inner, .. } => Type((**inner).clone()),
             other => Type(TypeNode::Dereference(Box::new(other.clone()))),
         }
     }
@@ -75,22 +73,17 @@ impl Type {
     pub fn data(&self) -> Data<Self> {
         match &self.0 {
             TypeNode::DataStructure { data, .. } => data.clone().map(|field| field.element),
-            TypeNode::Reference { lifetime, inner } => {
-                Type((**inner).clone()).data().map(|field| {
-                    Type(TypeNode::Reference {
-                        lifetime: *lifetime,
-                        inner: Box::new(field.element.0),
-                    })
+            TypeNode::Reference {
+                is_mut,
+                lifetime,
+                inner,
+            } => Type((**inner).clone()).data().map(|field| {
+                Type(TypeNode::Reference {
+                    is_mut: *is_mut,
+                    lifetime: *lifetime,
+                    inner: Box::new(field.element.0),
                 })
-            }
-            TypeNode::ReferenceMut { lifetime, inner } => {
-                Type((**inner).clone()).data().map(|field| {
-                    Type(TypeNode::ReferenceMut {
-                        lifetime: *lifetime,
-                        inner: Box::new(field.element.0),
-                    })
-                })
-            }
+            }),
             _ => panic!("Type::data"),
         }
     }
@@ -152,11 +145,12 @@ impl Type {
                         .and_then(|&param| GenericParam::lifetime(param))
                         .expect("syn_to_type: Not a lifetime ref")
                 });
-                if reference.mutability.is_some() {
-                    Type(TypeNode::ReferenceMut { lifetime, inner })
-                } else {
-                    Type(TypeNode::Reference { lifetime, inner })
-                }
+
+                Type(TypeNode::Reference {
+                    is_mut: reference.mutability.is_some(),
+                    lifetime,
+                    inner,
+                })
             }
 
             syn::Type::TraitObject(type_trait_object) => Type(TypeNode::TraitObject(
@@ -203,7 +197,6 @@ impl TypeNode {
             TypeNode::PrimitiveStr => String::from("str"),
             TypeNode::DataStructure { name, .. } => name.to_string(),
             TypeNode::Reference { inner, .. } => (&**inner).get_name(),
-            TypeNode::ReferenceMut { inner, .. } => (&**inner).get_name(),
             TypeNode::Path(path) => {
                 let mut tokens = TokenStream::new();
                 Print::ref_cast(path).to_tokens(&mut tokens);
@@ -236,17 +229,13 @@ impl TypeNode {
 
             PrimitiveStr => PrimitiveStr,
 
-            Reference { lifetime, inner } => Reference {
-                lifetime: lifetime.map(|lifetime| {
-                    ref_map
-                        .get(&GenericParam::Lifetime(lifetime))
-                        .and_then(|param| param.lifetime())
-                        .unwrap()
-                }),
-                inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
-            },
+            Reference {
+                is_mut,
+                lifetime,
+                inner,
+            } => Reference {
+                is_mut: *is_mut,
 
-            ReferenceMut { lifetime, inner } => ReferenceMut {
                 lifetime: lifetime.map(|lifetime| {
                     ref_map
                         .get(&GenericParam::Lifetime(lifetime))

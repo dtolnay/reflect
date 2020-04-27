@@ -219,7 +219,7 @@ impl CompleteFunction {
                     }
                 }
                 Str(s) => {}
-                Reference(v) | ReferenceMut(v) | Dereference(v) => {
+                Reference { value: v, .. } | Dereference(v) => {
                     if reachable.insert(*v) {
                         stack.push(*v);
                     }
@@ -256,8 +256,10 @@ impl CompleteFunction {
 
         for v in self.refs() {
             VALUES.with_borrow(|values| {
-                if let ValueNode::ReferenceMut(referent) = values[v.0] {
-                    mutable.insert(referent);
+                if let ValueNode::Reference { is_mut, value } = values[v.0] {
+                    if is_mut {
+                        mutable.insert(value);
+                    }
                 }
             })
         }
@@ -284,12 +286,12 @@ impl CompleteFunction {
                 }
             }
             ValueNode::Str(s) => quote! { #s },
-            ValueNode::Reference(v) => {
-                let v = v.binding();
+            ValueNode::Reference { is_mut, value } if !is_mut => {
+                let v = value.binding();
                 quote! { &#v }
             }
-            ValueNode::ReferenceMut(v) => {
-                let v = v.binding();
+            ValueNode::Reference { is_mut, value } => {
+                let v = value.binding();
                 quote! { &mut #v }
             }
             ValueNode::Dereference(v) => {
@@ -355,14 +357,14 @@ fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
     match receiver {
         Receiver::NoSelf => None,
         Receiver::SelfByValue => Some(quote!(self)),
-        Receiver::SelfByReference(lifetime) => {
+        Receiver::SelfByReference { is_mut, lifetime } if !is_mut => {
             let lifetime = lifetime
                 .0
                 .as_ref()
                 .map(|lifetime| Print::ref_cast(lifetime));
             Some(quote!(&#lifetime self))
         }
-        Receiver::SelfByReferenceMut(lifetime) => {
+        Receiver::SelfByReference { is_mut, lifetime } => {
             let lifetime = lifetime
                 .0
                 .as_ref()

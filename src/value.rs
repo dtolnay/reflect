@@ -16,14 +16,20 @@ impl Value {
     }
 
     pub fn reference(&self) -> Self {
-        let node = ValueNode::Reference(self.index);
+        let node = ValueNode::Reference {
+            is_mut: false,
+            value: self.index,
+        };
         Value {
             index: VALUES.index_push(node),
         }
     }
 
     pub fn reference_mut(&self) -> Self {
-        let node = ValueNode::ReferenceMut(self.index);
+        let node = ValueNode::Reference {
+            is_mut: true,
+            value: self.index,
+        };
         Value {
             index: VALUES.index_push(node),
         }
@@ -31,8 +37,7 @@ impl Value {
 
     pub fn dereference(&self) -> Self {
         match self.node() {
-            ValueNode::Reference(inner) => Value { index: inner },
-            ValueNode::ReferenceMut(inner) => Value { index: inner },
+            ValueNode::Reference { value, .. } => Value { index: value },
             other => {
                 let node = ValueNode::Dereference(self.index);
                 Value {
@@ -55,8 +60,14 @@ impl Value {
             DataStructure { data, .. } => data.map(|value_ref| Value {
                 index: value_ref.element,
             }),
-            Reference(v) => Value { index: v }.data().map(|v| v.element.reference()),
-            ReferenceMut(v) => Value { index: v }.data().map(|v| v.element.reference_mut()),
+            Reference { is_mut, value } if !is_mut => {
+                Value { index: value }.data().map(|v| v.element.reference())
+            }
+
+            Reference { is_mut, value } if is_mut => Value { index: value }
+                .data()
+                .map(|v| v.element.reference_mut()),
+
             // FIXME generate match and propagate the binding
             Binding { name, ty } => ty.data().map(|field| {
                 let node = ValueNode::Destructure {

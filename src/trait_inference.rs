@@ -436,36 +436,16 @@ impl TypeEqualitySets {
             // normal reference, so the inner types may be considered equal
             (
                 Reference {
-                    lifetime: lifetime1,
-                    inner: inner1,
-                },
-                ReferenceMut {
-                    lifetime: lifetime2,
-                    inner: inner2,
-                },
-            ) => {
-                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
-                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
-                }
-                return self.insert_types_as_equal(
-                    *inner1.clone(),
-                    *inner2.clone(),
-                    constraints,
-                    lifetime_equality_sets,
-                    subtypes,
-                );
-            }
-            (
-                ReferenceMut {
+                    is_mut: is_mut1,
                     lifetime: lifetime1,
                     inner: inner1,
                 },
                 Reference {
+                    is_mut: is_mut2,
                     lifetime: lifetime2,
                     inner: inner2,
                 },
-            ) => {
+            ) if is_mut1 != is_mut2 => {
                 if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
                     subtypes.insert_as_equal(*lifetime1, *lifetime2);
                     lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
@@ -520,36 +500,16 @@ impl TypeEqualitySets {
             }
             (
                 Reference {
+                    is_mut: is_mut1,
                     lifetime: lifetime1,
                     inner: inner1,
                 },
                 Reference {
+                    is_mut: is_mut2,
                     lifetime: lifetime2,
                     inner: inner2,
                 },
-            ) => {
-                if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
-                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
-                }
-                self.insert_types_as_equal(
-                    *inner1.clone(),
-                    *inner2.clone(),
-                    constraints,
-                    lifetime_equality_sets,
-                    subtypes,
-                )
-            }
-            (
-                ReferenceMut {
-                    lifetime: lifetime1,
-                    inner: inner1,
-                },
-                ReferenceMut {
-                    lifetime: lifetime2,
-                    inner: inner2,
-                },
-            ) => {
+            ) if is_mut1 == is_mut2 => {
                 if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
                     subtypes.insert_as_equal(*lifetime1, *lifetime2);
                     lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
@@ -784,7 +744,7 @@ impl CompleteFunction {
                                         subtypes,
                                     ),
                             },
-                            SelfByReference(lifetime) => match parent.parent_kind {
+                            SelfByReference { is_mut, lifetime } => match parent.parent_kind {
                                 ParentKind::Trait => {
                                     let first_type = first_type.dereference();
                                     if let TypeNode::TypeParam(_) = &first_type.0 {
@@ -794,25 +754,7 @@ impl CompleteFunction {
                                 ParentKind::DataStructure => type_equality_sets
                                     .insert_types_as_equal(
                                         TypeNode::Reference {
-                                            inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                            lifetime: lifetime.0,
-                                        },
-                                        first_type.0,
-                                        constraints,
-                                        lifetime_equality_sets,
-                                        subtypes,
-                                    ),
-                            },
-                            SelfByReferenceMut(lifetime) => match parent.parent_kind {
-                                ParentKind::Trait => {
-                                    let first_type = first_type.dereference();
-                                    if let TypeNode::TypeParam(_) = &first_type.0 {
-                                        add_self_trait_bound(parent, first_type, constraints)
-                                    }
-                                }
-                                ParentKind::DataStructure => type_equality_sets
-                                    .insert_types_as_equal(
-                                        TypeNode::ReferenceMut {
+                                            is_mut,
                                             inner: Box::new(TypeNode::Path(parent.path.clone())),
                                             lifetime: lifetime.0,
                                         },
@@ -1091,12 +1033,10 @@ impl TypeNode {
             TypeParam(type_param) => {
                 relevant_generic_params.contains(&GenericParam::Type(*type_param))
             }
-            Reference { lifetime, inner } => {
-                inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
-            }
-            ReferenceMut { lifetime, inner } => {
-                inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
-            }
+            Reference {
+                lifetime, inner, ..
+            } => inner.is_relevant_for_constraint(type_equality_sets, relevant_generic_params),
+
             _ => false,
         }
     }
@@ -1153,34 +1093,18 @@ impl TypeNode {
             ),
             (
                 Reference {
+                    is_mut: is_mut1,
                     lifetime: lifetime1,
                     inner: inner1,
                 },
                 Reference {
+                    is_mut: is_mut2,
                     lifetime: lifetime2,
                     inner: inner2,
                 },
             ) => Reference {
-                inner: Box::new(TypeNode::make_most_concrete_from_pair(
-                    *inner1,
-                    *inner2,
-                    concrete_maps_and_sets,
-                )),
-                lifetime: lifetime1
-                    .and_then(|lifetime1| lifetime2.map(|lifetime2| lifetime1.min(lifetime2)))
-                    .or(lifetime1)
-                    .or(lifetime2),
-            },
-            (
-                ReferenceMut {
-                    lifetime: lifetime1,
-                    inner: inner1,
-                },
-                ReferenceMut {
-                    lifetime: lifetime2,
-                    inner: inner2,
-                },
-            ) => ReferenceMut {
+                is_mut: is_mut1 && is_mut2,
+
                 inner: Box::new(TypeNode::make_most_concrete_from_pair(
                     *inner1,
                     *inner2,
@@ -1221,17 +1145,9 @@ impl TypeNode {
             Tuple(types) => types.iter_mut().for_each(|ty| {
                 ty.0.make_most_concrete(concrete_maps_and_sets);
             }),
-            Reference { inner, lifetime } => {
-                inner.make_most_concrete(concrete_maps_and_sets);
-
-                if let Some(lifetime) = lifetime {
-                    lifetime.make_most_concrete(
-                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                        &mut concrete_maps_and_sets.lifetime_equality_sets,
-                    );
-                }
-            }
-            ReferenceMut { inner, lifetime } => {
+            Reference {
+                inner, lifetime, ..
+            } => {
                 inner.make_most_concrete(concrete_maps_and_sets);
 
                 if let Some(lifetime) = lifetime {
@@ -1259,9 +1175,6 @@ impl TypeNode {
                 }
             }
             Reference { inner, .. } => {
-                inner.inner_params(type_equality_sets, relevant_generic_params)
-            }
-            ReferenceMut { inner, .. } => {
                 inner.inner_params(type_equality_sets, relevant_generic_params)
             }
             Path(path) => {

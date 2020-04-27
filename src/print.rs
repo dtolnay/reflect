@@ -3,7 +3,7 @@ use crate::{path, Accessor, Lifetime, SimplePath, Type, TypeNode, TypeParam};
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use ref_cast::RefCast;
-use syn::{Ident, LitInt};
+use syn::{Ident, LitInt, Token};
 
 #[derive(RefCast)]
 #[repr(C)]
@@ -41,16 +41,21 @@ impl ToTokens for Print<TypeNode> {
                 }
             }
             PrimitiveStr => quote!(str),
-            Reference { lifetime, inner } => {
+            Reference {
+                is_mut,
+                lifetime,
+                inner,
+            } => {
                 let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
                 let inner = Print::ref_cast(&**inner);
-                quote!(&#lifetime #inner)
+                let token_mut = if *is_mut {
+                    Some(Token![mut](Span::call_site()))
+                } else {
+                    None
+                };
+                quote!(&#lifetime #token_mut #inner)
             }
-            ReferenceMut { lifetime, inner } => {
-                let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
-                let inner = Print::ref_cast(&**inner);
-                quote!(&#lifetime mut #inner)
-            }
+
             Dereference(inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { name, .. } => {
                 //FIXME: generics

@@ -19,8 +19,10 @@ pub struct Signature {
 pub enum Receiver {
     NoSelf,
     SelfByValue,
-    SelfByReference(OptionLifetime),
-    SelfByReferenceMut(OptionLifetime),
+    SelfByReference {
+        is_mut: bool,
+        lifetime: OptionLifetime,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,18 +46,15 @@ impl Receiver {
         match *self {
             NoSelf => NoSelf,
             SelfByValue => SelfByValue,
-            SelfByReference(lifetime) => SelfByReference(OptionLifetime(
-                ref_map
-                    .get(&GenericParam::Lifetime(lifetime.0.unwrap()))
-                    .map(|param| param.lifetime())
-                    .unwrap(),
-            )),
-            SelfByReferenceMut(lifetime) => SelfByReferenceMut(OptionLifetime(
-                ref_map
-                    .get(&GenericParam::Lifetime(lifetime.0.unwrap()))
-                    .map(|param| param.lifetime())
-                    .unwrap(),
-            )),
+            SelfByReference { is_mut, lifetime } => SelfByReference {
+                is_mut,
+                lifetime: OptionLifetime(
+                    ref_map
+                        .get(&GenericParam::Lifetime(lifetime.0.unwrap()))
+                        .map(|param| param.lifetime())
+                        .unwrap(),
+                ),
+            },
         }
     }
 }
@@ -105,11 +104,17 @@ impl Signature {
     }
 
     pub fn set_self_by_reference(&mut self) {
-        self.receiver = Receiver::SelfByReference(OptionLifetime(None));
+        self.receiver = Receiver::SelfByReference {
+            is_mut: false,
+            lifetime: OptionLifetime(None),
+        };
     }
 
     pub fn set_self_by_reference_mut(&mut self) {
-        self.receiver = Receiver::SelfByReferenceMut(OptionLifetime(None));
+        self.receiver = Receiver::SelfByReference {
+            is_mut: true,
+            lifetime: OptionLifetime(None),
+        };
     }
 
     /// Add input type to signature.
@@ -158,13 +163,7 @@ impl Signature {
                         Reference {
                             lifetime: Some(lifetime),
                             inner,
-                        } if !inner.has_lifetimes() => self
-                            .output
-                            .0
-                            .insert_new_lifetimes2(*lifetime, &mut generics.params),
-                        ReferenceMut {
-                            lifetime: Some(lifetime),
-                            inner,
+                            ..
                         } if !inner.has_lifetimes() => self
                             .output
                             .0
@@ -181,7 +180,10 @@ impl Signature {
                 }
                 self.output.0.insert_new_lifetimes(&mut generics.params);
             }
-            SelfByReference(option_lifetime) | SelfByReferenceMut(option_lifetime) => {
+            SelfByReference {
+                lifetime: option_lifetime,
+                ..
+            } => {
                 let lifetime = if let Some(lifetime) = option_lifetime.0 {
                     lifetime
                 } else {
@@ -206,7 +208,9 @@ impl Signature {
 impl TypeNode {
     fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
         match self {
-            Reference { inner, lifetime } => {
+            Reference {
+                inner, lifetime, ..
+            } => {
                 if lifetime.is_none() {
                     let new_lifetime = LIFETIMES.count();
                     params.push(GenericParam::Lifetime(new_lifetime));
@@ -214,14 +218,7 @@ impl TypeNode {
                 };
                 inner.insert_new_lifetimes(params);
             }
-            ReferenceMut { inner, lifetime } => {
-                if lifetime.is_none() {
-                    let new_lifetime = LIFETIMES.count();
-                    params.push(GenericParam::Lifetime(new_lifetime));
-                    *lifetime = Some(new_lifetime)
-                };
-                inner.insert_new_lifetimes(params);
-            }
+
             Tuple(types) => {
                 for ty in types.iter_mut() {
                     ty.0.insert_new_lifetimes(params);
@@ -242,13 +239,9 @@ impl TypeNode {
 
     fn insert_new_lifetimes2(&mut self, new_lifetime: Lifetime, params: &mut Vec<GenericParam>) {
         match self {
-            Reference { inner, lifetime } => {
-                if lifetime.is_none() {
-                    *lifetime = Some(new_lifetime);
-                };
-                inner.insert_new_lifetimes(params);
-            }
-            ReferenceMut { inner, lifetime } => {
+            Reference {
+                inner, lifetime, ..
+            } => {
                 if lifetime.is_none() {
                     *lifetime = Some(new_lifetime);
                 };
@@ -274,7 +267,7 @@ impl TypeNode {
 
     fn has_lifetimes(&self) -> bool {
         match self {
-            Reference { .. } | ReferenceMut { .. } => true,
+            Reference { .. } => true,
             Tuple(types) => types.iter().any(|ty| ty.0.has_lifetimes()),
             Dereference(node) => node.has_lifetimes(),
             TraitObject(bounds) => bounds.iter().any(|bound| match bound {

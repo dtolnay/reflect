@@ -109,20 +109,15 @@ impl<'a> MakeFunction<'a> {
 
         let node = match match wip.f.sig.receiver {
             SelfByValue if index == 0 => wip.self_ty.clone(),
-            SelfByReference(lifetime) if index == 0 => wip.self_ty.clone().map(|ty| {
+            SelfByReference { is_mut, lifetime } if index == 0 => wip.self_ty.clone().map(|ty| {
                 Type(TypeNode::Reference {
-                    lifetime: lifetime.0,
-                    inner: Box::new(ty.0),
-                })
-            }),
-            SelfByReferenceMut(lifetime) if index == 0 => wip.self_ty.clone().map(|ty| {
-                Type(TypeNode::ReferenceMut {
+                    is_mut,
                     lifetime: lifetime.0,
                     inner: Box::new(ty.0),
                 })
             }),
             NoSelf => None,
-            SelfByValue | SelfByReference(_) | SelfByReferenceMut(_) => {
+            SelfByValue | SelfByReference { .. } => {
                 index -= 1;
                 None
             }
