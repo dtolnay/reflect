@@ -230,6 +230,20 @@ impl ConstraintSet {
         self.set.contains(constraint)
     }
 
+    fn add_subtypes(&mut self, subtypes: LifetimeSubtypeMap) {
+        subtypes
+            .subtypes
+            .into_iter()
+            .for_each(|(subtype, supertype)| {
+                if subtype != supertype {
+                    self.set.insert(GenericConstraint::Lifetime(LifetimeDef {
+                        lifetime: subtype,
+                        bounds: vec![supertype],
+                    }));
+                }
+            });
+    }
+
     fn filter_constraints(
         self,
         relevant_generic_params: &BTreeSet<GenericParam>,
@@ -662,6 +676,8 @@ impl CompleteImpl {
             type_equality_sets,
             lifetime_equality_sets,
         );
+
+        constraints.add_subtypes(subtypes);
 
         let constraints =
             constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
