@@ -1,10 +1,9 @@
 use crate::{
     GenericArgument, GenericParam, Generics, GlobalCounter, Lifetime, ParamMap, Path,
-    PathArguments, Type,
+    PathArguments, RefMap, Type,
     TypeNode::{self, *},
     TypeParamBound, LIFETIMES,
 };
-use std::collections::BTreeMap;
 use std::default::Default;
 
 #[derive(Debug, Clone)]
@@ -38,22 +37,16 @@ pub trait SetOutput<'a, T> {
 }
 
 impl Receiver {
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         use Receiver::*;
         match *self {
             NoSelf => NoSelf,
             SelfByValue => SelfByValue,
             SelfByReference { is_mut, lifetime } => SelfByReference {
                 is_mut,
-                lifetime: OptionLifetime(
-                    ref_map
-                        .get(&GenericParam::Lifetime(lifetime.0.unwrap()))
-                        .map(|param| param.lifetime())
-                        .unwrap(),
-                ),
+                lifetime: OptionLifetime(Some(
+                    lifetime.0.unwrap().clone_with_fresh_generics(ref_map),
+                )),
             },
         }
     }
@@ -139,6 +132,10 @@ impl Signature {
         self.generics.set_generic_params(params)
     }
 
+    pub fn add_parent_params(&mut self, param_map: &mut ParamMap) {
+        self.generics.param_map.append(param_map);
+    }
+
     pub fn set_generic_constraints(&mut self, constraints: &[&str]) {
         self.generics.set_generic_constraints(constraints);
     }
@@ -155,7 +152,7 @@ impl Signature {
 
         match &mut self.receiver {
             NoSelf => {
-                for ty in self.inputs.iter_mut() {
+                for ty in &mut self.inputs {
                     ty.0.insert_new_lifetimes(&mut generics.params);
                 }
                 if self.inputs.len() == 1 {
@@ -175,7 +172,7 @@ impl Signature {
                 }
             }
             SelfByValue => {
-                for ty in self.inputs.iter_mut() {
+                for ty in &mut self.inputs {
                     ty.0.insert_new_lifetimes(&mut generics.params);
                 }
                 self.output.0.insert_new_lifetimes(&mut generics.params);
@@ -192,7 +189,7 @@ impl Signature {
                     lifetime
                 };
                 option_lifetime.0 = Some(lifetime);
-                for ty in self.inputs.iter_mut() {
+                for ty in &mut self.inputs {
                     ty.0.insert_new_lifetimes(&mut generics.params);
                 }
                 self.output
@@ -282,11 +279,11 @@ impl TypeNode {
 
 impl Path {
     fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
-        for segment in self.path.iter_mut() {
+        for segment in &mut self.path {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
-                    for arg in args.args.args.iter_mut() {
+                    for arg in &mut args.args.args {
                         if let GenericArgument::Type(ty) = arg {
                             ty.0.insert_new_lifetimes(params)
                         }
@@ -300,11 +297,11 @@ impl Path {
     }
 
     fn insert_new_lifetimes2(&mut self, lifetime: Lifetime, params: &mut Vec<GenericParam>) {
-        for segment in self.path.iter_mut() {
+        for segment in &mut self.path {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
-                    for arg in args.args.args.iter_mut() {
+                    for arg in &mut args.args.args {
                         if let GenericArgument::Type(ty) = arg {
                             ty.0.insert_new_lifetimes2(lifetime, params)
                         }

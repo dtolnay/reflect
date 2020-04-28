@@ -7,7 +7,7 @@ library! {
 
         impl Subtypes {
             fn sub1<'a, 'b, T, U>(&'a T, &'b U) -> &'b U where 'a: 'b;
-            fn sub2<'c, 'b: 'c, U, V>(&'b U, &'c V) -> &'c V;
+            fn sub2<'b, 'c, U, V>(&'b U, &'c V) -> &'c V where 'b: 'c, 'c: 'b;
             fn sub3<'c, 'd, V, W>(&'c V, &'d W) where 'c: 'd, 'd: 'static;
         }
 
@@ -39,7 +39,24 @@ fn test_transitive_closure() {
         struct Trivial;
     };
 
-    let expected = quote! {};
+    let expected = quote! {
+        impl<'__a1, '__a2, __T0, __T1> ::subtypes::CallSubtypes<'__a1, '__a2, __T0, __T1> for Trivial
+        where
+            '__a1: '__a2,
+            '__a1: 'static,
+            '__a2: 'static,
+        {
+            fn call_subtypes(__arg0: &'__a1 mut __T0, __arg1: &'__a2 mut __T1) {
+                let __v0 = __arg0;
+                let __v1 = __arg1;
+                let __v2 = ::subtypes::Subtypes::sub1(__v0, __v1);
+                let __v3 = ::subtypes::Subtypes::sub2(__v1, __v2);
+                let _ = ::subtypes::Subtypes::sub3(__v2, __v3);
+                let __v5 = ();
+                __v5
+            }
+        }
+    };
 
     let output = reflect::derive(input, derive);
     assert_eq!(output.to_string(), expected.to_string());

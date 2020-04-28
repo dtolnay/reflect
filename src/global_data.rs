@@ -10,6 +10,8 @@ thread_local! {
     pub(crate) static LIFETIMES: RefCell<usize> = RefCell::new(1);
 }
 
+pub(crate) const STATIC_LIFETIME: Lifetime = Lifetime(0);
+
 pub(crate) trait GlobalBorrow<T> {
     fn with_borrow<R, F>(&'static self, f: F) -> R
     where

@@ -1,6 +1,5 @@
-use crate::{GenericArgument, GenericArguments, GenericParam, Ident, ParamMap, Type};
+use crate::{GenericArgument, GenericArguments, Ident, ParamMap, RefMap, Type};
 use ref_cast::RefCast;
-use std::collections::BTreeMap;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_str, ReturnType, Token};
 
@@ -139,10 +138,7 @@ impl Path {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         Path {
             global: self.global,
             path: self
@@ -172,10 +168,7 @@ impl Path {
 }
 
 impl AngleBracketedGenericArguments {
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         AngleBracketedGenericArguments {
             args: self.args.clone_with_fresh_generics(ref_map),
         }
@@ -183,10 +176,7 @@ impl AngleBracketedGenericArguments {
 }
 
 impl ParenthesizedGenericArguments {
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         ParenthesizedGenericArguments {
             inputs: self
                 .inputs

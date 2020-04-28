@@ -314,11 +314,11 @@
 //! general and robust procedural macro.
 
 #![doc(html_root_url = "https://docs.rs/reflect/0.0.4")]
+#![warn(clippy::explicit_iter_loop)]
 #![allow(unused_variables, dead_code)]
 #![allow(
     clippy::needless_pass_by_value,
     clippy::new_without_default,
-    clippy::for_loop_over_option,
     clippy::large_enum_variant,
     clippy::trivially_copy_pass_by_ref
 )]
@@ -372,11 +372,12 @@ use crate::compiler::{CompleteFunction, CompleteImpl, Program};
 use crate::execution::Tracker;
 use crate::field::Accessor;
 use crate::generics::{
-    GenericArgument, GenericConstraint, GenericParam, Lifetime, LifetimeDef, PredicateType,
+    GenericArgument, GenericConstraint, GenericParam, Lifetime, LifetimeDef, PredicateType, RefMap,
     TraitBound, TypeParam, TypeParamBound,
 };
 use crate::global_data::{
-    GlobalBorrow, GlobalCounter, GlobalPush, INVOKES, LIFETIMES, MACROS, TYPE_PARAMS, VALUES,
+    GlobalBorrow, GlobalCounter, GlobalPush, INVOKES, LIFETIMES, MACROS, STATIC_LIFETIME,
+    TYPE_PARAMS, VALUES,
 };
 use crate::ident::Ident;
 use crate::index::{

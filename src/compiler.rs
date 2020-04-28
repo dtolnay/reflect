@@ -93,7 +93,6 @@ impl CompleteImpl {
         if let Some(trait_ty) = trait_ty {
             quote! {
                 // FIXME: assosiated types
-                // FIXME: trait generics
                 impl #params #trait_ty for #name #self_ty_args #where_clause {
                     #(#functions)*
                 }
@@ -109,12 +108,15 @@ impl CompleteImpl {
 
     fn has_generics(&self) -> bool {
         if let TypeNode::DataStructure { generics, .. } = &self.ty.0 {
-            return !generics.params.is_empty();
+            !generics.params.is_empty()
+                || if let Some(parent) = &self.trait_ty {
+                    !parent.generics.params.is_empty()
+                } else {
+                    false
+                }
+        } else {
+            false
         }
-        if let Some(parent) = &self.trait_ty {
-            return !parent.generics.params.is_empty();
-        }
-        false
     }
 }
 

@@ -1,8 +1,8 @@
 use crate::{
     CompleteFunction, CompleteImpl, GenericArgument, GenericArguments, GenericConstraint,
-    GenericParam, GlobalBorrow, Lifetime, LifetimeDef, LifetimeEqualitySetRef, Parent, ParentKind,
-    Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef,
-    TypeNode, TypeParamBound, TypedIndex, INVOKES, VALUES,
+    GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef, LifetimeEqualitySetRef, Parent,
+    ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
+    TypeEqualitySetRef, TypeNode, TypeParamBound, TypedIndex, INVOKES, STATIC_LIFETIME, VALUES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -79,6 +79,12 @@ pub(crate) struct BoolMatrix {
     matrix: Vec<bool>,
 }
 
+pub(crate) struct TransitiveClosure {
+    transitive_closure: BoolMatrix,
+    index_lifetime_mapping: BTreeMap<usize, Lifetime>,
+    lifetime_index_mapping: BTreeMap<Lifetime, usize>,
+}
+
 impl BoolMatrix {
     fn new(size: usize) -> Self {
         BoolMatrix {
@@ -128,8 +134,8 @@ impl LifetimeSubtypeMap {
         });
     }
 
-    fn transitive_closure(&mut self) {
-        let (mapping, index_lifetime_mapping, size) = self.create_mapping();
+    fn transitive_closure(self) -> TransitiveClosure {
+        let (mapping, index_lifetime_mapping, lifetime_index_mapping, size) = self.create_mapping();
         let mut subtype_graph = BoolMatrix::new(size);
         let mut transitive_closure = BoolMatrix::new(size);
 
@@ -139,28 +145,18 @@ impl LifetimeSubtypeMap {
         }
 
         for i in 0..subtype_graph.size {
+            // The static lifetime is a subtype to all lifetimes
+            subtype_graph[(0, i)] = true;
+        }
+        for i in 0..subtype_graph.size {
             // Every type is a subtype of itself
             Self::transitive_closure_dfs(&mut subtype_graph, &mut transitive_closure, i, i);
         }
 
-        // Update self with transitive closure
-        for subtype_index in 0..transitive_closure.size {
-            let subtype = if let Some(&subtype) = index_lifetime_mapping.get(&subtype_index) {
-                subtype
-            } else {
-                continue;
-            };
-            for supertype_index in 0..transitive_closure.size {
-                let supertype =
-                    if let Some(&supertype) = index_lifetime_mapping.get(&supertype_index) {
-                        supertype
-                    } else {
-                        continue;
-                    };
-                if transitive_closure[(subtype_index, supertype_index)] {
-                    self.subtypes.insert((subtype, supertype));
-                }
-            }
+        TransitiveClosure {
+            transitive_closure,
+            lifetime_index_mapping,
+            index_lifetime_mapping,
         }
     }
 
@@ -171,9 +167,9 @@ impl LifetimeSubtypeMap {
         supertype: usize,
     ) {
         transitive_closure[(subtype, supertype)] = true;
-        for i in subtype..subtype_graph.size {
+        for i in 0..subtype_graph.size {
             // if i is a supertype of supertype then i is a supertype of subtype
-            if subtype_graph[(supertype, i)] && !transitive_closure[(supertype, i)] {
+            if subtype_graph[(supertype, i)] && !transitive_closure[(subtype, i)] {
                 Self::transitive_closure_dfs(subtype_graph, transitive_closure, subtype, i);
             }
         }
@@ -181,15 +177,22 @@ impl LifetimeSubtypeMap {
 
     /// Map all lifetimes to a unique index starting at zero
     /// The static lifetime always gets mapped to 0
-    fn create_mapping(&self) -> (Vec<(usize, usize)>, BTreeMap<usize, Lifetime>, usize) {
+    fn create_mapping(
+        &self,
+    ) -> (
+        Vec<(usize, usize)>,
+        BTreeMap<usize, Lifetime>,
+        BTreeMap<Lifetime, usize>,
+        usize,
+    ) {
         let mut lifetime_index_mapping = BTreeMap::new();
         let mut index_lifetime_mapping = BTreeMap::new();
         let mut mapping = Vec::new();
         let mut counter: usize = 1;
 
         // Map the static lifetime to 0
-        lifetime_index_mapping.insert(Lifetime(0), 0);
-        for (subtype, supertype) in self.subtypes.iter() {
+        lifetime_index_mapping.insert(STATIC_LIFETIME, 0);
+        for (subtype, supertype) in &self.subtypes {
             let subtype = if let Some(&subtype) = lifetime_index_mapping.get(subtype) {
                 subtype
             } else {
@@ -208,10 +211,15 @@ impl LifetimeSubtypeMap {
             };
             mapping.push((subtype, supertype));
         }
-        for (lifetime, index) in lifetime_index_mapping {
+        for (&lifetime, &index) in &lifetime_index_mapping {
             index_lifetime_mapping.insert(index, lifetime);
         }
-        (mapping, index_lifetime_mapping, counter)
+        (
+            mapping,
+            index_lifetime_mapping,
+            lifetime_index_mapping,
+            counter,
+        )
     }
 }
 
@@ -230,18 +238,26 @@ impl ConstraintSet {
         self.set.contains(constraint)
     }
 
-    fn add_subtypes(&mut self, subtypes: LifetimeSubtypeMap) {
-        subtypes
-            .subtypes
-            .into_iter()
-            .for_each(|(subtype, supertype)| {
-                if subtype != supertype {
+    fn add_subtypes(&mut self, transitive_closure: &TransitiveClosure) {
+        let lifetime_index_mapping = &transitive_closure.index_lifetime_mapping;
+        let transitive_closure = &transitive_closure.transitive_closure;
+        for subtype in 0..transitive_closure.size {
+            for supertype in 0..transitive_closure.size {
+                // Add the subtype: supertype constraint if subtype is a
+                // subtype of supertype, and subtype is not equal supertype
+                if transitive_closure[(subtype, supertype)]
+                    && transitive_closure[(subtype, supertype)]
+                        != transitive_closure[(supertype, subtype)]
+                {
+                    let subtype = *lifetime_index_mapping.get(&subtype).unwrap();
+                    let supertype = *lifetime_index_mapping.get(&supertype).unwrap();
                     self.set.insert(GenericConstraint::Lifetime(LifetimeDef {
                         lifetime: subtype,
                         bounds: vec![supertype],
                     }));
                 }
-            });
+            }
+        }
     }
 
     fn filter_constraints(
@@ -296,8 +312,8 @@ impl TypeEqualitySetRef {
     /// concrete than U, and thus Option<String> is more concrete than Option<U>,
     /// and thus the most concrete type we can get startng from the first set
     /// is Option<String>
-    fn make_most_concrete(&self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) -> TypeNode {
-        let most_concrete = concrete_maps_and_sets.most_concrete_type_map.get(self);
+    fn make_most_concrete(self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) -> TypeNode {
+        let most_concrete = concrete_maps_and_sets.most_concrete_type_map.get(&self);
         match most_concrete {
             Some(node) => node.clone(),
             None => {
@@ -312,7 +328,7 @@ impl TypeEqualitySetRef {
                 // it will just return Infer, in case we have a self referential loop.
                 concrete_maps_and_sets
                     .most_concrete_type_map
-                    .insert(*self, TypeNode::Infer);
+                    .insert(self, TypeNode::Infer);
 
                 // Temprorarily take the set out of the equlity set to avoid borrowing issues
                 let set =
@@ -333,7 +349,7 @@ impl TypeEqualitySetRef {
                 };
                 concrete_maps_and_sets
                     .most_concrete_type_map
-                    .insert(*self, most_concrete.clone());
+                    .insert(self, most_concrete.clone());
 
                 // insert the set back in again
                 concrete_maps_and_sets.type_equality_sets.sets[self.0].set = set;
@@ -387,7 +403,7 @@ where
                     EqualitySet::new(),
                 );
                 let set1 = &mut self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref1)];
-                for t in set2.set.iter() {
+                for t in &set2.set {
                     if let Some(set_ref) = self.set_map.get_mut(t) {
                         *set_ref = set_ref1
                     }
@@ -669,15 +685,14 @@ impl CompleteImpl {
         });
 
         subtypes.add_lifetime_bounds(&constraints);
-        subtypes.transitive_closure();
+        let transitive_closure = subtypes.transitive_closure();
+        constraints.add_subtypes(&transitive_closure);
 
         let (relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
             &original_generic_params,
             type_equality_sets,
             lifetime_equality_sets,
         );
-
-        constraints.add_subtypes(subtypes);
 
         let constraints =
             constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
@@ -819,7 +834,7 @@ impl CompleteFunction {
                     )
                 });
 
-                self.add_constraints(constraints);
+                Self::add_constraints(invoke, constraints, subtypes);
             }
         });
 
@@ -831,20 +846,35 @@ impl CompleteFunction {
         );
     }
 
-    fn add_constraints(&self, constraints: &mut ConstraintSet) {
+    fn add_constraints(
+        invoke: &Invoke,
+        constraints: &mut ConstraintSet,
+        subtypes: &mut LifetimeSubtypeMap,
+    ) {
         // Add parent constraints
         // FIXME: Add constraints from parent type
-        if let Some(generics) = self.f.parent.as_ref().map(|parent| &parent.generics) {
+        if let Some(generics) = invoke
+            .function
+            .parent
+            .as_ref()
+            .map(|parent| &parent.generics)
+        {
             generics.constraints.iter().for_each(|constraint| {
                 if !constraints.contains(constraint) {
                     constraints.insert(constraint.clone());
+                };
+                if let GenericConstraint::Lifetime(lifetime) = constraint {
+                    for &supertype in &lifetime.bounds {
+                        subtypes.insert(lifetime.lifetime, supertype);
+                    }
                 };
             })
         };
 
         // Add function constraints
         // FIXME: Add constraints from types in signature
-        self.f
+        invoke
+            .function
             .sig
             .generics
             .constraints
@@ -852,6 +882,11 @@ impl CompleteFunction {
             .for_each(|constraint| {
                 if !constraints.contains(constraint) {
                     constraints.insert(constraint.clone());
+                };
+                if let GenericConstraint::Lifetime(lifetime) = constraint {
+                    for &supertype in &lifetime.bounds {
+                        subtypes.insert(lifetime.lifetime, supertype);
+                    }
                 };
             })
     }
@@ -1272,8 +1307,8 @@ impl Lifetime {
         }
     }
 
-    fn is_relevant_for_constraint(&self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
-        self == &Lifetime(0) || relevant_generic_params.contains(&GenericParam::Lifetime(*self))
+    fn is_relevant_for_constraint(self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
+        self == STATIC_LIFETIME || relevant_generic_params.contains(&GenericParam::Lifetime(self))
     }
 }
 
@@ -1309,12 +1344,20 @@ impl LifetimeDef {
     }
 
     fn is_relevant_for_constraint(&self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
-        self.lifetime
-            .is_relevant_for_constraint(relevant_generic_params)
+        // The static lifetime is a subtype of all lifetimes so it redundant to say
+        self.lifetime != STATIC_LIFETIME
+            && self
+                .lifetime
+                .is_relevant_for_constraint(relevant_generic_params)
             && self
                 .bounds
                 .iter()
                 .all(|lifetime| lifetime.is_relevant_for_constraint(relevant_generic_params))
+            && if self.bounds.len() == 1 {
+                self.lifetime != self.bounds[0]
+            } else {
+                true
+            }
     }
 }
 
@@ -1383,11 +1426,11 @@ impl Path {
         type_equality_sets: &mut TypeEqualitySets,
         relevant_generic_params: &mut BTreeSet<GenericParam>,
     ) {
-        for segment in self.path.iter() {
+        for segment in &self.path {
             match &segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
-                    for arg in args.args.args.iter() {
+                    for arg in &args.args.args {
                         match arg {
                             GenericArgument::Type(ty) => {
                                 ty.0.inner_params(type_equality_sets, relevant_generic_params)

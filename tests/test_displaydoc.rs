@@ -39,10 +39,7 @@ fn display_fmt(f: MakeFunction) -> Value {
                 let num_fields = receiver.fields().count();
                 let attrs = receiver.attrs();
                 let doc_comment = extract_doc_comment(attrs);
-                let fmt_string = format!(
-                    "{} ",
-                    doc_comment.as_ref().map(String::as_str).unwrap_or("{}")
-                );
+                let fmt_string = format!("{} ", doc_comment.as_deref().unwrap_or("{}"));
 
                 let mut last_write = if !fmt_string.contains('{') {
                     RUNTIME::std::write.INVOKE(&[formatter, f.string(&fmt_string)])

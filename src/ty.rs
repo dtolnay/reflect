@@ -1,11 +1,10 @@
 use crate::{
-    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, TypeParam,
-    TypeParamBound,
+    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, RefMap,
+    TypeParam, TypeParamBound,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use syn::{parse_str, TypePath};
 
@@ -70,6 +69,14 @@ impl Type {
         })
     }
 
+    pub fn reference_mut(&self) -> Self {
+        Type(TypeNode::Reference {
+            is_mut: true,
+            lifetime: None,
+            inner: Box::new(self.0.clone()),
+        })
+    }
+
     pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
         let lifetime: syn::Lifetime = syn::parse_str(lifetime)
             .expect("Type::reference_with_lifetime: couldn't parse lifetime");
@@ -81,14 +88,6 @@ impl Type {
         Type(TypeNode::Reference {
             is_mut: true,
             lifetime: Some(lifetime),
-            inner: Box::new(self.0.clone()),
-        })
-    }
-
-    pub fn reference_mut(&self) -> Self {
-        Type(TypeNode::Reference {
-            is_mut: true,
-            lifetime: None,
             inner: Box::new(self.0.clone()),
         })
     }
@@ -141,10 +140,10 @@ impl Type {
             Type(TypeNode::TypeParam(
                 param
                     .type_param()
-                    .expect("Type::type_param_from_str: Not a type param ref"),
+                    .expect("Type::type_param_from_str: Not a type param"),
             ))
         } else {
-            panic!("Type::type_param_from_str: Not a type param ref")
+            panic!("Type::type_param_from_str: Not a type param")
         }
     }
 
@@ -208,10 +207,7 @@ impl Type {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         Type(self.0.clone_with_fresh_generics(ref_map))
     }
 }
@@ -242,10 +238,7 @@ impl TypeNode {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(
-        &self,
-        ref_map: &BTreeMap<GenericParam, GenericParam>,
-    ) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
         use super::TypeNode::*;
         match self {
             Infer => Infer,
@@ -266,12 +259,7 @@ impl TypeNode {
             } => Reference {
                 is_mut: *is_mut,
 
-                lifetime: lifetime.map(|lifetime| {
-                    ref_map
-                        .get(&GenericParam::Lifetime(lifetime))
-                        .and_then(|param| param.lifetime())
-                        .unwrap()
-                }),
+                lifetime: lifetime.map(|lifetime| lifetime.clone_with_fresh_generics(ref_map)),
                 inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
             },
 

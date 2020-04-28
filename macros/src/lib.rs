@@ -8,9 +8,9 @@ use std::iter::once;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
-    braced, parenthesized, parse_macro_input, parse_str, token, GenericArgument, GenericParam,
-    Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
-    TypeTraitObject,
+    braced, parenthesized, parse2, parse_macro_input, parse_str, token, GenericArgument,
+    GenericParam, Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token,
+    TypeParamBound, TypeTraitObject,
 };
 
 use self::proc_macro::TokenStream;
@@ -222,6 +222,7 @@ impl Parse for ItemTrait {
                     GenericArgument::Constraint(constraint) => {
                         parse_str(&constraint.ident.to_string()).ok()
                     }
+                    GenericArgument::Lifetime(lifetime) => parse_str(&lifetime.to_string()).ok(),
                     _ => None,
                 })
                 .collect();
@@ -446,7 +447,7 @@ fn declare_parent(
     parent_generics: &Generics,
     parent_type: &PathSegment,
     mod_path: &Path,
-    type_params: &[&Ident],
+    params: &[&GenericParam],
     parent_kind: ParentKind,
 ) -> TokenStream2 {
     let set_parent_params = if !parent_generics.params.is_empty() {
@@ -493,7 +494,7 @@ fn declare_parent(
             segments,
         },
         mod_path,
-        type_params,
+        params,
     );
 
     quote! {
@@ -516,16 +517,14 @@ fn declare_parent(
 
 fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
     let parent = &item.segment.ident;
-    let type_params: &Vec<_> = &item
+    let params: &Vec<_> = &item
         .generics
         .params
         .iter()
-        .filter_map(|param| {
-            if let GenericParam::Type(type_param) = param {
-                Some(&type_param.ident)
-            } else {
-                None
-            }
+        .filter(|param| match param {
+            GenericParam::Type(_) => true,
+            GenericParam::Lifetime(_) => true,
+            _ => false,
         })
         .collect();
 
@@ -533,7 +532,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         &item.generics,
         &item.segment,
         mod_path,
-        type_params,
+        params,
         ParentKind::DataStructure,
     );
 
@@ -543,7 +542,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
             !item.generics.params.is_empty(),
             f,
             mod_path,
-            type_params,
+            params,
         )
     });
 
@@ -562,16 +561,14 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     });
     let parent = &item.segment.ident;
 
-    let type_params: &Vec<_> = &item
+    let params: &Vec<_> = &item
         .generics
         .params
         .iter()
-        .filter_map(|param| {
-            if let GenericParam::Type(type_param) = param {
-                Some(&type_param.ident)
-            } else {
-                None
-            }
+        .filter(|param| match param {
+            GenericParam::Type(_) => true,
+            GenericParam::Lifetime(_) => true,
+            _ => false,
         })
         .collect();
 
@@ -579,7 +576,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         &item.generics,
         &item.segment,
         mod_path,
-        type_params,
+        params,
         ParentKind::Trait,
     );
 
@@ -589,7 +586,7 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
             !item.generics.params.is_empty(),
             f,
             mod_path,
-            type_params,
+            params,
         )
     });
 
@@ -608,7 +605,7 @@ fn declare_function(
     parent_has_generics: bool,
     function: &Function,
     mod_path: &Path,
-    type_params: &[&Ident],
+    params: &[&GenericParam],
 ) -> TokenStream2 {
     let name = &function.name;
     let name_str = name.to_string();
@@ -624,27 +621,17 @@ fn declare_function(
             sig.set_self_by_reference_mut();
         }),
     };
-    let type_params: &Vec<_> = &function
+    let params: &Vec<_> = &function
         .generics
         .params
         .iter()
-        .filter_map(|param| {
-            if let GenericParam::Type(type_param) = param {
-                Some(&type_param.ident)
-            } else {
-                None
-            }
+        .filter(|param| match param {
+            GenericParam::Type(_) => true,
+            GenericParam::Lifetime(_) => true,
+            _ => false,
         })
-        .chain(type_params.iter().copied())
+        .chain(params.iter().copied())
         .collect();
-
-    let get_parent_param_map = if parent_has_generics {
-        Some(quote! {
-            let param_map = &mut parent.get_param_map().clone();
-        })
-    } else {
-        None
-    };
 
     let function_has_generics = !function.generics.params.is_empty();
     let set_sig_params = if function_has_generics {
@@ -654,19 +641,17 @@ fn declare_function(
             .iter()
             .map(|param| param.to_token_stream().to_string());
 
-        if parent_has_generics {
-            Some(quote! {
-                {
-                    let sig_param_map = sig.set_generic_params(&[#(#param_strings),*]);
-                    sig_param_map.append(param_map);
-                    sig_param_map
-                };
-            })
-        } else {
-            Some(quote! {
-                sig.set_generic_params(&[#(#param_strings),*]);
-            })
-        }
+        Some(quote! {
+            sig.set_generic_params(&[#(#param_strings),*]);
+        })
+    } else {
+        None
+    };
+
+    let add_parent_params = if parent_has_generics {
+        Some(quote! {
+            sig.add_parent_params(&mut parent.get_param_map().clone());
+        })
     } else {
         None
     };
@@ -685,11 +670,11 @@ fn declare_function(
     };
 
     let setup_inputs = function.args.iter().map(|arg| {
-        let ty = to_runtime_type(arg, mod_path, type_params);
+        let ty = to_runtime_type(arg, mod_path, params);
         quote!(sig.add_input(|param_map: &mut _reflect::ParamMap| {#ty});)
     });
     let set_output = function.ret.as_ref().map(|ty| {
-        let ty = to_runtime_type(&ty, mod_path, type_params);
+        let ty = to_runtime_type(&ty, mod_path, params);
         quote!(sig.set_output(|param_map: &mut _reflect::ParamMap| {#ty});)
     });
 
@@ -711,8 +696,8 @@ fn declare_function(
                             static FUNCTION: ::std::rc::Rc<_reflect::Function> = {
                                 let mut sig = _reflect::Signature::new();
                                 let parent = _reflect::runtime::RuntimeParent::SELF(#parent);
-                                #get_parent_param_map
                                 #set_sig_params
+                                #add_parent_params
                                 #set_sig_constraints
                                 #setup_receiver
                                 #(
@@ -771,27 +756,25 @@ fn declare_macro(item: &ItemMacro) -> TokenStream2 {
     }
 }
 
-fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
+fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
     match ty {
         Type::Tuple(types) => {
-            let types = types
-                .iter()
-                .map(|ty| to_runtime_type(ty, mod_path, type_params));
+            let types = types.iter().map(|ty| to_runtime_type(ty, mod_path, params));
             quote! {
                 _reflect::Type::tuple(&[#(#types),*])
             }
         }
         Type::Path(path) => {
-            if let Some(ident) = &path.get_ident() {
+            if let Some(ident) = path.get_ident() {
                 // Check if the path is a generic argument
-                if type_params.contains(ident) {
+                if params.contains(&&parse2(quote! { #ident }).unwrap()) {
                     let type_param = ident.to_string();
                     return quote! {
                         _reflect::Type::type_param_from_str(#type_param, param_map)
                     };
                 }
             }
-            to_runtime_path_type(path, mod_path, type_params)
+            to_runtime_path_type(path, mod_path, params)
         }
 
         Type::TraitObject(type_trait_objects) => {
@@ -810,7 +793,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
             lifetime,
             inner,
         } if !is_mut => {
-            let inner = to_runtime_type(inner, mod_path, type_params);
+            let inner = to_runtime_type(inner, mod_path, params);
             if let Some(lifetime) = lifetime {
                 let lifetime_str = lifetime.to_string();
                 quote! {
@@ -825,7 +808,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
         Type::Reference {
             lifetime, inner, ..
         } => {
-            let inner = to_runtime_type(inner, mod_path, type_params);
+            let inner = to_runtime_type(inner, mod_path, params);
             if let Some(lifetime) = lifetime {
                 let lifetime_str = lifetime.to_string();
                 quote! {
@@ -840,8 +823,8 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, type_params: &[&Ident]) -> TokenS
     }
 }
 
-fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
-    let path = to_runtime_path(path, mod_path, type_params);
+fn to_runtime_path_type(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
+    let path = to_runtime_path(path, mod_path, params);
     quote! {
         _reflect::runtime::RuntimeType::SELF(
             #path
@@ -849,7 +832,7 @@ fn to_runtime_path_type(path: &Path, mod_path: &Path, type_params: &[&Ident]) ->
     }
 }
 
-fn to_runtime_path_str(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> String {
+fn to_runtime_path_str(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> String {
     let mut path = path.clone();
 
     // Check if path is defined in current module
@@ -861,33 +844,31 @@ fn to_runtime_path_str(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> 
     }
 
     let arguments = &mut path.segments.last_mut().unwrap().arguments;
-    expand_path_arguments(arguments, mod_path, type_params);
+    expand_path_arguments(arguments, mod_path, params);
     path.to_token_stream().to_string()
 }
 
-fn to_runtime_path(path: &Path, mod_path: &Path, type_params: &[&Ident]) -> TokenStream2 {
-    let path_str = to_runtime_path_str(path, mod_path, type_params);
+fn to_runtime_path(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
+    let path_str = to_runtime_path_str(path, mod_path, params);
     quote! {
         _reflect::Path::path_from_str(#path_str, param_map)
     }
 }
 
 /// Expand module defined types inside of a PathArgumet as fully qualified paths
-fn expand_path_arguments(arguments: &mut PathArguments, mod_path: &Path, type_params: &[&Ident]) {
+fn expand_path_arguments(arguments: &mut PathArguments, mod_path: &Path, params: &[&GenericParam]) {
     match arguments {
         PathArguments::None => {}
         PathArguments::AngleBracketed(generic_args) => {
             generic_args.args.iter_mut().for_each(|arg| match arg {
-                GenericArgument::Type(ty) => expand_type(ty, mod_path, type_params),
+                GenericArgument::Type(ty) => expand_type(ty, mod_path, params),
 
-                GenericArgument::Binding(binding) => {
-                    expand_type(&mut binding.ty, mod_path, type_params)
-                }
+                GenericArgument::Binding(binding) => expand_type(&mut binding.ty, mod_path, params),
 
                 GenericArgument::Constraint(constraint) => {
                     constraint.bounds.iter_mut().for_each(|bound| {
                         if let TypeParamBound::Trait(bound) = bound {
-                            expand_path(&mut bound.path, mod_path, type_params)
+                            expand_path(&mut bound.path, mod_path, params)
                         }
                     })
                 }
@@ -899,32 +880,32 @@ fn expand_path_arguments(arguments: &mut PathArguments, mod_path: &Path, type_pa
             generic_args
                 .inputs
                 .iter_mut()
-                .for_each(|ty| expand_type(ty, mod_path, type_params));
+                .for_each(|ty| expand_type(ty, mod_path, params));
 
             if let ReturnType::Type(_, ref mut ty) = generic_args.output {
-                expand_type(ty, mod_path, type_params)
+                expand_type(ty, mod_path, params)
             }
         }
     }
 }
 
 /// Expand module defined types inside of the PathArguments inside of a type
-fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &[&Ident]) {
+fn expand_type(ty: &mut syn::Type, mod_path: &Path, params: &[&GenericParam]) {
     use syn::Type::*;
     match ty {
-        Path(type_path) => expand_path(&mut type_path.path, mod_path, type_params),
-        Reference(reference) => expand_type(&mut reference.elem, mod_path, type_params),
+        Path(type_path) => expand_path(&mut type_path.path, mod_path, params),
+        Reference(reference) => expand_type(&mut reference.elem, mod_path, params),
 
         TraitObject(type_trait_object) => type_trait_object.bounds.iter_mut().for_each(|bound| {
             if let TypeParamBound::Trait(bound) = bound {
-                expand_path(&mut bound.path, mod_path, type_params)
+                expand_path(&mut bound.path, mod_path, params)
             }
         }),
 
         Tuple(type_tuple) => type_tuple
             .elems
             .iter_mut()
-            .for_each(|elem| expand_type(elem, mod_path, type_params)),
+            .for_each(|elem| expand_type(elem, mod_path, params)),
 
         // TODO: maybe return syn::Error?
         _ => unimplemented!("expand_type_arguments: Tried to expand unsupported type"),
@@ -933,10 +914,10 @@ fn expand_type(ty: &mut syn::Type, mod_path: &Path, type_params: &[&Ident]) {
 
 /// If path is an type defined in the current module, make the fully qualified
 /// type for that path
-fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &[&Ident]) {
+fn expand_path(path: &mut syn::Path, mod_path: &Path, params: &[&GenericParam]) {
     // Expand path arguments if any
     let path_arguments = &mut path.segments.last_mut().unwrap().arguments;
-    expand_path_arguments(path_arguments, mod_path, type_params);
+    expand_path_arguments(path_arguments, mod_path, params);
 
     // If the type is defined in the current scope, expand to the fully quallified path
     // FIXME: This test assumes that a type with one path segment and no leading
@@ -944,7 +925,8 @@ fn expand_path(path: &mut syn::Path, mod_path: &Path, type_params: &[&Ident]) {
     // is not defined correctly.
     if path.segments.len() == 1 && path.leading_colon.is_none() {
         let segment = &path.segments[0];
-        if !type_params.contains(&&segment.ident) {
+        let ident = &segment.ident;
+        if !params.contains(&&parse2(quote! { #ident }).unwrap()) {
             let mut segments = Punctuated::new();
             mod_path
                 .segments
