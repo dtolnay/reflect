@@ -380,15 +380,12 @@ use crate::global_data::{
     TYPE_PARAMS, VALUES,
 };
 use crate::ident::Ident;
-use crate::index::{
-    InvokeRef, LifetimeEqualitySetRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex,
-    ValueRef,
-};
+use crate::index::{InvokeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex, ValueRef};
 use crate::node::ValueNode;
 use crate::path::{PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
-use crate::trait_inference::{LifetimeEqualitySet, TypeEqualitySet};
+use crate::trait_inference::TypeEqualitySet;
 use crate::ty::TypeNode;
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

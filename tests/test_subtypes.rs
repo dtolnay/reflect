@@ -40,13 +40,9 @@ fn test_transitive_closure() {
     };
 
     let expected = quote! {
-        impl<'__a1, '__a2, __T0, __T1> ::subtypes::CallSubtypes<'__a1, '__a2, __T0, __T1> for Trivial
-        where
-            '__a1: '__a2,
-            '__a1: 'static,
-            '__a2: 'static,
+        impl<__T0, __T1> ::subtypes::CallSubtypes<'static, 'static, __T0, __T1> for Trivial
         {
-            fn call_subtypes(__arg0: &'__a1 mut __T0, __arg1: &'__a2 mut __T1) {
+            fn call_subtypes(__arg0: &'static mut __T0, __arg1: &'static mut __T1) {
                 let __v0 = __arg0;
                 let __v1 = __arg1;
                 let __v2 = ::subtypes::Subtypes::sub1(__v0, __v1);

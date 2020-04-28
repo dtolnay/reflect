@@ -35,12 +35,16 @@ fn test_generics1() {
     }
 
     let expected = quote! {
-        impl<'__a1, '__a2, __T0, __T1>  ::generic::Generic<__T1> for Generics<'__a1, '__a2, __T0>
-            where
+        impl<'__a1, __T0, __T1> ::generic::Generic<__T1> for Generics<'__a1, 'static, __T0>
+        where
             __T0: ::generic::Bound + Send,
-            '__a2: 'static,
         {
-            fn generic<__T2>(self, __arg0: __T1, __arg1: ::generic::Wrapper<__T2>, __arg2: ::generic::Wrapper<::generic::Wrapper<::std::string::String> >) {
+            fn generic<__T2>(
+                self,
+                __arg0: __T1,
+                __arg1: ::generic::Wrapper<__T2>,
+                __arg2: ::generic::Wrapper<::generic::Wrapper<::std::string::String> >
+            ) {
                 let __v0 = ();
                 __v0
             }

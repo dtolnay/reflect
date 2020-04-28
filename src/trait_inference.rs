@@ -1,8 +1,8 @@
 use crate::{
     CompleteFunction, CompleteImpl, GenericArgument, GenericArguments, GenericConstraint,
-    GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef, LifetimeEqualitySetRef, Parent,
-    ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
-    TypeEqualitySetRef, TypeNode, TypeParamBound, TypedIndex, INVOKES, STATIC_LIFETIME, VALUES,
+    GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef, Parent, ParentKind, Path,
+    PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
+    TypeParamBound, TypedIndex, INVOKES, STATIC_LIFETIME, VALUES,
 };
 // SeaHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -30,8 +30,6 @@ pub(crate) struct EqualitySet<T> {
 /// types, since more than two types may be considered equal
 pub(crate) type TypeEqualitySet = EqualitySet<TypeNode>;
 
-pub(crate) type LifetimeEqualitySet = EqualitySet<Lifetime>;
-
 /// A set of constraints used in the where clause in the final impl
 pub(crate) struct ConstraintSet {
     pub(crate) set: HashSet<GenericConstraint, BuildHasherDefault<SeaHasher>>,
@@ -45,14 +43,9 @@ pub(crate) struct EqualitySets<SetRef, T> {
 // A mapping between types and it's corresponding set of equal types
 pub(crate) type TypeEqualitySets = EqualitySets<TypeEqualitySetRef, TypeNode>;
 
-// A mapping between types and it's corresponding set of equal types
-pub(crate) type LifetimeEqualitySets = EqualitySets<LifetimeEqualitySetRef, Lifetime>;
-
-pub(crate) struct ConcreteMapsAndSets {
+pub(crate) struct ConcreteMapAndSets {
     most_concrete_type_map: BTreeMap<TypeEqualitySetRef, TypeNode>,
-    most_concrete_lifetime_map: BTreeMap<LifetimeEqualitySetRef, Lifetime>,
     type_equality_sets: TypeEqualitySets,
-    lifetime_equality_sets: LifetimeEqualitySets,
 }
 
 pub(crate) struct OriginalGenercs {
@@ -83,6 +76,13 @@ pub(crate) struct TransitiveClosure {
     transitive_closure: BoolMatrix,
     index_lifetime_mapping: BTreeMap<usize, Lifetime>,
     lifetime_index_mapping: BTreeMap<Lifetime, usize>,
+}
+
+struct Mapping {
+    mapping: Vec<(usize, usize)>,
+    index_lifetime_mapping: BTreeMap<usize, Lifetime>,
+    lifetime_index_mapping: BTreeMap<Lifetime, usize>,
+    size: usize,
 }
 
 impl BoolMatrix {
@@ -135,7 +135,13 @@ impl LifetimeSubtypeMap {
     }
 
     fn transitive_closure(self) -> TransitiveClosure {
-        let (mapping, index_lifetime_mapping, lifetime_index_mapping, size) = self.create_mapping();
+        let Mapping {
+            mapping,
+            index_lifetime_mapping,
+            lifetime_index_mapping,
+            size,
+        } = self.create_mapping();
+
         let mut subtype_graph = BoolMatrix::new(size);
         let mut transitive_closure = BoolMatrix::new(size);
 
@@ -151,6 +157,12 @@ impl LifetimeSubtypeMap {
         for i in 0..subtype_graph.size {
             // Every type is a subtype of itself
             Self::transitive_closure_dfs(&mut subtype_graph, &mut transitive_closure, i, i);
+        }
+        for i in 0..size {
+            println!();
+            for j in 0..size {
+                print!("{} ", transitive_closure[(i, j)] as u8);
+            }
         }
 
         TransitiveClosure {
@@ -177,49 +189,54 @@ impl LifetimeSubtypeMap {
 
     /// Map all lifetimes to a unique index starting at zero
     /// The static lifetime always gets mapped to 0
-    fn create_mapping(
-        &self,
-    ) -> (
-        Vec<(usize, usize)>,
-        BTreeMap<usize, Lifetime>,
-        BTreeMap<Lifetime, usize>,
-        usize,
-    ) {
+    fn create_mapping(&self) -> Mapping {
         let mut lifetime_index_mapping = BTreeMap::new();
         let mut index_lifetime_mapping = BTreeMap::new();
+        let mut unique_lifetimes = BTreeSet::new();
         let mut mapping = Vec::new();
-        let mut counter: usize = 1;
 
-        // Map the static lifetime to 0
-        lifetime_index_mapping.insert(STATIC_LIFETIME, 0);
+        unique_lifetimes.insert(STATIC_LIFETIME);
+        for &(subtype, supertype) in &self.subtypes {
+            unique_lifetimes.insert(subtype);
+            unique_lifetimes.insert(supertype);
+        }
+        let size = unique_lifetimes.len();
+        for (index, lifetime) in unique_lifetimes.into_iter().enumerate() {
+            index_lifetime_mapping.insert(index, lifetime);
+            lifetime_index_mapping.insert(lifetime, index);
+        }
         for (subtype, supertype) in &self.subtypes {
-            let subtype = if let Some(&subtype) = lifetime_index_mapping.get(subtype) {
-                subtype
-            } else {
-                lifetime_index_mapping.insert(*subtype, counter);
-                let subtype = counter;
-                counter += 1;
-                subtype
-            };
-            let supertype = if let Some(&supertype) = lifetime_index_mapping.get(supertype) {
-                supertype
-            } else {
-                lifetime_index_mapping.insert(*supertype, counter);
-                let supertype = counter;
-                counter += 1;
-                supertype
-            };
+            let &subtype = lifetime_index_mapping.get(subtype).unwrap();
+            let &supertype = lifetime_index_mapping.get(supertype).unwrap();
             mapping.push((subtype, supertype));
         }
-        for (&lifetime, &index) in &lifetime_index_mapping {
-            index_lifetime_mapping.insert(index, lifetime);
-        }
-        (
+
+        Mapping {
             mapping,
             index_lifetime_mapping,
             lifetime_index_mapping,
-            counter,
-        )
+            size,
+        }
+    }
+}
+
+impl TransitiveClosure {
+    pub(crate) fn make_most_concrete_lifetime(&self, lifetime: &mut Lifetime) {
+        if let Some(&lifetime_index) = self.lifetime_index_mapping.get(&lifetime) {
+            // Find the first lifetime self is equal to
+            *lifetime = (0..self.transitive_closure.size)
+                .filter_map(|i| {
+                    if self.transitive_closure[(i, lifetime_index)]
+                        && self.transitive_closure[(lifetime_index, i)]
+                    {
+                        self.index_lifetime_mapping.get(&i).copied()
+                    } else {
+                        None
+                    }
+                })
+                .min()
+                .unwrap();
+        };
     }
 }
 
@@ -263,15 +280,19 @@ impl ConstraintSet {
     fn filter_constraints(
         self,
         relevant_generic_params: &BTreeSet<GenericParam>,
-        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
     ) -> Self {
         ConstraintSet {
             set: self
                 .set
                 .into_iter()
                 .map(|mut constraint| {
-                    let is_relevant =
-                        constraint.make_relevant(concrete_maps_and_sets, relevant_generic_params);
+                    let is_relevant = constraint.make_relevant(
+                        concrete_maps_and_sets,
+                        relevant_generic_params,
+                        transitive_closure,
+                    );
                     if is_relevant {
                         Some(constraint)
                     } else {
@@ -312,7 +333,11 @@ impl TypeEqualitySetRef {
     /// concrete than U, and thus Option<String> is more concrete than Option<U>,
     /// and thus the most concrete type we can get startng from the first set
     /// is Option<String>
-    fn make_most_concrete(self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) -> TypeNode {
+    fn make_most_concrete(
+        self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) -> TypeNode {
         let most_concrete = concrete_maps_and_sets.most_concrete_type_map.get(&self);
         match most_concrete {
             Some(node) => node.clone(),
@@ -336,7 +361,7 @@ impl TypeEqualitySetRef {
                 let mut iterator = set.iter().peekable();
                 let mut first = iterator.next().unwrap().clone();
                 let most_concrete = if iterator.peek().is_none() {
-                    first.make_most_concrete_inner(concrete_maps_and_sets);
+                    first.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                     first
                 } else {
                     iterator.fold(first, |current_most_concrete, ty| {
@@ -344,6 +369,7 @@ impl TypeEqualitySetRef {
                             current_most_concrete,
                             ty.clone(),
                             concrete_maps_and_sets,
+                            transitive_closure,
                         )
                     })
                 };
@@ -438,7 +464,6 @@ impl TypeEqualitySets {
         ty1: TypeNode,
         ty2: TypeNode,
         constraints: &mut ConstraintSet,
-        lifetime_equality_sets: &mut LifetimeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use TypeNode::*;
@@ -447,13 +472,7 @@ impl TypeEqualitySets {
                 if bounds1.len() != bounds2.len() {
                     panic!("TypeEqualitySets::insert_types_as_equal: TraitObjects have different number of bounds")
                 }
-                return self.insert_inner_type_as_equal_to(
-                    &ty1,
-                    &ty2,
-                    constraints,
-                    lifetime_equality_sets,
-                    subtypes,
-                );
+                return self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints, subtypes);
             }
             (TraitObject(bounds), _) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
@@ -487,25 +506,17 @@ impl TypeEqualitySets {
             ) if is_mut1 != is_mut2 => {
                 if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
                     subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
                 }
                 return self.insert_types_as_equal(
                     *inner1.clone(),
                     *inner2.clone(),
                     constraints,
-                    lifetime_equality_sets,
                     subtypes,
                 );
             }
             _ => (),
         }
-        self.insert_inner_type_as_equal_to(
-            &ty1,
-            &ty2,
-            constraints,
-            lifetime_equality_sets,
-            subtypes,
-        );
+        self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints, subtypes);
         self.insert_as_equal(ty1, ty2)
     }
 
@@ -517,7 +528,6 @@ impl TypeEqualitySets {
         ty1: &TypeNode,
         ty2: &TypeNode,
         constraints: &mut ConstraintSet,
-        lifetime_equality_sets: &mut LifetimeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use TypeNode::*;
@@ -529,7 +539,6 @@ impl TypeEqualitySets {
                             ty1.0.clone(),
                             ty2.0.clone(),
                             constraints,
-                            lifetime_equality_sets,
                             subtypes,
                         )
                     })
@@ -551,24 +560,11 @@ impl TypeEqualitySets {
             ) if is_mut1 == is_mut2 => {
                 if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
                     subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                    lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
                 }
-                self.insert_types_as_equal(
-                    *inner1.clone(),
-                    *inner2.clone(),
-                    constraints,
-                    lifetime_equality_sets,
-                    subtypes,
-                )
+                self.insert_types_as_equal(*inner1.clone(), *inner2.clone(), constraints, subtypes)
             }
             (Path(path1), Path(path2)) => {
-                self.insert_path_arguments_as_equal_to(
-                    path1,
-                    path2,
-                    constraints,
-                    lifetime_equality_sets,
-                    subtypes,
-                );
+                self.insert_path_arguments_as_equal_to(path1, path2, constraints, subtypes);
             }
             (TraitObject(bounds1), TraitObject(bounds2)) => bounds1
                 .iter()
@@ -579,13 +575,11 @@ impl TypeEqualitySets {
                             &trait_bound1.path,
                             &trait_bound2.path,
                             constraints,
-                            lifetime_equality_sets,
                             subtypes,
                         );
                     }
                     (TypeParamBound::Lifetime(lifetime1), TypeParamBound::Lifetime(lifetime2)) => {
                         subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                        lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
                     }
                     _ => panic!("TraitObjects have different bound types"),
                 }),
@@ -614,7 +608,6 @@ impl TypeEqualitySets {
         path1: &Path,
         path2: &Path,
         constraints: &mut ConstraintSet,
-        lifetime_equality_sets: &mut LifetimeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         let (segment1, segment2) = (
@@ -636,7 +629,6 @@ impl TypeEqualitySets {
                                 ty1.0.clone(),
                                 ty2.0.clone(),
                                 constraints,
-                                lifetime_equality_sets,
                                 subtypes,
                             ),
                         (
@@ -644,7 +636,6 @@ impl TypeEqualitySets {
                             GenericArgument::Lifetime(lifetime2),
                         ) => {
                             subtypes.insert_as_equal(*lifetime1, *lifetime2);
-                            lifetime_equality_sets.insert_as_equal(*lifetime1, *lifetime2);
                         }
                         _ => {
                             unimplemented!("TypeEqualitySets::insert_inner_type_as_equal_to: Path")
@@ -666,7 +657,6 @@ impl CompleteImpl {
     pub(crate) fn compute_trait_bounds(&self) -> TraitInferenceResult {
         let mut constraints = ConstraintSet::new();
         let mut type_equality_sets = TypeEqualitySets::new();
-        let mut lifetime_equality_sets = LifetimeEqualitySets::new();
         let mut subtypes = LifetimeSubtypeMap::new();
 
         let OriginalGenercs {
@@ -676,32 +666,41 @@ impl CompleteImpl {
         } = self.get_original_generics(&mut constraints);
 
         self.functions.iter().for_each(|function| {
-            function.compute_trait_bounds(
-                &mut constraints,
-                &mut type_equality_sets,
-                &mut lifetime_equality_sets,
-                &mut subtypes,
-            )
+            function.compute_trait_bounds(&mut constraints, &mut type_equality_sets, &mut subtypes)
         });
 
         subtypes.add_lifetime_bounds(&constraints);
         let transitive_closure = subtypes.transitive_closure();
         constraints.add_subtypes(&transitive_closure);
 
-        let (relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
+        let (mut relevant_generic_params, mut concrete_maps_and_sets) = get_relevant_generic_params(
             &original_generic_params,
             type_equality_sets,
-            lifetime_equality_sets,
+            &transitive_closure,
         );
 
-        let constraints =
-            constraints.filter_constraints(&relevant_generic_params, &mut concrete_maps_and_sets);
+        let constraints = constraints.filter_constraints(
+            &relevant_generic_params,
+            &mut concrete_maps_and_sets,
+            &transitive_closure,
+        );
 
-        let data_struct_args =
-            get_data_struct_args(original_data_struct_args, &mut concrete_maps_and_sets);
+        let data_struct_args = get_data_struct_args(
+            original_data_struct_args,
+            &mut concrete_maps_and_sets,
+            &transitive_closure,
+        );
 
-        let trait_args = get_trait_args(original_trait_args, &mut concrete_maps_and_sets);
+        let trait_args = get_trait_args(
+            original_trait_args,
+            &mut concrete_maps_and_sets,
+            &transitive_closure,
+        );
 
+        // We remove the static lifetime since it is not a part of the paramater list
+        relevant_generic_params.remove(&GenericParam::Lifetime(STATIC_LIFETIME));
+
+        // FIXME: We need a mapping to the most concrete types and lifetimes in each function
         TraitInferenceResult {
             constraints,
             generic_params: relevant_generic_params,
@@ -763,7 +762,6 @@ impl CompleteFunction {
         &self,
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
-        lifetime_equality_sets: &mut LifetimeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use Receiver::*;
@@ -794,7 +792,6 @@ impl CompleteFunction {
                                         TypeNode::Path(parent.path.clone()),
                                         first_type.0,
                                         constraints,
-                                        lifetime_equality_sets,
                                         subtypes,
                                     ),
                             },
@@ -814,7 +811,6 @@ impl CompleteFunction {
                                         },
                                         first_type.0,
                                         constraints,
-                                        lifetime_equality_sets,
                                         subtypes,
                                     ),
                             },
@@ -829,7 +825,6 @@ impl CompleteFunction {
                         ty.0.clone(),
                         val.node().get_type().0,
                         constraints,
-                        lifetime_equality_sets,
                         subtypes,
                     )
                 });
@@ -838,12 +833,7 @@ impl CompleteFunction {
             }
         });
 
-        self.set_output_equal_to_last_value(
-            constraints,
-            type_equality_sets,
-            lifetime_equality_sets,
-            subtypes,
-        );
+        self.set_output_equal_to_last_value(constraints, type_equality_sets, subtypes);
     }
 
     fn add_constraints(
@@ -895,7 +885,6 @@ impl CompleteFunction {
         &self,
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
-        lifetime_equality_sets: &mut LifetimeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         // The type of the outgoing value must be the same as the return value
@@ -907,7 +896,6 @@ impl CompleteFunction {
                 self.f.sig.output.0.clone(),
                 return_value_type.0,
                 constraints,
-                lifetime_equality_sets,
                 subtypes,
             )
         }
@@ -935,18 +923,15 @@ fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut
 fn get_relevant_generic_params(
     original_generic_params: &[GenericParam],
     type_equality_sets: TypeEqualitySets,
-    lifetime_equality_sets: LifetimeEqualitySets,
-) -> (BTreeSet<GenericParam>, ConcreteMapsAndSets) {
+    transitive_closure: &TransitiveClosure,
+) -> (BTreeSet<GenericParam>, ConcreteMapAndSets) {
     use TypeNode::*;
     let mut relevant_generic_params = BTreeSet::new();
     let most_concrete_type_map = BTreeMap::new();
-    let most_concrete_lifetime_map = BTreeMap::new();
 
-    let mut concrete_maps_and_sets = ConcreteMapsAndSets {
+    let mut concrete_maps_and_sets = ConcreteMapAndSets {
         most_concrete_type_map,
-        most_concrete_lifetime_map,
         type_equality_sets,
-        lifetime_equality_sets,
     };
 
     for param in original_generic_params.iter() {
@@ -962,7 +947,8 @@ fn get_relevant_generic_params(
                         .new_set(TypeParam(type_param))
                 });
 
-                let node = set_ref.make_most_concrete(&mut concrete_maps_and_sets);
+                let node =
+                    set_ref.make_most_concrete(&mut concrete_maps_and_sets, transitive_closure);
                 node.inner_params(
                     &mut concrete_maps_and_sets.type_equality_sets,
                     &mut relevant_generic_params,
@@ -970,18 +956,8 @@ fn get_relevant_generic_params(
             }
 
             GenericParam::Lifetime(lifetime) => {
-                let set_ref = concrete_maps_and_sets
-                    .lifetime_equality_sets
-                    .get_set_ref(&lifetime);
-                let set_ref = set_ref.unwrap_or_else(|| {
-                    concrete_maps_and_sets
-                        .lifetime_equality_sets
-                        .new_set(*lifetime)
-                });
-                let lifetime = set_ref.make_most_concrete(
-                    &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                    &concrete_maps_and_sets.lifetime_equality_sets,
-                );
+                let mut lifetime = *lifetime;
+                lifetime.make_most_concrete(transitive_closure);
                 relevant_generic_params.insert(GenericParam::Lifetime(lifetime));
             }
 
@@ -994,7 +970,8 @@ fn get_relevant_generic_params(
 
 fn get_data_struct_args(
     original_data_struct_args: Vec<GenericParam>,
-    concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+    concrete_maps_and_sets: &mut ConcreteMapAndSets,
+    transitive_closure: &TransitiveClosure,
 ) -> GenericArguments {
     GenericArguments {
         args: original_data_struct_args
@@ -1002,10 +979,13 @@ fn get_data_struct_args(
             .map(|arg| match arg {
                 GenericParam::Type(ty) => {
                     let mut node = TypeNode::TypeParam(ty);
-                    node.make_most_concrete(concrete_maps_and_sets);
+                    node.make_most_concrete(concrete_maps_and_sets, transitive_closure);
                     GenericArgument::Type(Type(node))
                 }
-                GenericParam::Lifetime(lifetime) => GenericArgument::Lifetime(lifetime),
+                GenericParam::Lifetime(mut lifetime) => {
+                    lifetime.make_most_concrete(transitive_closure);
+                    GenericArgument::Lifetime(lifetime)
+                }
                 GenericParam::Const(_) => unimplemented!(),
             })
             .collect(),
@@ -1014,22 +994,20 @@ fn get_data_struct_args(
 
 fn get_trait_args(
     original_trait_args: Vec<GenericArgument>,
-    concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+    concrete_maps_and_sets: &mut ConcreteMapAndSets,
+    transitive_closure: &TransitiveClosure,
 ) -> GenericArguments {
     GenericArguments {
         args: original_trait_args
             .into_iter()
             .map(|arg| match arg {
                 GenericArgument::Type(mut ty) => {
-                    ty.0.make_most_concrete(concrete_maps_and_sets);
+                    ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
                     GenericArgument::Type(Type(ty.0))
                 }
 
                 GenericArgument::Lifetime(mut lifetime) => {
-                    lifetime.make_most_concrete(
-                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                        &concrete_maps_and_sets.lifetime_equality_sets,
-                    );
+                    lifetime.make_most_concrete(transitive_closure);
                     GenericArgument::Lifetime(lifetime)
                 }
 
@@ -1063,10 +1041,11 @@ impl GenericConstraint {
     /// but it might be supported in the future.
     fn make_relevant(
         &mut self,
-        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
         relevant_generic_params: &BTreeSet<GenericParam>,
+        transitive_closure: &TransitiveClosure,
     ) -> bool {
-        self.make_most_concrete(concrete_maps_and_sets);
+        self.make_most_concrete(concrete_maps_and_sets, transitive_closure);
         self.is_relevant(
             &concrete_maps_and_sets.type_equality_sets,
             &relevant_generic_params,
@@ -1089,13 +1068,18 @@ impl GenericConstraint {
         }
     }
 
-    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+    fn make_most_concrete(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
         match self {
-            GenericConstraint::Type(pred_ty) => pred_ty.make_most_concrete(concrete_maps_and_sets),
-            GenericConstraint::Lifetime(lifetime) => lifetime.make_most_concrete(
-                &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                &concrete_maps_and_sets.lifetime_equality_sets,
-            ),
+            GenericConstraint::Type(pred_ty) => {
+                pred_ty.make_most_concrete(concrete_maps_and_sets, transitive_closure)
+            }
+            GenericConstraint::Lifetime(lifetime) => {
+                lifetime.make_most_concrete(transitive_closure)
+            }
         }
     }
 }
@@ -1114,18 +1098,21 @@ impl PredicateType {
             })
     }
 
-    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
-        self.bounded_ty.0.make_most_concrete(concrete_maps_and_sets);
+    fn make_most_concrete(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
+        self.bounded_ty
+            .0
+            .make_most_concrete(concrete_maps_and_sets, transitive_closure);
 
-        self.bounds
-            .iter_mut()
-            .for_each(|bound| bound.make_most_concrete_inner(concrete_maps_and_sets));
+        self.bounds.iter_mut().for_each(|bound| {
+            bound.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure)
+        });
 
         self.lifetimes.iter_mut().for_each(|lifetime| {
-            lifetime.make_most_concrete(
-                &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                &concrete_maps_and_sets.lifetime_equality_sets,
-            );
+            lifetime.make_most_concrete(transitive_closure);
         });
     }
 }
@@ -1149,9 +1136,13 @@ impl TypeNode {
         }
     }
 
-    fn make_most_concrete(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+    fn make_most_concrete(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
         if let Some(set_ref) = concrete_maps_and_sets.type_equality_sets.get_set_ref(self) {
-            *self = set_ref.make_most_concrete(concrete_maps_and_sets);
+            *self = set_ref.make_most_concrete(concrete_maps_and_sets, transitive_closure);
         }
     }
 
@@ -1161,29 +1152,24 @@ impl TypeNode {
     fn make_most_concrete_from_pair(
         ty1: TypeNode,
         ty2: TypeNode,
-        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
     ) -> Self {
         use TypeNode::*;
         match (ty1, ty2) {
-            (Infer, mut node) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
+            (Infer, mut node) | (mut node, Infer) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                 node
             }
-            (mut node, Infer) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
-                node
-            }
-            (PrimitiveStr, _) => PrimitiveStr,
-            (_, PrimitiveStr) => PrimitiveStr,
-            (Path(path1), Path(path2)) => {
-                crate::Path::make_most_concrete_from_pair(path1, path2, concrete_maps_and_sets)
-            }
-            (Path(mut path), _) => {
-                path.make_most_concrete_inner(concrete_maps_and_sets);
-                Path(path)
-            }
-            (_, Path(mut path)) => {
-                path.make_most_concrete_inner(concrete_maps_and_sets);
+            (PrimitiveStr, _) | (_, PrimitiveStr) => PrimitiveStr,
+            (Path(path1), Path(path2)) => crate::Path::make_most_concrete_from_pair(
+                path1,
+                path2,
+                concrete_maps_and_sets,
+                transitive_closure,
+            ),
+            (Path(mut path), _) | (_, Path(mut path)) => {
+                path.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                 Path(path)
             }
             (Tuple(types1), Tuple(types2)) if types1.len() == types2.len() => Tuple(
@@ -1195,6 +1181,7 @@ impl TypeNode {
                             ty1.0,
                             ty2.0,
                             concrete_maps_and_sets,
+                            transitive_closure,
                         ))
                     })
                     .collect(),
@@ -1217,27 +1204,20 @@ impl TypeNode {
                     *inner1,
                     *inner2,
                     concrete_maps_and_sets,
+                    transitive_closure,
                 )),
                 lifetime: lifetime1
                     .and_then(|lifetime1| lifetime2.map(|lifetime2| lifetime1.min(lifetime2)))
                     .or(lifetime1)
                     .or(lifetime2),
             },
-            (TraitObject(_), mut node) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
-                node
-            }
-            (mut node, TraitObject(_)) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
+            (TraitObject(_), mut node) | (mut node, TraitObject(_)) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                 node
             }
             (TypeParam(ref1), TypeParam(ref2)) => TypeParam(ref1.min(ref2)),
-            (TypeParam(_), mut node) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
-                node
-            }
-            (mut node, TypeParam(_)) => {
-                node.make_most_concrete_inner(concrete_maps_and_sets);
+            (TypeParam(_), mut node) | (mut node, TypeParam(_)) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                 node
             }
             (node1, node2) => panic!(
@@ -1247,25 +1227,26 @@ impl TypeNode {
         }
     }
 
-    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+    fn make_most_concrete_inner(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
         use TypeNode::*;
         match self {
             Tuple(types) => types.iter_mut().for_each(|ty| {
-                ty.0.make_most_concrete(concrete_maps_and_sets);
+                ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
             }),
             Reference {
                 inner, lifetime, ..
             } => {
-                inner.make_most_concrete(concrete_maps_and_sets);
+                inner.make_most_concrete(concrete_maps_and_sets, transitive_closure);
 
                 if let Some(lifetime) = lifetime {
-                    lifetime.make_most_concrete(
-                        &mut concrete_maps_and_sets.most_concrete_lifetime_map,
-                        &concrete_maps_and_sets.lifetime_equality_sets,
-                    );
+                    lifetime.make_most_concrete(transitive_closure);
                 }
             }
-            Path(path) => path.make_most_concrete_inner(concrete_maps_and_sets),
+            Path(path) => path.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure),
             node => {}
         }
     }
@@ -1297,14 +1278,8 @@ impl TypeNode {
 }
 
 impl Lifetime {
-    fn make_most_concrete(
-        &mut self,
-        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
-        lifetime_equality_sets: &LifetimeEqualitySets,
-    ) {
-        if let Some(set_ref) = lifetime_equality_sets.get_set_ref(&self) {
-            *self = set_ref.make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
-        }
+    fn make_most_concrete(&mut self, transitive_closure: &TransitiveClosure) {
+        transitive_closure.make_most_concrete_lifetime(self);
     }
 
     fn is_relevant_for_constraint(self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
@@ -1312,34 +1287,12 @@ impl Lifetime {
     }
 }
 
-impl LifetimeEqualitySetRef {
-    fn make_most_concrete(
-        self,
-        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
-        lifetime_equality_sets: &LifetimeEqualitySets,
-    ) -> Lifetime {
-        if let Some(lifetime) = most_concrete_lifetime_map.get(&self) {
-            *lifetime
-        } else {
-            let lifetimes = &lifetime_equality_sets.sets[self.0];
-            let lifetime = *lifetimes.set.iter().min().unwrap();
-            most_concrete_lifetime_map.insert(self, lifetime);
-            lifetime
-        }
-    }
-}
-
 impl LifetimeDef {
-    fn make_most_concrete(
-        &mut self,
-        most_concrete_lifetime_map: &mut BTreeMap<LifetimeEqualitySetRef, Lifetime>,
-        lifetime_equality_sets: &LifetimeEqualitySets,
-    ) {
-        self.lifetime
-            .make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
+    fn make_most_concrete(&mut self, transitive_closure: &TransitiveClosure) {
+        self.lifetime.make_most_concrete(transitive_closure);
 
         self.bounds.iter_mut().for_each(|lifetime| {
-            lifetime.make_most_concrete(most_concrete_lifetime_map, lifetime_equality_sets);
+            lifetime.make_most_concrete(transitive_closure);
         });
     }
 
@@ -1382,12 +1335,16 @@ impl TypeParamBound {
         }
     }
 
-    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+    fn make_most_concrete_inner(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
         match self {
             TypeParamBound::Trait(bound) => {
-                bound.path.make_most_concrete_inner(concrete_maps_and_sets);
-                // FIXME: properly deal with lifetimes
-                // bound.lifetimes
+                bound
+                    .path
+                    .make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
             }
 
             // FIXME: properly deal with lifetimes
@@ -1449,14 +1406,20 @@ impl Path {
         }
     }
 
-    fn make_most_concrete_inner(&mut self, concrete_maps_and_sets: &mut ConcreteMapsAndSets) {
+    fn make_most_concrete_inner(
+        &mut self,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
+    ) {
         let path_len = self.path.len();
         let segment = &mut self.path[path_len - 1];
         match &mut segment.args {
             PathArguments::None => {}
             PathArguments::AngleBracketed(args) => {
                 args.args.args.iter_mut().for_each(|arg| match arg {
-                    GenericArgument::Type(ty) => ty.0.make_most_concrete(concrete_maps_and_sets),
+                    GenericArgument::Type(ty) => {
+                        ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure)
+                    }
 
                     GenericArgument::Lifetime(lifetime) => {
                         // FIXME: Lifetime
@@ -1497,7 +1460,8 @@ impl Path {
     fn make_most_concrete_from_pair(
         mut path1: Path,
         mut path2: Path,
-        concrete_maps_and_sets: &mut ConcreteMapsAndSets,
+        concrete_maps_and_sets: &mut ConcreteMapAndSets,
+        transitive_closure: &TransitiveClosure,
     ) -> TypeNode {
         let path1_len = path1.path.len();
         let path2_len = path2.path.len();
@@ -1516,13 +1480,13 @@ impl Path {
                 match args1.len().cmp(&args2.len()) {
                     Ordering::Less => {
                         let mut node = TypeNode::Path(path1);
-                        node.make_most_concrete(concrete_maps_and_sets);
+                        node.make_most_concrete(concrete_maps_and_sets, transitive_closure);
                         node
                     }
 
                     Ordering::Greater => {
                         let mut node = TypeNode::Path(path2);
-                        node.make_most_concrete(concrete_maps_and_sets);
+                        node.make_most_concrete(concrete_maps_and_sets, transitive_closure);
                         node
                     }
 
@@ -1538,6 +1502,7 @@ impl Path {
                                             ty1.clone().0,
                                             ty2.clone().0,
                                             concrete_maps_and_sets,
+                                            transitive_closure,
                                         ),
                                     ))
                                 }

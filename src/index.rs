@@ -1,4 +1,4 @@
-use crate::{Invoke, LifetimeEqualitySet, MacroInvoke, TypeEqualitySet, ValueNode};
+use crate::{Invoke, MacroInvoke, TypeEqualitySet, ValueNode};
 
 pub(crate) trait Push {
     type Element: TypedIndex;
@@ -77,21 +77,6 @@ impl TypedIndex for TypeEqualitySet {
 
     fn index(i: usize) -> Self::Index {
         TypeEqualitySetRef(i)
-    }
-
-    fn from_index(i: Self::Index) -> usize {
-        i.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub(crate) struct LifetimeEqualitySetRef(pub usize);
-
-impl TypedIndex for LifetimeEqualitySet {
-    type Index = LifetimeEqualitySetRef;
-
-    fn index(i: usize) -> Self::Index {
-        LifetimeEqualitySetRef(i)
     }
 
     fn from_index(i: Self::Index) -> usize {
