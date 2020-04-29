@@ -1,7 +1,7 @@
 use crate::{
     global_data, Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics,
-    Ident, Program, Struct, StructStruct, Tracker, TraitInferenceResult, TupleStruct, Type,
-    TypeNode, UnitStruct, WipFunction, WipImpl,
+    Ident, Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct,
+    WipFunction, WipImpl,
 };
 use proc_macro2::TokenStream;
 use syn::DeriveInput;
@@ -96,8 +96,11 @@ fn tracker_to_program(tracker: Tracker) -> Program {
     }
 }
 
-fn into_complete_impl(imp: WipImpl) -> (CompleteImpl, Option<TraitInferenceResult>) {
-    let mut complete_impl = CompleteImpl {
+fn into_complete_impl(imp: WipImpl) -> CompleteImpl {
+    if imp.has_generics() {
+        return imp.compute_trait_bounds();
+    }
+    CompleteImpl {
         trait_ty: imp.trait_ty,
         ty: imp.ty,
         functions: imp
@@ -119,11 +122,6 @@ fn into_complete_impl(imp: WipImpl) -> (CompleteImpl, Option<TraitInferenceResul
                 }
             })
             .collect(),
-    };
-    let result = if complete_impl.has_generics() {
-        Some(complete_impl.compute_trait_bounds())
-    } else {
-        None
-    };
-    (complete_impl, result)
+        result: None,
+    }
 }

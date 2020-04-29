@@ -13,8 +13,7 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub(crate) struct Program {
     pub crates: Vec<Ident>,
-    // TODO: Make this less awkward
-    pub impls: Vec<(CompleteImpl, Option<TraitInferenceResult>)>,
+    pub impls: Vec<CompleteImpl>,
 }
 
 #[derive(Debug)]
@@ -22,6 +21,7 @@ pub(crate) struct CompleteImpl {
     pub trait_ty: Option<Rc<Parent>>,
     pub ty: Type,
     pub functions: Vec<CompleteFunction>,
+    pub result: Option<TraitInferenceResult>,
 }
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub(crate) struct CompleteFunction {
 
 impl Program {
     pub fn compile(&self) -> TokenStream {
-        let impls = self.impls.iter().map(|(imp, result)| imp.compile(result));
+        let impls = self.impls.iter().map(CompleteImpl::compile);
 
         quote! {
             #(#impls)*
@@ -45,7 +45,7 @@ impl Program {
 }
 
 impl CompleteImpl {
-    fn compile(&self, result: &Option<TraitInferenceResult>) -> TokenStream {
+    fn compile(&self) -> TokenStream {
         let functions = self.functions.iter().map(CompleteFunction::compile);
 
         let name = if let TypeNode::DataStructure { name, .. } = &self.ty.0 {
@@ -53,7 +53,7 @@ impl CompleteImpl {
         } else {
             panic!()
         };
-        let (params, self_ty_args, where_clause, trait_ty) = if let Some(result) = result {
+        let (params, self_ty_args, where_clause, trait_ty) = if let Some(result) = &self.result {
             let params = result.generic_params.iter().map(Print::ref_cast);
             let params = Some(quote!(<#(#params),*>));
             let constraints = result.constraints.set.iter().map(Print::ref_cast);
@@ -79,15 +79,11 @@ impl CompleteImpl {
             });
             (params, self_ty_args, where_clause, trait_ty)
         } else {
-            (
-                None,
-                None,
-                None,
-                self.trait_ty.as_ref().map(|trait_ty| {
-                    let path = Print::ref_cast(&trait_ty.path);
-                    quote!(#path)
-                }),
-            )
+            let trait_ty = self.trait_ty.as_ref().map(|trait_ty| {
+                let path = Print::ref_cast(&trait_ty.path);
+                quote!(#path)
+            });
+            (None, None, None, trait_ty)
         };
 
         if let Some(trait_ty) = trait_ty {
@@ -103,19 +99,6 @@ impl CompleteImpl {
                     #(#functions)*
                 }
             }
-        }
-    }
-
-    pub(crate) fn has_generics(&self) -> bool {
-        if let TypeNode::DataStructure { generics, .. } = &self.ty.0 {
-            !generics.params.is_empty()
-                || if let Some(parent) = &self.trait_ty {
-                    !parent.generics.params.is_empty()
-                } else {
-                    false
-                }
-        } else {
-            false
         }
     }
 }

@@ -1,8 +1,8 @@
 use crate::{
-    CompleteFunction, CompleteImpl, GenericArgument, GenericArguments, GenericConstraint,
+    CompleteFunction, CompleteImpl, Function, GenericArgument, GenericArguments, GenericConstraint,
     GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef, Parent, ParentKind, Path,
     PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
-    TypeParamBound, TypedIndex, INVOKES, STATIC_LIFETIME, VALUES,
+    TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME, VALUES,
 };
 // FxHasher is used, both because it is a faster hashing algorithm than the
 // default one, and because it has a hasher with a defalt seed, which is
@@ -219,8 +219,9 @@ impl LifetimeSubtypeMap {
 
 impl TransitiveClosure {
     pub(crate) fn make_most_concrete_lifetime(&mut self, lifetime: &mut Lifetime) {
-        // Always looking up a cached result is used to insure correctnes in
+        // Always looking up a cached result first is to insure correctnes in
         // `CompleteFunction::make_concrete_function`.
+        // TODO: explain why
         if let Some(&most_concrete) = self.most_concrete_lifetime_map.get(lifetime) {
             *lifetime = most_concrete;
             return;
@@ -395,12 +396,7 @@ impl TypeEqualitySetRef {
     }
 }
 
-impl<SetRef, T> EqualitySets<SetRef, T>
-where
-    SetRef: Copy,
-    T: Eq + Hash + Clone,
-    EqualitySet<T>: TypedIndex<Index = SetRef>,
-{
+impl TypeEqualitySets {
     fn new() -> Self {
         EqualitySets {
             set_map: HashMap::default(),
@@ -408,37 +404,32 @@ where
         }
     }
 
-    fn contains_key(&self, t: &T) -> bool {
-        self.set_map.contains_key(t)
+    fn contains_key(&self, ty: &TypeNode) -> bool {
+        self.set_map.contains_key(ty)
     }
 
-    fn get_set(&self, t: &T) -> Option<&EqualitySet<T>> {
-        self.set_map
-            .get(t)
-            .map(|set_ref| &self.sets[<EqualitySet<T> as TypedIndex>::from_index(*set_ref)])
+    fn get_set(&self, ty: &TypeNode) -> Option<&TypeEqualitySet> {
+        self.set_map.get(ty).map(|set_ref| &self.sets[set_ref.0])
     }
 
-    pub(crate) fn get_set_ref(&self, t: &T) -> Option<SetRef> {
-        self.set_map.get(t).copied()
+    pub(crate) fn get_set_ref(&self, ty: &TypeNode) -> Option<TypeEqualitySetRef> {
+        self.set_map.get(ty).copied()
     }
 
-    fn new_set(&mut self, t: T) -> SetRef {
+    fn new_set(&mut self, ty: TypeNode) -> TypeEqualitySetRef {
         let mut set = EqualitySet::new();
-        set.insert(t.clone());
+        set.insert(ty.clone());
         let set_ref = self.sets.index_push(set);
 
-        self.set_map.insert(t, set_ref);
+        self.set_map.insert(ty, set_ref);
         set_ref
     }
 
-    fn insert_as_equal(&mut self, t1: T, t2: T) {
-        match (self.set_map.get(&t1), self.set_map.get(&t2)) {
+    fn insert_as_equal(&mut self, ty1: TypeNode, ty2: TypeNode) {
+        match (self.set_map.get(&ty1), self.set_map.get(&ty2)) {
             (Some(&set_ref1), Some(&set_ref2)) => {
-                let set2 = std::mem::replace(
-                    &mut self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref2)],
-                    EqualitySet::new(),
-                );
-                let set1 = &mut self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref1)];
+                let set2 = std::mem::replace(&mut self.sets[set_ref2.0], EqualitySet::new());
+                let set1 = &mut self.sets[set_ref1.0];
                 for t in &set2.set {
                     if let Some(set_ref) = self.set_map.get_mut(t) {
                         *set_ref = set_ref1
@@ -447,26 +438,24 @@ where
                 set1.set.extend(set2.set);
             }
             (Some(&set_ref), None) => {
-                self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref)].insert(t2.clone());
-                self.set_map.insert(t2, set_ref);
+                self.sets[set_ref.0].insert(ty2.clone());
+                self.set_map.insert(ty2, set_ref);
             }
             (None, Some(&set_ref)) => {
-                self.sets[<EqualitySet<T> as TypedIndex>::from_index(set_ref)].insert(t1.clone());
-                self.set_map.insert(t1, set_ref);
+                self.sets[set_ref.0].insert(ty1.clone());
+                self.set_map.insert(ty1, set_ref);
             }
             (None, None) => {
                 let mut set = EqualitySet::new();
-                set.insert(t2.clone());
-                set.insert(t1.clone());
+                set.insert(ty2.clone());
+                set.insert(ty1.clone());
                 let set_ref = self.sets.index_push(set);
-                self.set_map.insert(t2, set_ref);
-                self.set_map.insert(t1, set_ref);
+                self.set_map.insert(ty2, set_ref);
+                self.set_map.insert(ty1, set_ref);
             }
         }
     }
-}
 
-impl TypeEqualitySets {
     /// Insert two types as equal to eachother, and in case of TraitObjects, e.g.
     /// ty1: T, ty2: dyn Clone, insert T: Clone as constraint.
     fn insert_types_as_equal(
@@ -663,8 +652,8 @@ impl TypeEqualitySets {
     }
 }
 
-impl CompleteImpl {
-    pub(crate) fn compute_trait_bounds(&mut self) -> TraitInferenceResult {
+impl WipImpl {
+    pub(crate) fn compute_trait_bounds(mut self) -> CompleteImpl {
         let mut constraints = ConstraintSet::new();
         let mut type_equality_sets = TypeEqualitySets::new();
         let mut subtypes = LifetimeSubtypeMap::new();
@@ -672,10 +661,11 @@ impl CompleteImpl {
         let OriginalGenercs {
             original_generic_params,
             original_data_struct_args,
-            original_trait_args,
+            mut original_trait_args,
         } = self.get_original_generics(&mut constraints);
 
-        self.functions.iter().for_each(|function| {
+        let functions = self.functions.into_inner();
+        functions.iter().for_each(|function| {
             function.compute_trait_bounds(&mut constraints, &mut type_equality_sets, &mut subtypes)
         });
 
@@ -701,15 +691,17 @@ impl CompleteImpl {
             &mut transitive_closure,
         );
 
-        let trait_args = get_trait_args(
-            original_trait_args,
+        make_concrete_trait_args(
+            &mut original_trait_args,
             &mut concrete_maps_and_sets,
             &mut transitive_closure,
         );
+        let trait_args = GenericArguments {
+            args: original_trait_args,
+        };
 
-        let functions: Vec<_> = self
-            .functions
-            .iter_mut()
+        let functions: Vec<_> = functions
+            .into_iter()
             .map(|function| {
                 function
                     .make_concrete_function(&mut concrete_maps_and_sets, &mut transitive_closure)
@@ -719,24 +711,28 @@ impl CompleteImpl {
         // We remove the static lifetime since it is not a part of the paramater list
         relevant_generic_params.remove(&GenericParam::Lifetime(STATIC_LIFETIME));
 
-        // FIXME: We need a mapping to the most concrete types and lifetimes in each function
-        TraitInferenceResult {
-            constraints,
-            generic_params: relevant_generic_params,
-            data_struct_args,
-            trait_args,
+        CompleteImpl {
+            trait_ty: self.trait_ty,
+            ty: self.ty,
+            functions,
+            result: Some(TraitInferenceResult {
+                constraints,
+                generic_params: relevant_generic_params,
+                data_struct_args,
+                trait_args,
+            }),
         }
     }
 
-    fn get_original_generics(&self, constraints: &mut ConstraintSet) -> OriginalGenercs {
+    fn get_original_generics(&mut self, constraints: &mut ConstraintSet) -> OriginalGenercs {
         let mut original_generic_params = Vec::new();
         let mut original_data_struct_args = Vec::new();
         let mut original_trait_args = Vec::new();
 
         // data structure generics
-        if let Type(TypeNode::DataStructure { ref generics, .. }) = self.ty {
-            generics.constraints.iter().for_each(|constraint| {
-                constraints.insert(constraint.clone());
+        if let Type(TypeNode::DataStructure { generics, .. }) = &mut self.ty {
+            generics.constraints.drain(..).for_each(|constraint| {
+                constraints.insert(constraint);
             });
             generics.params.iter().for_each(|&param| {
                 original_generic_params.push(param);
@@ -776,7 +772,7 @@ impl CompleteImpl {
     }
 }
 
-impl CompleteFunction {
+impl WipFunction {
     fn compute_trait_bounds(
         &self,
         constraints: &mut ConstraintSet,
@@ -785,7 +781,7 @@ impl CompleteFunction {
     ) {
         use Receiver::*;
         INVOKES.with_borrow(|invokes| {
-            for invoke in invokes[self.invokes.start.0..self.invokes.end.0].iter() {
+            for invoke in invokes[self.invokes.start.0..self.invokes.end.unwrap().0].iter() {
                 let parent = &invoke.function.parent;
                 let sig = &invoke.function.sig;
                 let args_iter = match sig.receiver {
@@ -907,9 +903,9 @@ impl CompleteFunction {
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         // The type of the outgoing value must be the same as the return value
-        if self.values.end.0 > self.values.start.0 {
+        if self.values.end.unwrap().0 > self.values.start.0 {
             let return_value_type =
-                VALUES.with_borrow(|values| values[self.values.end.0 - 1].get_type());
+                VALUES.with_borrow(|values| values[self.values.end.unwrap().0 - 1].get_type());
 
             type_equality_sets.insert_types_as_equal(
                 self.f.sig.output.0.clone(),
@@ -920,18 +916,16 @@ impl CompleteFunction {
         }
     }
 
-    // TODO: If I need to change the complete function, it is not actually complete
     fn make_concrete_function(
-        &mut self,
+        self,
         concrete_maps_and_sets: &mut ConcreteMapAndSets,
         transitive_closure: &mut TransitiveClosure,
-    ) {
+    ) -> CompleteFunction {
         let mut f = (*self.f).clone();
         let type_equality_sets = &mut concrete_maps_and_sets.type_equality_sets;
         let most_concrete_type_map = &mut concrete_maps_and_sets.most_concrete_type_map;
 
         for param in &f.sig.generics.params {
-            println!("{:?}", param);
             match param {
                 GenericParam::Type(param) => {
                     let type_param = TypeNode::TypeParam(*param);
@@ -963,7 +957,21 @@ impl CompleteFunction {
             constraint.make_most_concrete(concrete_maps_and_sets, transitive_closure);
         }
 
-        self.f = Rc::new(f);
+        self.into_complete_function(f)
+    }
+
+    fn into_complete_function(self, f: Function) -> CompleteFunction {
+        let values: Option<_> = self.values.into();
+        let invokes: Option<_> = self.invokes.into();
+        let macros: Option<_> = self.macros.into();
+        CompleteFunction {
+            self_ty: self.self_ty,
+            f: Rc::new(f),
+            values: values.unwrap(),
+            invokes: invokes.unwrap(),
+            macros: macros.unwrap(),
+            ret: self.ret,
+        }
     }
 }
 
@@ -1057,29 +1065,22 @@ fn get_data_struct_args(
     }
 }
 
-fn get_trait_args(
-    original_trait_args: Vec<GenericArgument>,
+fn make_concrete_trait_args(
+    trait_args: &mut Vec<GenericArgument>,
     concrete_maps_and_sets: &mut ConcreteMapAndSets,
     transitive_closure: &mut TransitiveClosure,
-) -> GenericArguments {
-    GenericArguments {
-        args: original_trait_args
-            .into_iter()
-            .map(|arg| match arg {
-                GenericArgument::Type(mut ty) => {
-                    ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
-                    GenericArgument::Type(Type(ty.0))
-                }
+) {
+    trait_args.iter_mut().for_each(|arg| match arg {
+        GenericArgument::Type(ty) => {
+            ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
+        }
 
-                GenericArgument::Lifetime(mut lifetime) => {
-                    lifetime.make_most_concrete(transitive_closure);
-                    GenericArgument::Lifetime(lifetime)
-                }
+        GenericArgument::Lifetime(lifetime) => {
+            lifetime.make_most_concrete(transitive_closure);
+        }
 
-                _ => unimplemented!(),
-            })
-            .collect(),
-    }
+        _ => unimplemented!(),
+    })
 }
 
 impl GenericConstraint {
@@ -1388,16 +1389,12 @@ impl TypeParamBound {
         relevant_generic_params: &BTreeSet<GenericParam>,
     ) -> bool {
         match self {
-            TypeParamBound::Trait(bound) => {
-                //FIXME: Properly deal with lifetimes
-                bound
-                    .path
-                    .is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
-            }
+            TypeParamBound::Trait(bound) => bound
+                .path
+                .is_relevant_for_constraint(type_equality_sets, relevant_generic_params),
 
-            TypeParamBound::Lifetime(_) => {
-                // FIXME: properly deal with lifetimes
-                true
+            TypeParamBound::Lifetime(lifetime) => {
+                lifetime.is_relevant_for_constraint(relevant_generic_params)
             }
         }
     }
@@ -1414,8 +1411,7 @@ impl TypeParamBound {
                     .make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
             }
 
-            // FIXME: properly deal with lifetimes
-            bound @ TypeParamBound::Lifetime(_) => {}
+            TypeParamBound::Lifetime(lifetime) => lifetime.make_most_concrete(transitive_closure),
         }
     }
 }
@@ -1434,7 +1430,9 @@ impl Path {
                     ty.0.is_relevant_for_constraint(type_equality_sets, relevant_generic_params)
                 }
 
-                GenericArgument::Lifetime(_) => true,
+                GenericArgument::Lifetime(lifetime) => {
+                    lifetime.is_relevant_for_constraint(relevant_generic_params)
+                }
 
                 _ => unimplemented!("is_relevant_for_constraint: PathArguments::AngleBracketed"),
             }),

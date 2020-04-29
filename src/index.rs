@@ -20,7 +20,6 @@ where
 pub(crate) trait TypedIndex {
     type Index;
     fn index(i: usize) -> Self::Index;
-    fn from_index(i: Self::Index) -> usize;
 }
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -31,10 +30,6 @@ impl TypedIndex for ValueNode {
 
     fn index(i: usize) -> Self::Index {
         ValueRef(i)
-    }
-
-    fn from_index(i: Self::Index) -> usize {
-        i.0
     }
 }
 
@@ -47,10 +42,6 @@ impl TypedIndex for Invoke {
     fn index(i: usize) -> Self::Index {
         InvokeRef(i)
     }
-
-    fn from_index(i: Self::Index) -> usize {
-        i.0
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,10 +52,6 @@ impl TypedIndex for MacroInvoke {
 
     fn index(i: usize) -> Self::Index {
         MacroInvokeRef(i)
-    }
-
-    fn from_index(i: Self::Index) -> usize {
-        i.0
     }
 }
 
@@ -77,9 +64,5 @@ impl TypedIndex for TypeEqualitySet {
 
     fn index(i: usize) -> Self::Index {
         TypeEqualitySetRef(i)
-    }
-
-    fn from_index(i: Self::Index) -> usize {
-        i.0
     }
 }
