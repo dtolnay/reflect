@@ -158,12 +158,6 @@ impl LifetimeSubtypeMap {
             // Every type is a subtype of itself
             Self::transitive_closure_dfs(&mut subtype_graph, &mut transitive_closure, i, i);
         }
-        for i in 0..size {
-            println!();
-            for j in 0..size {
-                print!("{} ", transitive_closure[(i, j)] as u8);
-            }
-        }
 
         TransitiveClosure {
             transitive_closure,
@@ -485,7 +479,7 @@ impl TypeEqualitySets {
             (_, TraitObject(bounds)) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
-                    bounded_ty: Type(ty1.clone()),
+                    bounded_ty: Type(ty1),
                     bounds: bounds.clone(),
                 }));
                 return;
@@ -1508,10 +1502,10 @@ impl Path {
                                 }
                                 // FIXME: Deal with lifetimes
                                 (
-                                    GenericArgument::Lifetime(lifetime_ref1),
-                                    GenericArgument::Lifetime(lifetime_ref2),
+                                    GenericArgument::Lifetime(lifetime1),
+                                    GenericArgument::Lifetime(lifetime2),
                                 ) => {
-                                    GenericArgument::Lifetime((*lifetime_ref1).min(*lifetime_ref2))
+                                    GenericArgument::Lifetime((*lifetime1).min(*lifetime2))
                                 }
                                 _ => unimplemented!(
                                     "Path::make_most_concrete_from_pair: GenericArgument"

@@ -143,6 +143,12 @@ impl ParamMap {
         }
         param_map
     }
+
+    pub(crate) fn get_lifetime(&self, ident: &syn::Ident) -> Lifetime {
+        self.get(ident)
+            .and_then(|param| param.lifetime())
+            .expect("Lifetime::get_lifetime: ident is not a lifetime")
+    }
 }
 
 // TODO: Change name to something more descriptive
@@ -381,18 +387,10 @@ where
             bounds,
             ..
         }) => GenericConstraint::Lifetime(LifetimeDef {
-            lifetime: param_map
-                .get(&ident)
-                .and_then(|param| GenericParam::lifetime(*param))
-                .expect("syn_where_predicates_to_generic_constraints: is not a lifetime ref"),
+            lifetime: param_map.get_lifetime(&ident),
             bounds: bounds
                 .into_iter()
-                .map(|syn::Lifetime { ident, .. }| {
-                    param_map
-                        .get(&ident)
-                        .and_then(|&param| GenericParam::lifetime(param))
-                        .expect("syn_where_predicates_to_generic_constraints: Not a lifetime ref")
-                })
+                .map(|syn::Lifetime { ident, .. }| param_map.get_lifetime(&ident))
                 .collect(),
         }),
         WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
@@ -437,18 +435,10 @@ where
                 let &param = param_map.get(&ident).unwrap();
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Lifetime(LifetimeDef {
-                        lifetime: param_map
-                            .get(&ident)
-                            .and_then(|param| GenericParam::lifetime(*param))
-                            .expect("syn_to_generic_params: Not a lifetime ref"),
+                        lifetime: param_map.get_lifetime(&ident),
                         bounds: bounds
                             .into_iter()
-                            .map(|syn::Lifetime { ident, .. }| {
-                                param_map
-                                    .get(&ident)
-                                    .and_then(|param| GenericParam::lifetime(*param))
-                                    .expect("syn_to_generic_params: Not a lifetime ref")
-                            })
+                            .map(|syn::Lifetime { ident, .. }| param_map.get_lifetime(&ident))
                             .collect(),
                     }));
                 }
@@ -500,12 +490,9 @@ pub(crate) fn syn_to_type_param_bound(
             lifetimes: syn_to_bound_lifetimes(lifetimes, param_map),
             path: Path::syn_to_path(path, param_map),
         }),
-        syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(
-            param_map
-                .get(&lifetime.ident)
-                .and_then(|&param| GenericParam::lifetime(param))
-                .expect("syn_to_type_param_bounds: Not a lifetime ref"),
-        ),
+        syn::TypeParamBound::Lifetime(lifetime) => {
+            TypeParamBound::Lifetime(param_map.get_lifetime(&lifetime.ident))
+        }
     }
 }
 
@@ -531,12 +518,9 @@ impl GenericArgument {
                 GenericArgument::Type(Type::syn_to_type(ty, param_map))
             }
 
-            syn::GenericArgument::Lifetime(lifetime) => GenericArgument::Lifetime(
-                param_map
-                    .get(&lifetime.ident)
-                    .and_then(|&param| GenericParam::lifetime(param))
-                    .expect("syn_to_generic_argument: Not a lifetime ref"),
-            ),
+            syn::GenericArgument::Lifetime(lifetime) => {
+                GenericArgument::Lifetime(param_map.get_lifetime(&lifetime.ident))
+            }
 
             syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {
                 ident: Ident::from(binding.ident),

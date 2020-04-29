@@ -57,10 +57,7 @@ impl Type {
     pub fn reference_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
         let lifetime: syn::Lifetime = syn::parse_str(lifetime)
             .expect("Type::reference_with_lifetime: couldn't parse lifetime");
-        let lifetime = param_map
-            .get(&lifetime.ident)
-            .and_then(|param| param.lifetime())
-            .expect("Type::reference_with_lifetime: invalid lifetime");
+        let lifetime = param_map.get_lifetime(&lifetime.ident);
 
         Type(TypeNode::Reference {
             is_mut: false,
@@ -80,10 +77,7 @@ impl Type {
     pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
         let lifetime: syn::Lifetime = syn::parse_str(lifetime)
             .expect("Type::reference_with_lifetime: couldn't parse lifetime");
-        let lifetime = param_map
-            .get(&lifetime.ident)
-            .and_then(|param| param.lifetime())
-            .expect("Type::reference_with_lifetime: invalid lifetime");
+        let lifetime = param_map.get_lifetime(&lifetime.ident);
 
         Type(TypeNode::Reference {
             is_mut: true,
@@ -168,12 +162,9 @@ impl Type {
 
             syn::Type::Reference(reference) => {
                 let inner = Box::new(Type::syn_to_type(*reference.elem, param_map).0);
-                let lifetime = reference.lifetime.map(|lifetime| {
-                    param_map
-                        .get(&lifetime.ident)
-                        .and_then(|&param| GenericParam::lifetime(param))
-                        .expect("syn_to_type: Not a lifetime ref")
-                });
+                let lifetime = reference
+                    .lifetime
+                    .map(|lifetime| param_map.get_lifetime(&lifetime.ident));
 
                 Type(TypeNode::Reference {
                     is_mut: reference.mutability.is_some(),
