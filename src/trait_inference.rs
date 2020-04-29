@@ -1487,8 +1487,7 @@ impl Path {
                     }
 
                     GenericArgument::Lifetime(lifetime) => {
-                        // FIXME: Lifetime
-                        unimplemented!("Path::make_most_concrete_inner: Lifetime")
+                        lifetime.make_most_concrete(transitive_closure)
                     }
                     _ => unimplemented!(),
                 });
@@ -1571,7 +1570,6 @@ impl Path {
                                         ),
                                     ))
                                 }
-                                // FIXME: Deal with lifetimes
                                 (
                                     GenericArgument::Lifetime(lifetime1),
                                     GenericArgument::Lifetime(lifetime2),
