@@ -128,7 +128,7 @@ impl Signature {
         <Self as SetOutput<'a, T>>::set_output(self, into_output);
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) {
         self.generics.set_generic_params(params)
     }
 

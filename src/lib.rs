@@ -386,6 +386,6 @@ use crate::path::{PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;
-use crate::trait_inference::TypeEqualitySet;
+use crate::trait_inference::{TraitInferenceResult, TypeEqualitySet};
 use crate::ty::TypeNode;
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

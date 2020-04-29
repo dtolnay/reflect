@@ -269,13 +269,12 @@ impl GenericConstraint {
 }
 
 impl Generics {
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) {
         let syn_params = params.iter().map(|param| parse_str(param).unwrap());
         let (params, constraints, mut param_map) = syn_to_generic_params(syn_params);
         self.params.extend(params);
         self.constraints.extend(constraints);
         self.param_map.append(&mut param_map);
-        &mut self.param_map
     }
 
     pub fn set_generic_constraints(&mut self, constraints: &[&str]) {

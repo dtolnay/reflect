@@ -59,7 +59,7 @@ impl ParentBuilder {
         <Self as SetPath<'a, P>>::set_path(self, into_path);
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) {
         self.generics.set_generic_params(params)
     }
 

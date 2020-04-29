@@ -1,7 +1,7 @@
 use crate::ident::Ident;
 use crate::{
     Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, PathArguments, Print, Receiver,
-    SimplePath, Type, TypeNode, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
+    SimplePath, TraitInferenceResult, Type, TypeNode, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -13,7 +13,8 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub(crate) struct Program {
     pub crates: Vec<Ident>,
-    pub impls: Vec<CompleteImpl>,
+    // TODO: Make this less awkward
+    pub impls: Vec<(CompleteImpl, Option<TraitInferenceResult>)>,
 }
 
 #[derive(Debug)]
@@ -35,7 +36,7 @@ pub(crate) struct CompleteFunction {
 
 impl Program {
     pub fn compile(&self) -> TokenStream {
-        let impls = self.impls.iter().map(CompleteImpl::compile);
+        let impls = self.impls.iter().map(|(imp, result)| imp.compile(result));
 
         quote! {
             #(#impls)*
@@ -44,7 +45,7 @@ impl Program {
 }
 
 impl CompleteImpl {
-    fn compile(&self) -> TokenStream {
+    fn compile(&self, result: &Option<TraitInferenceResult>) -> TokenStream {
         let functions = self.functions.iter().map(CompleteFunction::compile);
 
         let name = if let TypeNode::DataStructure { name, .. } = &self.ty.0 {
@@ -52,8 +53,7 @@ impl CompleteImpl {
         } else {
             panic!()
         };
-        let (params, self_ty_args, where_clause, trait_ty) = if self.has_generics() {
-            let result = self.compute_trait_bounds();
+        let (params, self_ty_args, where_clause, trait_ty) = if let Some(result) = result {
             let params = result.generic_params.iter().map(Print::ref_cast);
             let params = Some(quote!(<#(#params),*>));
             let constraints = result.constraints.set.iter().map(Print::ref_cast);
@@ -72,7 +72,7 @@ impl CompleteImpl {
                 let mut path = parent.path.clone();
                 let args = &mut path.path.last_mut().unwrap().args;
                 if let PathArguments::AngleBracketed(args) = args {
-                    args.args = result.trait_args;
+                    args.args = result.trait_args.clone();
                 };
                 let path = Print::ref_cast(&path);
                 quote!(#path)
@@ -106,7 +106,7 @@ impl CompleteImpl {
         }
     }
 
-    fn has_generics(&self) -> bool {
+    pub(crate) fn has_generics(&self) -> bool {
         if let TypeNode::DataStructure { generics, .. } = &self.ty.0 {
             !generics.params.is_empty()
                 || if let Some(parent) = &self.trait_ty {
@@ -323,6 +323,7 @@ impl CompleteFunction {
                 let parent = parent.binding();
                 let accessor = Print::ref_cast(accessor);
 
+                // FIXME: Making the destructure a reference is sometimes wrong
                 quote! {
                     &#parent.#accessor
                 }

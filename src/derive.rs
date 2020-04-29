@@ -1,7 +1,7 @@
 use crate::{
     global_data, Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics,
-    Ident, Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct,
-    WipFunction,
+    Ident, Program, Struct, StructStruct, Tracker, TraitInferenceResult, TupleStruct, Type,
+    TypeNode, UnitStruct, WipFunction, WipImpl,
 };
 use proc_macro2::TokenStream;
 use syn::DeriveInput;
@@ -91,29 +91,39 @@ fn tracker_to_program(tracker: Tracker) -> Program {
             .impls
             .into_inner()
             .into_iter()
-            .map(|imp| CompleteImpl {
-                trait_ty: imp.trait_ty,
-                ty: imp.ty,
-                functions: imp
-                    .functions
-                    .into_inner()
-                    .into_iter()
-                    .map(|function| {
-                        let function: WipFunction = function;
-                        let values: Option<_> = function.values.into();
-                        let invokes: Option<_> = function.invokes.into();
-                        let macros: Option<_> = function.macros.into();
-                        CompleteFunction {
-                            self_ty: function.self_ty,
-                            f: function.f,
-                            values: values.unwrap(),
-                            invokes: invokes.unwrap(),
-                            macros: macros.unwrap(),
-                            ret: function.ret,
-                        }
-                    })
-                    .collect(),
-            })
+            .map(into_complete_impl)
             .collect(),
     }
+}
+
+fn into_complete_impl(imp: WipImpl) -> (CompleteImpl, Option<TraitInferenceResult>) {
+    let mut complete_impl = CompleteImpl {
+        trait_ty: imp.trait_ty,
+        ty: imp.ty,
+        functions: imp
+            .functions
+            .into_inner()
+            .into_iter()
+            .map(|function| {
+                let function: WipFunction = function;
+                let values: Option<_> = function.values.into();
+                let invokes: Option<_> = function.invokes.into();
+                let macros: Option<_> = function.macros.into();
+                CompleteFunction {
+                    self_ty: function.self_ty,
+                    f: function.f,
+                    values: values.unwrap(),
+                    invokes: invokes.unwrap(),
+                    macros: macros.unwrap(),
+                    ret: function.ret,
+                }
+            })
+            .collect(),
+    };
+    let result = if complete_impl.has_generics() {
+        Some(complete_impl.compute_trait_bounds())
+    } else {
+        None
+    };
+    (complete_impl, result)
 }

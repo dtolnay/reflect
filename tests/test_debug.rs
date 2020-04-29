@@ -59,8 +59,8 @@ fn test_generic_debug() {
     let expected = quote! {
         impl<'__a1, __T0, __T1> ::std::fmt::Debug for Generic<'__a1, __T0, __T1>
             where
-            __T1: Clone,
             __T0: Debug,
+            __T1: Clone,
             &'__a1 __T1: Debug,
     };
     let actual = reflect::derive(input, debug::derive);
