@@ -505,7 +505,7 @@ fn declare_parent(
                         let mut parent_builder = _reflect::ParentBuilder::new(#parent_kind);
                         #set_parent_params
                         #set_parent_constraints
-                        parent_builder.set_path(|param_map: &mut _reflect::ParamMap| #get_runtime_path);
+                        parent_builder.set_path(|param_map: &mut _reflect::SynParamMap| #get_runtime_path);
                         ::std::rc::Rc::new(parent_builder.into_parent())
                     };
                 }
@@ -671,11 +671,11 @@ fn declare_function(
 
     let setup_inputs = function.args.iter().map(|arg| {
         let ty = to_runtime_type(arg, mod_path, params);
-        quote!(sig.add_input(|param_map: &mut _reflect::ParamMap| {#ty});)
+        quote!(sig.add_input(|param_map: &mut _reflect::SynParamMap| {#ty});)
     });
     let set_output = function.ret.as_ref().map(|ty| {
         let ty = to_runtime_type(&ty, mod_path, params);
-        quote!(sig.set_output(|param_map: &mut _reflect::ParamMap| {#ty});)
+        quote!(sig.set_output(|param_map: &mut _reflect::SynParamMap| {#ty});)
     });
 
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))

@@ -1,5 +1,5 @@
 use crate::{
-    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, RefMap,
+    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, SynParamMap,
     TypeParam, TypeParamBound,
 };
 use proc_macro2::TokenStream;
@@ -54,7 +54,7 @@ impl Type {
         })
     }
 
-    pub fn reference_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
+    pub fn reference_with_lifetime(&self, lifetime: &str, param_map: &SynParamMap) -> Self {
         let lifetime: syn::Lifetime = syn::parse_str(lifetime)
             .expect("Type::reference_with_lifetime: couldn't parse lifetime");
         let lifetime = param_map.get_lifetime(&lifetime.ident);
@@ -74,7 +74,7 @@ impl Type {
         })
     }
 
-    pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &ParamMap) -> Self {
+    pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &SynParamMap) -> Self {
         let lifetime: syn::Lifetime = syn::parse_str(lifetime)
             .expect("Type::reference_with_lifetime: couldn't parse lifetime");
         let lifetime = param_map.get_lifetime(&lifetime.ident);
@@ -119,7 +119,7 @@ impl Type {
         }
     }
 
-    pub fn get_trait_object(type_param_bounds: &[&str], param_map: &mut ParamMap) -> Self {
+    pub fn get_trait_object(type_param_bounds: &[&str], param_map: &mut SynParamMap) -> Self {
         Type(TypeNode::TraitObject(
             type_param_bounds
                 .iter()
@@ -128,7 +128,7 @@ impl Type {
         ))
     }
 
-    pub fn type_param_from_str(type_param: &str, param_map: &mut ParamMap) -> Self {
+    pub fn type_param_from_str(type_param: &str, param_map: &mut SynParamMap) -> Self {
         let ident = parse_str(type_param).unwrap();
         if let Some(&param) = param_map.get(&ident) {
             Type(TypeNode::TypeParam(
@@ -141,7 +141,7 @@ impl Type {
         }
     }
 
-    pub(crate) fn syn_to_type(ty: syn::Type, param_map: &mut ParamMap) -> Self {
+    pub(crate) fn syn_to_type(ty: syn::Type, param_map: &mut SynParamMap) -> Self {
         match ty {
             syn::Type::Path(TypePath {
                 //FIXME: add qself to Path
@@ -198,8 +198,8 @@ impl Type {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
-        Type(self.0.clone_with_fresh_generics(ref_map))
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
+        Type(self.0.clone_with_fresh_generics(param_map))
     }
 }
 
@@ -229,7 +229,7 @@ impl TypeNode {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         use super::TypeNode::*;
         match self {
             Infer => Infer,
@@ -237,7 +237,7 @@ impl TypeNode {
             Tuple(types) => Tuple(
                 types
                     .iter()
-                    .map(|ty| ty.clone_with_fresh_generics(ref_map))
+                    .map(|ty| ty.clone_with_fresh_generics(param_map))
                     .collect(),
             ),
 
@@ -250,18 +250,18 @@ impl TypeNode {
             } => Reference {
                 is_mut: *is_mut,
 
-                lifetime: lifetime.map(|lifetime| lifetime.clone_with_fresh_generics(ref_map)),
-                inner: Box::new(inner.clone_with_fresh_generics(ref_map)),
+                lifetime: lifetime.map(|lifetime| lifetime.clone_with_fresh_generics(param_map)),
+                inner: Box::new(inner.clone_with_fresh_generics(param_map)),
             },
 
             Dereference(dereference) => {
-                Dereference(Box::new(dereference.clone_with_fresh_generics(ref_map)))
+                Dereference(Box::new(dereference.clone_with_fresh_generics(param_map)))
             }
 
             TraitObject(bounds) => TraitObject(
                 bounds
                     .iter()
-                    .map(|bound| bound.clone_with_fresh_generics(ref_map))
+                    .map(|bound| bound.clone_with_fresh_generics(param_map))
                     .collect(),
             ),
 
@@ -269,10 +269,10 @@ impl TypeNode {
                 unimplemented!("Type::clone_with_fresh_generics: DataStructure")
             }
 
-            Path(path) => Path(path.clone_with_fresh_generics(ref_map)),
+            Path(path) => Path(path.clone_with_fresh_generics(param_map)),
 
             TypeParam(type_param) => TypeParam(
-                ref_map
+                param_map
                     .get(&GenericParam::Type(*type_param))
                     .and_then(|param| param.type_param())
                     .unwrap(),

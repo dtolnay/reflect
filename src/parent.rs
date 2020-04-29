@@ -1,4 +1,4 @@
-use crate::{Generics, ParamMap, Path};
+use crate::{Generics, Path, SynParamMap};
 use std::default::Default;
 
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ impl<'a> SetPath<'a, Path> for ParentBuilder {
 
 impl<'a, F> SetPath<'a, F> for ParentBuilder
 where
-    F: FnOnce(&'a mut ParamMap) -> Path,
+    F: FnOnce(&'a mut SynParamMap) -> Path,
 {
     fn set_path(&'a mut self, into_path: F) {
         self.path = Some((into_path)(&mut self.generics.param_map));
@@ -59,7 +59,7 @@ impl ParentBuilder {
         <Self as SetPath<'a, P>>::set_path(self, into_path);
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
         self.generics.set_generic_params(params)
     }
 
@@ -75,7 +75,7 @@ pub enum ParentKind {
 }
 
 impl Parent {
-    pub fn get_param_map(&self) -> &ParamMap {
+    pub fn get_param_map(&self) -> &SynParamMap {
         &self.generics.param_map
     }
 }

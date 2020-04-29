@@ -1,6 +1,6 @@
 use crate::{
     GenericArgument, GenericParam, Generics, GlobalCounter, Lifetime, ParamMap, Path,
-    PathArguments, RefMap, Type,
+    PathArguments, SynParamMap, Type,
     TypeNode::{self, *},
     TypeParamBound, LIFETIMES,
 };
@@ -37,7 +37,7 @@ pub trait SetOutput<'a, T> {
 }
 
 impl Receiver {
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         use Receiver::*;
         match *self {
             NoSelf => NoSelf,
@@ -45,7 +45,7 @@ impl Receiver {
             SelfByReference { is_mut, lifetime } => SelfByReference {
                 is_mut,
                 lifetime: OptionLifetime(Some(
-                    lifetime.0.unwrap().clone_with_fresh_generics(ref_map),
+                    lifetime.0.unwrap().clone_with_fresh_generics(param_map),
                 )),
             },
         }
@@ -60,7 +60,7 @@ impl<'a> AddInput<'a, Type> for Signature {
 
 impl<'a, F> AddInput<'a, F> for Signature
 where
-    F: FnOnce(&'a mut ParamMap) -> Type,
+    F: FnOnce(&'a mut SynParamMap) -> Type,
 {
     fn add_input(&'a mut self, into_input: F) {
         self.inputs.push((into_input)(&mut self.generics.param_map))
@@ -75,7 +75,7 @@ impl<'a> SetOutput<'a, Type> for Signature {
 
 impl<'a, F> SetOutput<'a, F> for Signature
 where
-    F: FnOnce(&'a mut ParamMap) -> Type,
+    F: FnOnce(&'a mut SynParamMap) -> Type,
 {
     fn set_output(&'a mut self, into_output: F) {
         self.output = (into_output)(&mut self.generics.param_map);
@@ -128,11 +128,11 @@ impl Signature {
         <Self as SetOutput<'a, T>>::set_output(self, into_output);
     }
 
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
         self.generics.set_generic_params(params)
     }
 
-    pub fn add_parent_params(&mut self, param_map: &mut ParamMap) {
+    pub fn add_parent_params(&mut self, param_map: &mut SynParamMap) {
         self.generics.param_map.append(param_map);
     }
 

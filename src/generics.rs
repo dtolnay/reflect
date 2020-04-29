@@ -15,7 +15,7 @@ pub struct Generics {
 
     // A mapping between the parameter identifiers and their GenericParam
     // representation
-    pub(crate) param_map: ParamMap,
+    pub(crate) param_map: SynParamMap,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -102,22 +102,22 @@ pub(crate) struct Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParamMap {
+pub struct SynParamMap {
     // TODO: Perhaps change key type from syn:Ident to syn::GenericParam or GenericParam
     // to avoid name collisions with type params and generic params with the same name
     pub(crate) map: BTreeMap<syn::Ident, GenericParam>,
 }
 
-pub struct RefMap {
+pub struct ParamMap {
     pub(crate) map: BTreeMap<GenericParam, GenericParam>,
 }
 
-impl ParamMap {
+impl SynParamMap {
     pub(crate) fn new() -> Self {
         let static_lifetime = syn::Ident::new("static", Span::call_site());
         let mut param_map = BTreeMap::new();
         param_map.insert(static_lifetime, GenericParam::Lifetime(STATIC_LIFETIME));
-        ParamMap { map: param_map }
+        SynParamMap { map: param_map }
     }
 
     pub(crate) fn insert(&mut self, key: syn::Ident, value: GenericParam) -> Option<GenericParam> {
@@ -128,20 +128,20 @@ impl ParamMap {
         self.map.get(key)
     }
 
-    pub fn append(&mut self, other: &mut ParamMap) {
+    pub fn append(&mut self, other: &mut SynParamMap) {
         self.map.append(&mut other.map)
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
-        let mut param_map = ParamMap::new();
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
+        let mut syn_param_map = SynParamMap::new();
         for key in self.map.keys() {
             let value = self.get(key).unwrap();
 
-            if let Some(value) = ref_map.get(value) {
-                param_map.insert(key.clone(), *value);
+            if let Some(value) = param_map.get(value) {
+                syn_param_map.insert(key.clone(), *value);
             }
         }
-        param_map
+        syn_param_map
     }
 
     pub(crate) fn get_lifetime(&self, ident: &syn::Ident) -> Lifetime {
@@ -151,15 +151,14 @@ impl ParamMap {
     }
 }
 
-// TODO: Change name to something more descriptive
-impl RefMap {
+impl ParamMap {
     pub(crate) fn new() -> Self {
         let mut map = BTreeMap::new();
         map.insert(
             GenericParam::Lifetime(STATIC_LIFETIME),
             GenericParam::Lifetime(STATIC_LIFETIME),
         );
-        RefMap { map }
+        ParamMap { map }
     }
 
     pub(crate) fn insert(
@@ -176,7 +175,10 @@ impl RefMap {
 }
 
 impl TypeParamBound {
-    pub(crate) fn get_type_param_bound(type_param_bound: &str, param_map: &mut ParamMap) -> Self {
+    pub(crate) fn get_type_param_bound(
+        type_param_bound: &str,
+        param_map: &mut SynParamMap,
+    ) -> Self {
         syn_to_type_param_bound(
             parse_str(type_param_bound)
                 .expect("TypeParamBound::get_type_param_bound: Not a TypeParamBound"),
@@ -184,28 +186,28 @@ impl TypeParamBound {
         )
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         match self {
             TypeParamBound::Lifetime(lifetime) => {
-                TypeParamBound::Lifetime(lifetime.clone_with_fresh_generics(ref_map))
+                TypeParamBound::Lifetime(lifetime.clone_with_fresh_generics(param_map))
             }
 
             TypeParamBound::Trait(bound) => TypeParamBound::Trait(TraitBound {
                 lifetimes: bound
                     .lifetimes
                     .iter()
-                    .map(|lifetime| lifetime.clone_with_fresh_generics(ref_map))
+                    .map(|lifetime| lifetime.clone_with_fresh_generics(param_map))
                     .collect(),
 
-                path: bound.path.clone_with_fresh_generics(ref_map),
+                path: bound.path.clone_with_fresh_generics(param_map),
             }),
         }
     }
 }
 
 impl Lifetime {
-    pub(crate) fn clone_with_fresh_generics(self, ref_map: &RefMap) -> Self {
-        ref_map
+    pub(crate) fn clone_with_fresh_generics(self, param_map: &ParamMap) -> Self {
+        param_map
             .get(&GenericParam::Lifetime(self))
             .and_then(|param| param.lifetime())
             .unwrap()
@@ -239,27 +241,27 @@ impl GenericParam {
 }
 
 impl GenericConstraint {
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         match self {
             Self::Type(predicate) => Self::Type(PredicateType {
                 lifetimes: predicate
                     .lifetimes
                     .iter()
-                    .map(|lifetime| lifetime.clone_with_fresh_generics(ref_map))
+                    .map(|lifetime| lifetime.clone_with_fresh_generics(param_map))
                     .collect(),
-                bounded_ty: predicate.bounded_ty.clone_with_fresh_generics(ref_map),
+                bounded_ty: predicate.bounded_ty.clone_with_fresh_generics(param_map),
                 bounds: predicate
                     .bounds
                     .iter()
-                    .map(|bound| bound.clone_with_fresh_generics(ref_map))
+                    .map(|bound| bound.clone_with_fresh_generics(param_map))
                     .collect(),
             }),
             Self::Lifetime(lifetime_def) => Self::Lifetime(LifetimeDef {
-                lifetime: lifetime_def.lifetime.clone_with_fresh_generics(ref_map),
+                lifetime: lifetime_def.lifetime.clone_with_fresh_generics(param_map),
                 bounds: lifetime_def
                     .bounds
                     .iter()
-                    .map(|lifetime| lifetime.clone_with_fresh_generics(ref_map))
+                    .map(|lifetime| lifetime.clone_with_fresh_generics(param_map))
                     .collect(),
             }),
         }
@@ -267,7 +269,7 @@ impl GenericConstraint {
 }
 
 impl Generics {
-    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut ParamMap {
+    pub fn set_generic_params(&mut self, params: &[&str]) -> &mut SynParamMap {
         let syn_params = params.iter().map(|param| parse_str(param).unwrap());
         let (params, constraints, mut param_map) = syn_to_generic_params(syn_params);
         self.params.extend(params);
@@ -300,8 +302,8 @@ impl Generics {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self) -> (Self, RefMap) {
-        let mut ref_map = RefMap::new();
+    pub(crate) fn clone_with_fresh_generics(&self) -> (Self, ParamMap) {
+        let mut param_map = ParamMap::new();
         (
             Generics {
                 params: self
@@ -309,18 +311,18 @@ impl Generics {
                     .iter()
                     .map(|param| {
                         let new_param = param.get_fresh_param();
-                        ref_map.insert(*param, new_param);
+                        param_map.insert(*param, new_param);
                         new_param
                     })
                     .collect(),
                 constraints: self
                     .constraints
                     .iter()
-                    .map(|constraint| constraint.clone_with_fresh_generics(&ref_map))
+                    .map(|constraint| constraint.clone_with_fresh_generics(&param_map))
                     .collect(),
-                param_map: self.param_map.clone_with_fresh_generics(&ref_map),
+                param_map: self.param_map.clone_with_fresh_generics(&param_map),
             },
-            ref_map,
+            param_map,
         )
     }
 }
@@ -330,14 +332,14 @@ impl Default for Generics {
         Generics {
             params: Vec::new(),
             constraints: Vec::new(),
-            param_map: ParamMap::new(),
+            param_map: SynParamMap::new(),
         }
     }
 }
 
 fn syn_to_bound_lifetimes(
     lifetimes: Option<BoundLifetimes>,
-    param_map: &mut ParamMap,
+    param_map: &mut SynParamMap,
 ) -> Vec<Lifetime> {
     lifetimes.map_or_else(Vec::new, |lifetimes| {
         lifetimes
@@ -359,14 +361,14 @@ fn syn_to_bound_lifetimes(
 
 fn syn_where_clause_to_generic_constraints<'a>(
     where_clause: WhereClause,
-    param_map: &'a mut ParamMap,
+    param_map: &'a mut SynParamMap,
 ) -> impl Iterator<Item = GenericConstraint> + 'a {
     syn_where_predicates_to_generic_constraints(where_clause.predicates.into_iter(), param_map)
 }
 
 pub(crate) fn syn_where_predicates_to_generic_constraints<'a, I>(
     where_predicates: I,
-    param_map: &'a mut ParamMap,
+    param_map: &'a mut SynParamMap,
 ) -> impl Iterator<Item = GenericConstraint> + 'a
 where
     I: Iterator<Item = WherePredicate> + 'a,
@@ -399,11 +401,11 @@ where
 
 pub(crate) fn syn_to_generic_params<T>(
     params: T,
-) -> (Vec<GenericParam>, Vec<GenericConstraint>, ParamMap)
+) -> (Vec<GenericParam>, Vec<GenericConstraint>, SynParamMap)
 where
     T: IntoIterator<Item = syn::GenericParam>,
 {
-    let mut param_map = ParamMap::new();
+    let mut param_map = SynParamMap::new();
     let mut constraints = Vec::new();
     let params: Vec<_> = params.into_iter().collect();
     params
@@ -450,7 +452,7 @@ where
     (params, constraints, param_map)
 }
 
-pub(crate) fn param_mapping(param: &syn::GenericParam, param_map: &mut ParamMap) {
+pub(crate) fn param_mapping(param: &syn::GenericParam, param_map: &mut SynParamMap) {
     match &param {
         syn::GenericParam::Type(syn::TypeParam { ident, .. }) => {
             let param = GenericParam::Type(TYPE_PARAMS.count());
@@ -469,7 +471,7 @@ pub(crate) fn param_mapping(param: &syn::GenericParam, param_map: &mut ParamMap)
 
 pub(crate) fn syn_to_type_param_bounds<'a, T>(
     bounds: T,
-    param_map: &'a mut ParamMap,
+    param_map: &'a mut SynParamMap,
 ) -> impl Iterator<Item = TypeParamBound> + 'a
 where
     T: IntoIterator<Item = syn::TypeParamBound> + 'a,
@@ -481,7 +483,7 @@ where
 
 pub(crate) fn syn_to_type_param_bound(
     type_param_bound: syn::TypeParamBound,
-    param_map: &mut ParamMap,
+    param_map: &mut SynParamMap,
 ) -> TypeParamBound {
     match type_param_bound {
         syn::TypeParamBound::Trait(syn::TraitBound {
@@ -497,12 +499,12 @@ pub(crate) fn syn_to_type_param_bound(
 }
 
 impl GenericArguments {
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         GenericArguments {
             args: self
                 .args
                 .iter()
-                .map(|arg| arg.clone_with_fresh_generics(ref_map))
+                .map(|arg| arg.clone_with_fresh_generics(param_map))
                 .collect(),
         }
     }
@@ -511,7 +513,7 @@ impl GenericArguments {
 impl GenericArgument {
     pub(crate) fn syn_to_generic_argument(
         arg: syn::GenericArgument,
-        param_map: &mut ParamMap,
+        param_map: &mut SynParamMap,
     ) -> Self {
         match arg {
             syn::GenericArgument::Type(ty) => {
@@ -540,20 +542,22 @@ impl GenericArgument {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         match self {
-            Self::Type(ty) => Self::Type(ty.clone_with_fresh_generics(ref_map)),
-            Self::Lifetime(lifetime) => Self::Lifetime(lifetime.clone_with_fresh_generics(ref_map)),
+            Self::Type(ty) => Self::Type(ty.clone_with_fresh_generics(param_map)),
+            Self::Lifetime(lifetime) => {
+                Self::Lifetime(lifetime.clone_with_fresh_generics(param_map))
+            }
             Self::Binding(binding) => Self::Binding(Binding {
                 ident: binding.ident.clone(),
-                ty: binding.ty.clone_with_fresh_generics(ref_map),
+                ty: binding.ty.clone_with_fresh_generics(param_map),
             }),
             Self::Constraint(constraint) => Self::Constraint(Constraint {
                 ident: constraint.ident.clone(),
                 bounds: constraint
                     .bounds
                     .iter()
-                    .map(|bound| bound.clone_with_fresh_generics(ref_map))
+                    .map(|bound| bound.clone_with_fresh_generics(param_map))
                     .collect(),
             }),
             Self::Const(expr) => {

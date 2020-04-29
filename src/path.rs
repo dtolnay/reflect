@@ -1,4 +1,4 @@
-use crate::{GenericArgument, GenericArguments, Ident, ParamMap, RefMap, Type};
+use crate::{GenericArgument, GenericArguments, Ident, ParamMap, SynParamMap, Type};
 use ref_cast::RefCast;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{parse_str, ReturnType, Token};
@@ -69,14 +69,14 @@ impl Path {
         path
     }
 
-    pub fn path_from_str(path: &str, param_map: &mut ParamMap) -> Self {
+    pub fn path_from_str(path: &str, param_map: &mut SynParamMap) -> Self {
         Self::syn_to_path(
             parse_str(path).expect("Path::path_from_str: Not a Path"),
             param_map,
         )
     }
 
-    pub(crate) fn syn_to_path(path: syn::Path, param_map: &mut ParamMap) -> Self {
+    pub(crate) fn syn_to_path(path: syn::Path, param_map: &mut SynParamMap) -> Self {
         let global = path.leading_colon.is_some();
         let path: Vec<_> = path
             .segments
@@ -88,7 +88,7 @@ impl Path {
 
     pub(crate) fn syn_to_path_segment(
         path_segment: syn::PathSegment,
-        param_map: &mut ParamMap,
+        param_map: &mut SynParamMap,
     ) -> PathSegment {
         let syn::PathSegment { ident, arguments } = path_segment;
         let ident = Ident::from(ident);
@@ -138,7 +138,7 @@ impl Path {
         }
     }
 
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         Path {
             global: self.global,
             path: self
@@ -153,13 +153,15 @@ impl Path {
                     PathArguments::AngleBracketed(ref args) => PathSegment {
                         ident: segment.ident.clone(),
                         args: PathArguments::AngleBracketed(
-                            args.clone_with_fresh_generics(ref_map),
+                            args.clone_with_fresh_generics(param_map),
                         ),
                     },
 
                     PathArguments::Parenthesized(ref args) => PathSegment {
                         ident: segment.ident.clone(),
-                        args: PathArguments::Parenthesized(args.clone_with_fresh_generics(ref_map)),
+                        args: PathArguments::Parenthesized(
+                            args.clone_with_fresh_generics(param_map),
+                        ),
                     },
                 })
                 .collect(),
@@ -168,25 +170,25 @@ impl Path {
 }
 
 impl AngleBracketedGenericArguments {
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         AngleBracketedGenericArguments {
-            args: self.args.clone_with_fresh_generics(ref_map),
+            args: self.args.clone_with_fresh_generics(param_map),
         }
     }
 }
 
 impl ParenthesizedGenericArguments {
-    pub(crate) fn clone_with_fresh_generics(&self, ref_map: &RefMap) -> Self {
+    pub(crate) fn clone_with_fresh_generics(&self, param_map: &ParamMap) -> Self {
         ParenthesizedGenericArguments {
             inputs: self
                 .inputs
                 .iter()
-                .map(|ty| ty.clone_with_fresh_generics(ref_map))
+                .map(|ty| ty.clone_with_fresh_generics(param_map))
                 .collect(),
             output: self
                 .output
                 .as_ref()
-                .map(|ty| ty.clone_with_fresh_generics(ref_map)),
+                .map(|ty| ty.clone_with_fresh_generics(param_map)),
         }
     }
 }

@@ -1504,9 +1504,7 @@ impl Path {
                                 (
                                     GenericArgument::Lifetime(lifetime1),
                                     GenericArgument::Lifetime(lifetime2),
-                                ) => {
-                                    GenericArgument::Lifetime((*lifetime1).min(*lifetime2))
-                                }
+                                ) => GenericArgument::Lifetime((*lifetime1).min(*lifetime2)),
                                 _ => unimplemented!(
                                     "Path::make_most_concrete_from_pair: GenericArgument"
                                 ),
