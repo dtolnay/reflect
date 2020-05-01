@@ -33,8 +33,8 @@ fn test_tuple() {
         {
             fn swap(__arg0: (::tuple::One, ::tuple::Two)) -> (::tuple::Two, ::tuple::One) {
                 let __v0 = __arg0;
-                let __v1 = &__v0.0;
-                let __v2 = &__v0.1;
+                let __v1 = __v0.0;
+                let __v2 = __v0.1;
                 let __v3 = (__v2, __v1);
                 __v3
             }

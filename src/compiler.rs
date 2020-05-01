@@ -3,12 +3,13 @@ use crate::{
     Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, PathArguments, Print, Receiver,
     SimplePath, TraitInferenceResult, Type, TypeNode, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::collections::BTreeSet as Set;
 use std::ops::Range;
 use std::rc::Rc;
+use syn::Token;
 
 #[derive(Debug)]
 pub(crate) struct Program {
@@ -301,15 +302,23 @@ impl CompleteFunction {
                 }
             }),
             ValueNode::Destructure {
-                parent, accessor, ..
+                parent,
+                accessor,
+                ty,
             } => {
+                let mut node = &parent.node().get_type().0;
                 let parent = parent.binding();
                 let accessor = Print::ref_cast(accessor);
+                let mut references = TokenStream::new();
 
-                // FIXME: Making the destructure a reference is sometimes wrong
-                quote! {
-                    &#parent.#accessor
+                while let TypeNode::Reference { is_mut, inner, .. } = node {
+                    Token!(&)(Span::call_site()).to_tokens(&mut references);
+                    if *is_mut {
+                        Token![mut](Span::call_site()).to_tokens(&mut references);
+                    }
+                    node = &**inner;
                 }
+                quote!(#references #parent.#accessor)
             }
             ValueNode::DataStructure { .. } => unimplemented!(),
             ValueNode::MacroInvocation(invoke) => MACROS.with_borrow(|macros| {

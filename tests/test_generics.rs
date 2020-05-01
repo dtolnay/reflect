@@ -116,34 +116,8 @@ fn test_generics2() {
         }
     };
 
-    let expected_start = quote! {
-        impl<__T0, __T1, __T4, __T7> ::generic::Generic<__T4>
-            for GenericQuadruple<
-                __T0,
-                __T1,
-                ::generic::Wrapper<__T7>,
-                ::generic::Wrapper<::std::string::String>
-            >
-        where
-            __T0: ::generic::Generic<__T1>,
-    };
-
-    let expected_generic = quote! {
-        fn generic<__T5>(
-            self,
-            __arg0: __T4,
-            __arg1: ::generic::Wrapper<__T5>,
-            __arg2: ::generic::Wrapper<::generic::Wrapper<::std::string::String> >
-        )
-    };
-
     let output = reflect::derive(input, derive);
     let output = output.to_string();
 
-    // The code gen produces wrong output
-    assert_ne!(&output, &expected.to_string());
-
-    // However the trait and type inference is correct
-    assert!(output.starts_with(&expected_start.to_string()));
-    assert!(output.contains(&expected_generic.to_string()));
+    assert_eq!(&output, &expected.to_string());
 }
