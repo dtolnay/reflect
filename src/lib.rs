@@ -314,7 +314,7 @@
 //! general and robust procedural macro.
 
 #![doc(html_root_url = "https://docs.rs/reflect/0.0.4")]
-#![warn(clippy::explicit_iter_loop)]
+#![warn(clippy::explicit_iter_loop, clippy::doc_markdown)]
 #![allow(unused_variables, dead_code)]
 #![allow(
     clippy::needless_pass_by_value,
@@ -322,6 +322,7 @@
     clippy::large_enum_variant,
     clippy::trivially_copy_pass_by_ref
 )]
+// #![warn(clippy::pedantic)]
 
 #[doc(hidden)]
 pub use reflect_internal::*;

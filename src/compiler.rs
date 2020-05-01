@@ -186,6 +186,8 @@ impl CompleteFunction {
     }
 
     fn compute_reachability(&self) -> Set<ValueRef> {
+        use crate::ValueNode::*;
+
         let mut reachable = Set::new();
         let mut stack: Vec<_> = self.refs().filter(|v| self.is_important(*v)).collect();
 
@@ -194,7 +196,6 @@ impl CompleteFunction {
             reachable.insert(ret);
         }
 
-        use crate::ValueNode::*;
         while let Some(v) = stack.pop() {
             VALUES.with_borrow(|values| match &values[v.0] {
                 Tuple(values) => {

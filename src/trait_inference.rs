@@ -4,9 +4,10 @@ use crate::{
     PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
     TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME, VALUES,
 };
-// FxHasher is used, both because it is a faster hashing algorithm than the
-// default one, and because it has a hasher with a defalt seed, which is
-// useful for testing purposes, and consistent output between compiles.
+// FxHasher is used because it is a faster hashing algorithm than the
+// default one, but most importantly because it has a hasher with a defalt
+// seed, which is useful for testing purposes, and consistent output between
+// compiles.
 use fxhash::{FxHashMap, FxHashSet};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -20,13 +21,14 @@ pub(crate) struct EqualitySet<T> {
     pub(crate) set: FxHashSet<T>,
 }
 
-/// A set of types that are considered to be equal. An example of how it is used:
-/// Say we have a function: fn func<T>(maybe: Option<T>) {}, and we call this
-/// function with a value of type ::std::option::Option<String>. Then we need
-/// at least two sets.
-/// In set one, we have { Option<T>, ::std::option::Option<String>, .. }
-/// In set two, we have { T, String, .. }. Both sets may contain more than two
-/// types, since more than two types may be considered equal
+/// A set of types that are considered to be equal. An example of how it is
+/// used: Say we have a function: `fn func<T>(maybe: Option<T>) {}`, and we
+/// call this function with a value of type `::std::option::Option<String>`.
+/// Then we need at least two sets.
+/// In set one, we have: { `Option<T>`, `::std::option::Option<String>`, .. }
+/// In set two, we have the inner types: { T, String, .. }. Both sets may
+/// contain more than two types, since more than two types may be considered
+/// equal
 pub(crate) type TypeEqualitySet = EqualitySet<TypeNode>;
 
 /// A set of constraints used in the where clause in the final impl
@@ -40,9 +42,19 @@ pub(crate) struct EqualitySets<SetRef, T> {
     pub(crate) sets: Vec<EqualitySet<T>>,
 }
 
-// A mapping between types and it's corresponding set of equal types
+// A mapping between types and it's corresponding equality sets
 pub(crate) type TypeEqualitySets = EqualitySets<TypeEqualitySetRef, TypeNode>;
 
+/// A conventient wrapper struct that is sent around quite a bit
+///
+/// The `most_concrete_type_map` is a mapping between references to a type-
+/// equality set and the most concrete type related to that set. Something
+/// that may be slightly unintuitive is that the most concrete type related to
+/// a given set might not be in that set. The reason for that is that an
+/// equality set may contain the type `Option<T>`, and another set may contain
+/// the types: { `T`, `String`, .. }. The most concrete type for the set
+/// containing `Option<T>` may actually be `Option<String>`, even though
+/// `Option<String>` was not contained in that set.
 pub(crate) struct ConcreteMapAndSets {
     most_concrete_type_map: BTreeMap<TypeEqualitySetRef, TypeNode>,
     type_equality_sets: TypeEqualitySets,
@@ -73,6 +85,20 @@ pub(crate) struct BoolMatrix {
     matrix: Vec<bool>,
 }
 
+/// The result of calling the `transitive_closure` method on a
+///`LifetimeSubtypeMap`
+///
+/// The transitive closure on the subtype relation on lifetimes represented
+/// in a `BoolMatrix` with some convenient extra structure for tranlating
+/// between lifetimes and indexes.
+///
+/// The `most_concrete_lifetime_map` contains a mapping between each lifetime
+/// and to the "most concrete" lifetime. The most concrete lifetme for a
+/// lifetime 'a, is the result of calling `min` on the set of lifetimes that
+/// 'a is equal to. Since the 'static lifetime is represented with the
+/// numerical value 0, this has the convenient side effect that any lifetime
+/// that is proven to be equal to the 'static lifetime, will have the 'static
+/// as it's most concrete type
 pub(crate) struct TransitiveClosure {
     transitive_closure: BoolMatrix,
     index_lifetime_mapping: BTreeMap<usize, Lifetime>,
@@ -80,6 +106,7 @@ pub(crate) struct TransitiveClosure {
     most_concrete_lifetime_map: BTreeMap<Lifetime, Lifetime>,
 }
 
+/// A temprary struct that contains the output from the `create_mapping` method
 struct Mapping {
     mapping: Vec<(usize, usize)>,
     index_lifetime_mapping: BTreeMap<usize, Lifetime>,
@@ -136,6 +163,8 @@ impl LifetimeSubtypeMap {
         });
     }
 
+    /// Find the transitive closure of the subtype relation.
+    /// If 'a: 'b and 'b: 'c, the 'a: 'c
     fn transitive_closure(self) -> TransitiveClosure {
         let Mapping {
             mapping,
@@ -338,9 +367,9 @@ where
 impl TypeEqualitySetRef {
     /// The most concrete type is what the inferred type for a value must be.
     /// What is meant by making something more concrete, is essentially making
-    /// it less generic. Say we have a TypeEqualitySet with these types:
+    /// it less generic. Say we have a `TypeEqualitySet` with these types:
     /// { T, Option<U> }. The most concrete type of these, are Option<U>.
-    /// Imaginge then that we have another set: { U, String }. String is more
+    /// Imagine then that we have another set: { U, String }. String is more
     /// concrete than U, and thus Option<String> is more concrete than Option<U>,
     /// and thus the most concrete type we can get startng from the first set
     /// is Option<String>
@@ -456,8 +485,9 @@ impl TypeEqualitySets {
         }
     }
 
-    /// Insert two types as equal to eachother, and in case of TraitObjects, e.g.
-    /// ty1: T, ty2: dyn Clone, insert T: Clone as constraint.
+    /// Insert two types as equal to eachother. In case one of the types is a
+    ///`TraitObject`, e.g. ty1 has type `T` and ty2 has type `dyn Clone`, then
+    /// insert `T: Clone` as constraint.
     fn insert_types_as_equal(
         &mut self,
         ty1: TypeNode,
@@ -583,10 +613,10 @@ impl TypeEqualitySets {
 
     /// When comparing two paths with the same number of arguments, we assume
     /// those arguments to correspond to eachother in the order they are
-    /// defined. If we have two paths: ::std::result::Result<T, U>, and
-    /// Result<V, W>, we assume T = V and U = W. This may not be the case
-    /// in all cases as Result could be defined as:
-    /// type Result<V, W> = std::result:Result<W, V>, but it is unlikely that
+    /// defined. If we have two paths: `::std::result::Result<T, U>`, and
+    /// `Result<V, W>`, we assume `T` = `V` and `U` = `W`. This may not be the
+    /// case in all cases as `Result` could be defined as:
+    /// `type Result<V, W> = std::result:Result<W, V>`, but it is unlikely
     /// that someone would define a type like that. The benifit of pretending
     /// that this scenario will not occur, is that we may get better trait
     /// inference for the cases where the type parameters correspond to
@@ -636,12 +666,11 @@ impl TypeEqualitySets {
                         }
                     })
             }
-            (PathArguments::Parenthesized(args1), _) => unimplemented!(
-                "TypeEqualitySets::insert_inner_type_as_equal_to: ParenthesizedGenericArgument"
-            ),
-            (_, PathArguments::Parenthesized(args1)) => unimplemented!(
-                "TypeEqualitySets::insert_inner_type_as_equal_to: ParenthesizedGenericArgument"
-            ),
+            (PathArguments::Parenthesized(args1), _) | (_, PathArguments::Parenthesized(args1)) => {
+                unimplemented!(
+                    "TypeEqualitySets::insert_inner_type_as_equal_to: ParenthesizedGenericArgument"
+                )
+            }
             _ => (),
         }
     }
@@ -982,12 +1011,12 @@ fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut
 }
 
 /// Find generic parameters of the most concrete types for the generic
-/// parameters related to the DataStructure or trait that is being
+/// parameters related to the `DataStructure` or trait that is being
 /// implemented. Then return a set containing all the inner generic type
-/// parameters. Say we are implementing a trait Trait for a struct S<T, U>
+/// parameters. Say we are implementing a trait `Trait` for a struct `S<T, U>`
 /// After doing some analysis we have concluded that the most concrete type
-/// for T is Option<V> and U is already the most concrete type it can be. We
-/// then return a set containing V, and U
+/// for `T` is `Option<V>` and `U` is already the most concrete type it can be.
+/// We then return a set containing V, and U
 fn get_relevant_generic_params(
     original_generic_params: &[GenericParam],
     type_equality_sets: TypeEqualitySets,
@@ -1084,13 +1113,13 @@ impl GenericConstraint {
     /// that the constraint is not relevant at all, and thus it returns
     /// true if it is relevant, or false otherwise.
     ///
-    /// Example of a not relevat constraint is: `T: Clone`, where T is
-    /// inferred to be String. String is a concrete type, and therefore does
-    /// not need an explisit bound.
+    /// Example of a not relevat constraint is: `T: Clone`, where `T` is
+    /// inferred to be `String`. `String` is a concrete type, and therefore
+    /// does not need an explisit bound.
     ///
     /// Less obvious is that we disallow cases like:
     /// `Type<T>: Trait` and `U: Trait<Type<T>>`
-    /// This is to avoid the scenario where Type is private but Trait is
+    /// This is to avoid the scenario where `Type` is private but `Trait` is
     /// public. In this case the final impl may compile without specifying the
     /// trait bound, but won't compile with it.
     ///
@@ -1098,7 +1127,7 @@ impl GenericConstraint {
     /// doing an `impl<T> Trait for Struct<Type<T>>` for example. In this case
     /// it is safe to accept the constraint: `Type<T>: Trait` as this won't
     /// trigger the private type in public interface error. This scenario is
-    /// currently ignored by this method, and will return a None in that case,
+    /// currently ignored by this method, and will return false in that case,
     /// but it might be supported in the future.
     fn make_relevant(
         &mut self,
@@ -1209,9 +1238,9 @@ impl TypeNode {
         *self = set_ref.make_most_concrete(concrete_maps_and_sets, transitive_closure);
     }
 
-    /// Makes the most concrete TypeNode from two TypeNodes that are consdered
-    /// to be equal. This is primarily decided based on the inner types of the
-    /// nodes.
+    /// Makes the most concrete `TypeNode` from two `TypeNode`s that are
+    /// considered to be equal. This is primarily decided based on the inner
+    /// types of the nodes.
     fn make_most_concrete_from_pair(
         ty1: TypeNode,
         ty2: TypeNode,
@@ -1499,7 +1528,7 @@ impl Path {
     /// still represent the same underlying type. This methods accounts for
     /// this, and will try to combine these paths in the best way possible.
     /// It is for example common to make a custum Result type with one
-    /// parameter, that is just a type alias for std::result::Result. e.g.:
+    /// parameter, that is just a type alias for `std::result::Result`. e.g.:
     /// `type Result<T> = std::result::Result<Error, T>`
     ///
     /// This method prefers the path with the least arguments, as it will most
@@ -1508,11 +1537,12 @@ impl Path {
     ///
     /// For two paths with an equal number of generic arguments, these
     /// arguments are compared to eachother in chronlogical order. For example
-    /// with the types: Result<T, U> and std::result::Result<&'static str, V>
-    /// it is assumed that T is equal to &'static str, and U is equal to V
+    /// with the types: `Result<T, U>` and
+    /// `std::result::Result<&'static str, V>` it is assumed that `T` is equal
+    /// to `&'static str`, and `U` is equal to `V`.
     ///
-    /// In the rare case we have to types like Result<T, U> and tluseR<W, V>
-    /// this will not hold if tluseR<W, V> is defined as:
+    /// In the rare case we have to types like `Result<T, U>` and
+    /// `tluseR<W, V>` this will not hold if `tluseR<W, V>` is defined as:
     /// `type tluseR<W, V> = Result<V, W>;`.
     /// The code generation may produce invalid code in this case, but I
     /// assume this will be rare, and not worth worrying about.

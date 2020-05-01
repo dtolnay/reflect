@@ -51,7 +51,7 @@ impl ParentBuilder {
     }
 
     /// Set the path of the Parent.
-    /// P can be either a Path or a type implementing FnOnce(&'a mut ParamMap) -> Path
+    /// P can be either a Path or a type implementing `FnOnce(&'a mut ParamMap) -> Path`
     pub fn set_path<'a, P>(&'a mut self, into_path: P)
     where
         Self: SetPath<'a, P>,

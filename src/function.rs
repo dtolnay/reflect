@@ -30,9 +30,10 @@ impl Function {
         }
     }
 
-    /// When calling set_parent it is important to use a reference to the same
-    /// Parent struct for all functions declared inside of the same impl or
-    /// trait definition. Otherwise the trait inference may not work correctly
+    /// When calling `set_parent` it is important to use a reference to the
+    /// same Parent struct for all functions declared inside of the same impl
+    /// or trait definition. Otherwise the trait inference may not work
+    /// correctly.
     pub fn set_parent(&mut self, parent: Rc<Parent>) {
         self.parent = Some(parent);
     }

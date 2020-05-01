@@ -111,7 +111,7 @@ impl Signature {
     }
 
     /// Add input type to signature.
-    /// T can be either a Type or a type implementing FnOnce(&'a mut ParamMap) -> Type
+    /// T can be either a Type or a type implementing `FnOnce(&'a mut ParamMap) -> Type`
     pub fn add_input<'a, T>(&'a mut self, into_input: T)
     where
         Self: AddInput<'a, T>,
@@ -120,7 +120,7 @@ impl Signature {
     }
 
     /// Set output type to signature.
-    /// T can be either a Type or a type implementing FnOnce(&'a mut ParamMap) -> Type
+    /// T can be either a Type or a type implementing `FnOnce(&'a mut ParamMap) -> Type`
     pub fn set_output<'a, T>(&'a mut self, into_output: T)
     where
         Self: SetOutput<'a, T>,
@@ -141,7 +141,7 @@ impl Signature {
     }
 
     /// Explicitly insert elided lifetimes
-    /// Should be called by Function::get_function after the all paramters are inserted
+    /// Should be called by `Function::get_function` after the all paramters are inserted
     pub(crate) fn insert_elided_lifetimes(&mut self) {
         use Receiver::*;
         let generics = &mut self.generics;
@@ -265,7 +265,7 @@ impl TypeNode {
     fn has_lifetimes(&self) -> bool {
         match self {
             Reference { .. } => true,
-            Tuple(types) => types.iter().any(|ty| ty.has_lifetimes()),
+            Tuple(types) => types.iter().any(TypeNode::has_lifetimes),
             Dereference(node) => node.has_lifetimes(),
             TraitObject(bounds) => bounds.iter().any(|bound| match bound {
                 TypeParamBound::Trait(bound) => bound.path.has_lifetimes(),
