@@ -42,7 +42,7 @@ pub(crate) struct EqualitySets<SetRef, T> {
     pub(crate) sets: Vec<EqualitySet<T>>,
 }
 
-// A mapping between types and it's corresponding equality sets
+// A mapping between types and their corresponding equality sets
 pub(crate) type TypeEqualitySets = EqualitySets<TypeEqualitySetRef, TypeNode>;
 
 /// A conventient wrapper struct that is sent around quite a bit
@@ -485,7 +485,7 @@ impl TypeEqualitySets {
         }
     }
 
-    /// Insert two types as equal to eachother. In case one of the types is a
+    /// Insert two types as equal to each other. In case one of the types is a
     ///`TraitObject`, e.g. ty1 has type `T` and ty2 has type `dyn Clone`, then
     /// insert `T: Clone` as constraint.
     fn insert_types_as_equal(
@@ -549,7 +549,7 @@ impl TypeEqualitySets {
         self.insert_as_equal(ty1, ty2)
     }
 
-    /// Insert the inner types of two types as equal to eachother
+    /// Insert the inner types of two types as equal to each other
     /// For example if we have two tuple types (T, &str) and (U, S) we would
     /// get two sets {T, U}, and {&str, S}
     fn insert_inner_type_as_equal_to(
@@ -612,7 +612,7 @@ impl TypeEqualitySets {
     }
 
     /// When comparing two paths with the same number of arguments, we assume
-    /// those arguments to correspond to eachother in the order they are
+    /// those arguments to correspond to each other in the order they are
     /// defined. If we have two paths: `::std::result::Result<T, U>`, and
     /// `Result<V, W>`, we assume `T` = `V` and `U` = `W`. This may not be the
     /// case in all cases as `Result` could be defined as:
@@ -620,7 +620,7 @@ impl TypeEqualitySets {
     /// that someone would define a type like that. The benifit of pretending
     /// that this scenario will not occur, is that we may get better trait
     /// inference for the cases where the type parameters correspond to
-    /// eachother.
+    /// each other.
     ///
     /// For cases where two paths have an unequal number of parameters, we
     /// assume that the path with the fewest paramters is a type alias for
@@ -1536,7 +1536,7 @@ impl Path {
     /// circumstanses.
     ///
     /// For two paths with an equal number of generic arguments, these
-    /// arguments are compared to eachother in chronlogical order. For example
+    /// arguments are compared to each other in chronlogical order. For example
     /// with the types: `Result<T, U>` and
     /// `std::result::Result<&'static str, V>` it is assumed that `T` is equal
     /// to `&'static str`, and `U` is equal to `V`.

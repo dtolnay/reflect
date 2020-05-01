@@ -322,7 +322,6 @@
     clippy::large_enum_variant,
     clippy::trivially_copy_pass_by_ref
 )]
-// #![warn(clippy::pedantic)]
 
 #[doc(hidden)]
 pub use reflect_internal::*;
