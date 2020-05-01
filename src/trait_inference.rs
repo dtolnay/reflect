@@ -534,12 +534,7 @@ impl TypeEqualitySets {
             (Tuple(types1), Tuple(types2)) => {
                 if types1.len() == types2.len() {
                     types1.iter().zip(types2.iter()).for_each(|(ty1, ty2)| {
-                        self.insert_types_as_equal(
-                            ty1.0.clone(),
-                            ty2.0.clone(),
-                            constraints,
-                            subtypes,
-                        )
+                        self.insert_types_as_equal(ty1.clone(), ty2.clone(), constraints, subtypes)
                     })
                 } else {
                     panic!("TypeEqualitySets::insert_inner_type_as_equal_to: Tuples have different number of arguments")
@@ -730,11 +725,11 @@ impl WipImpl {
         let mut original_trait_args = Vec::new();
 
         // data structure generics
-        if let Type(TypeNode::DataStructure { generics, .. }) = &mut self.ty {
-            generics.constraints.drain(..).for_each(|constraint| {
+        if let Type(TypeNode::DataStructure(data)) = &mut self.ty {
+            data.generics.constraints.drain(..).for_each(|constraint| {
                 constraints.insert(constraint);
             });
-            generics.params.iter().for_each(|&param| {
+            data.generics.params.iter().for_each(|&param| {
                 original_generic_params.push(param);
                 original_data_struct_args.push(param);
             })
@@ -1245,12 +1240,12 @@ impl TypeNode {
                     .into_iter()
                     .zip(types2.into_iter())
                     .map(|(ty1, ty2)| {
-                        Type(TypeNode::make_most_concrete_from_pair(
-                            ty1.0,
-                            ty2.0,
+                        TypeNode::make_most_concrete_from_pair(
+                            ty1,
+                            ty2,
                             concrete_maps_and_sets,
                             transitive_closure,
-                        ))
+                        )
                     })
                     .collect(),
             ),
@@ -1303,7 +1298,7 @@ impl TypeNode {
         use TypeNode::*;
         match self {
             Tuple(types) => types.iter_mut().for_each(|ty| {
-                ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
+                ty.make_most_concrete(concrete_maps_and_sets, transitive_closure);
             }),
             Reference {
                 inner, lifetime, ..
@@ -1328,7 +1323,7 @@ impl TypeNode {
         match self {
             Tuple(types) => {
                 for ty in types.iter() {
-                    ty.0.inner_params(type_equality_sets, relevant_generic_params)
+                    ty.inner_params(type_equality_sets, relevant_generic_params)
                 }
             }
             Reference { inner, .. } => {

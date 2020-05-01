@@ -36,7 +36,7 @@ impl ValueNode {
             ValueNode::Tuple(types) => Type(TypeNode::Tuple(
                 types
                     .iter()
-                    .map(|type_ref| type_ref.node().get_type())
+                    .map(|type_ref| type_ref.node().get_type().0)
                     .collect(),
             )),
             ValueNode::Str(_) => Type(TypeNode::PrimitiveStr),

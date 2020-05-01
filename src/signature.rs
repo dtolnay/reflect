@@ -218,7 +218,7 @@ impl TypeNode {
 
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.0.insert_new_lifetimes(params);
+                    ty.insert_new_lifetimes(params);
                 }
             }
             Dereference(node) => node.insert_new_lifetimes(params),
@@ -246,7 +246,7 @@ impl TypeNode {
             }
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.0.insert_new_lifetimes2(new_lifetime, params);
+                    ty.insert_new_lifetimes2(new_lifetime, params);
                 }
             }
             Dereference(node) => node.insert_new_lifetimes2(new_lifetime, params),
@@ -265,7 +265,7 @@ impl TypeNode {
     fn has_lifetimes(&self) -> bool {
         match self {
             Reference { .. } => true,
-            Tuple(types) => types.iter().any(|ty| ty.0.has_lifetimes()),
+            Tuple(types) => types.iter().any(|ty| ty.has_lifetimes()),
             Dereference(node) => node.has_lifetimes(),
             TraitObject(bounds) => bounds.iter().any(|bound| match bound {
                 TypeParamBound::Trait(bound) => bound.path.has_lifetimes(),

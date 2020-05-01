@@ -49,8 +49,8 @@ impl CompleteImpl {
     fn compile(&self) -> TokenStream {
         let functions = self.functions.iter().map(CompleteFunction::compile);
 
-        let name = if let TypeNode::DataStructure { name, .. } = &self.ty.0 {
-            name
+        let name = if let TypeNode::DataStructure(data) = &self.ty.0 {
+            &data.name
         } else {
             panic!()
         };

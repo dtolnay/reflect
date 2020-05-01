@@ -57,8 +57,8 @@ impl ToTokens for Print<TypeNode> {
             }
 
             Dereference(inner) => panic!("Type::Dereference::to_tokens"),
-            DataStructure { name, .. } => {
-                //FIXME: generics
+            DataStructure(data) => {
+                let name = &data.name;
                 quote!(#name)
             }
             TraitObject(bounds) => {

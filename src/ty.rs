@@ -15,7 +15,7 @@ pub struct Type(pub(crate) TypeNode);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum TypeNode {
     Infer,
-    Tuple(Vec<Type>),
+    Tuple(Vec<TypeNode>),
     PrimitiveStr,
     Reference {
         is_mut: bool,
@@ -24,13 +24,16 @@ pub(crate) enum TypeNode {
     },
     Dereference(Box<TypeNode>),
     TraitObject(Vec<TypeParamBound>),
-    DataStructure {
-        name: Ident,
-        generics: Generics,
-        data: Data<Type>,
-    },
+    DataStructure(Box<DataStructure>),
     Path(Path),
     TypeParam(TypeParam),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct DataStructure {
+    pub name: Ident,
+    pub generics: Generics,
+    pub data: Data<Type>,
 }
 
 impl Type {
@@ -39,7 +42,9 @@ impl Type {
     }
 
     pub fn tuple(types: &[Self]) -> Self {
-        Type(TypeNode::Tuple(Vec::from(types)))
+        Type(TypeNode::Tuple(
+            types.iter().cloned().map(|ty| ty.0).collect(),
+        ))
     }
 
     pub fn primitive_str() -> Self {
@@ -95,7 +100,7 @@ impl Type {
 
     pub fn data(&self) -> Data<Self> {
         match &self.0 {
-            TypeNode::DataStructure { data, .. } => data.clone().map(|field| field.element),
+            TypeNode::DataStructure(data) => data.data.clone().map(|field| field.element),
             TypeNode::Reference {
                 is_mut,
                 lifetime,
@@ -114,7 +119,7 @@ impl Type {
     /// Returns a Type from a Tuple
     pub fn get_tuple_type(&self, index: usize) -> Self {
         match &self.0 {
-            TypeNode::Tuple(types) => types[index].clone(),
+            TypeNode::Tuple(types) => Type(types[index].clone()),
             _ => panic!("Type::get_tuple_type: Not a Tuple"),
         }
     }
@@ -189,7 +194,7 @@ impl Type {
                         type_tuple
                             .elems
                             .into_iter()
-                            .map(|elem| Self::syn_to_type(elem, param_map))
+                            .map(|elem| Self::syn_to_type(elem, param_map).0)
                             .collect(),
                     ))
                 }
@@ -212,7 +217,7 @@ impl TypeNode {
                 quote!((#(#types),*)).to_string()
             }
             TypeNode::PrimitiveStr => String::from("str"),
-            TypeNode::DataStructure { name, .. } => name.to_string(),
+            TypeNode::DataStructure(data) => data.name.to_string(),
             TypeNode::Reference { inner, .. } => (&**inner).get_name(),
             TypeNode::Path(path) => {
                 let mut tokens = TokenStream::new();

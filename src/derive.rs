@@ -1,7 +1,7 @@
 use crate::{
-    global_data, Accessor, CompleteFunction, CompleteImpl, Data, Enum, Execution, Field, Generics,
-    Ident, Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode, UnitStruct,
-    WipFunction, WipImpl,
+    global_data, Accessor, CompleteFunction, CompleteImpl, Data, DataStructure, Enum, Execution,
+    Field, Generics, Ident, Program, Struct, StructStruct, Tracker, TupleStruct, Type, TypeNode,
+    UnitStruct, WipFunction, WipImpl,
 };
 use proc_macro2::TokenStream;
 use syn::DeriveInput;
@@ -77,11 +77,11 @@ fn syn_to_type(input: DeriveInput) -> Type {
         syn::Data::Union(_) => unimplemented!("union"),
     };
 
-    Type(TypeNode::DataStructure {
+    Type(TypeNode::DataStructure(Box::new(DataStructure {
         name: Ident::from(input.ident),
         generics,
         data,
-    })
+    })))
 }
 
 fn tracker_to_program(tracker: Tracker) -> Program {

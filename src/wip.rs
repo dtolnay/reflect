@@ -158,8 +158,8 @@ impl WipFunction {
 }
 impl WipImpl {
     pub(crate) fn has_generics(&self) -> bool {
-        if let TypeNode::DataStructure { generics, .. } = &self.ty.0 {
-            !generics.params.is_empty()
+        if let TypeNode::DataStructure(data) = &self.ty.0 {
+            !data.generics.params.is_empty()
                 || if let Some(parent) = &self.trait_ty {
                     !parent.generics.params.is_empty()
                 } else {

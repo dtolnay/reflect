@@ -99,7 +99,7 @@ impl Value {
                 let node = ValueNode::Destructure {
                     parent: self.index,
                     accessor: Accessor::Index(index),
-                    ty: types[index].clone(),
+                    ty: Type(types[index].clone()),
                 };
                 Value {
                     index: VALUES.index_push(node),
