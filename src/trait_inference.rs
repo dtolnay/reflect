@@ -5,7 +5,7 @@ use crate::{
     TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME, VALUES,
 };
 // FxHasher is used because it is a faster hashing algorithm than the
-// default one, but most importantly because it has a hasher with a defalt
+// default one, but most importantly because it has a hasher with a default
 // seed, which is useful for testing purposes, and consistent output between
 // compiles.
 use fxhash::{FxHashMap, FxHashSet};
