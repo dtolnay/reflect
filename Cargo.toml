@@ -11,9 +11,6 @@ categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
 edition = "2018"
 
-[badges]
-travis-ci = { repository = "dtolnay/reflect" }
-
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
