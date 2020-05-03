@@ -1,8 +1,9 @@
 use crate::{
-    CompleteFunction, CompleteImpl, Function, GenericArgument, GenericArguments, GenericConstraint,
-    GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef, Parent, ParentKind, Path,
-    PathArguments, PredicateType, Push, Receiver, TraitBound, Type, TypeEqualitySetRef, TypeNode,
-    TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME, VALUES,
+    AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, Function, GenericArgument,
+    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef,
+    Parent, ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
+    TypeEqualitySetRef, TypeNode, TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME,
+    VALUES,
 };
 // FxHasher is used because it is a faster hashing algorithm than the
 // default one, but most importantly because it has a hasher with a default
@@ -63,7 +64,7 @@ pub(crate) struct ConcreteMapAndSets {
 pub(crate) struct OriginalGenercs {
     original_generic_params: Vec<GenericParam>,
     original_data_struct_args: Vec<GenericParam>,
-    original_trait_args: Vec<GenericArgument>,
+    original_trait_args: Vec<GenericParam>,
 }
 
 #[derive(Debug)]
@@ -685,7 +686,7 @@ impl WipImpl {
         let OriginalGenercs {
             original_generic_params,
             original_data_struct_args,
-            mut original_trait_args,
+            original_trait_args,
         } = self.get_original_generics(&mut constraints);
 
         let functions = self.functions.into_inner();
@@ -709,20 +710,17 @@ impl WipImpl {
             &mut transitive_closure,
         );
 
-        let data_struct_args = get_data_struct_args(
+        let data_struct_args = get_args(
             original_data_struct_args,
             &mut concrete_maps_and_sets,
             &mut transitive_closure,
         );
 
-        make_concrete_trait_args(
-            &mut original_trait_args,
+        let trait_args = get_args(
+            original_trait_args,
             &mut concrete_maps_and_sets,
             &mut transitive_closure,
         );
-        let trait_args = GenericArguments {
-            args: original_trait_args,
-        };
 
         let functions: Vec<_> = functions
             .into_iter()
@@ -778,14 +776,8 @@ impl WipImpl {
             });
             generics.params.iter().for_each(|&param| {
                 original_generic_params.push(param);
+                original_trait_args.push(param);
             });
-            match &path.path.last().unwrap().args {
-                PathArguments::None => {}
-                PathArguments::AngleBracketed(args) => {
-                    original_trait_args.extend(args.args.args.iter().cloned());
-                }
-                _ => unreachable!(),
-            }
         };
 
         OriginalGenercs {
@@ -826,13 +818,12 @@ impl WipFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::DataStructure => type_equality_sets
-                                    .insert_types_as_equal(
-                                        TypeNode::Path(parent.path.clone()),
-                                        first_type.0,
-                                        constraints,
-                                        subtypes,
-                                    ),
+                                ParentKind::Impl => type_equality_sets.insert_types_as_equal(
+                                    TypeNode::Path(parent.path.clone()),
+                                    first_type.0,
+                                    constraints,
+                                    subtypes,
+                                ),
                             },
                             SelfByReference { is_mut, lifetime } => match parent.parent_kind {
                                 ParentKind::Trait => {
@@ -841,17 +832,16 @@ impl WipFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::DataStructure => type_equality_sets
-                                    .insert_types_as_equal(
-                                        TypeNode::Reference {
-                                            is_mut,
-                                            inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                            lifetime: lifetime.0,
-                                        },
-                                        first_type.0,
-                                        constraints,
-                                        subtypes,
-                                    ),
+                                ParentKind::Impl => type_equality_sets.insert_types_as_equal(
+                                    TypeNode::Reference {
+                                        is_mut,
+                                        inner: Box::new(TypeNode::Path(parent.path.clone())),
+                                        lifetime: lifetime.0,
+                                    },
+                                    first_type.0,
+                                    constraints,
+                                    subtypes,
+                                ),
                             },
                             NoSelf => unreachable!(),
                         }
@@ -1000,14 +990,36 @@ impl WipFunction {
 }
 
 fn add_self_trait_bound(parent: &Rc<Parent>, first_type: Type, constraints: &mut ConstraintSet) {
+    assert_eq!(parent.parent_kind, ParentKind::Trait);
+
+    let mut path = parent.path.clone();
+    path.path.last_mut().unwrap().args = params_to_args(&parent.generics.params);
     constraints.insert(GenericConstraint::Type(PredicateType {
         lifetimes: Vec::new(),
         bounded_ty: first_type,
         bounds: vec![TypeParamBound::Trait(TraitBound {
             lifetimes: Vec::new(),
-            path: parent.path.clone(),
+            path,
         })],
     }));
+}
+
+fn params_to_args(params: &[GenericParam]) -> PathArguments {
+    if params.is_empty() {
+        return PathArguments::None;
+    }
+    PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+        args: GenericArguments {
+            args: params
+                .iter()
+                .map(|param| match param {
+                    GenericParam::Type(ty) => GenericArgument::Type(Type(TypeNode::TypeParam(*ty))),
+                    GenericParam::Lifetime(lifetime) => GenericArgument::Lifetime(*lifetime),
+                    GenericParam::Const(_) => unimplemented!(),
+                })
+                .collect(),
+        },
+    })
 }
 
 /// Find generic parameters of the most concrete types for the generic
@@ -1065,13 +1077,13 @@ fn get_relevant_generic_params(
     (relevant_generic_params, concrete_maps_and_sets)
 }
 
-fn get_data_struct_args(
-    original_data_struct_args: Vec<GenericParam>,
+fn get_args(
+    original_args: Vec<GenericParam>,
     concrete_maps_and_sets: &mut ConcreteMapAndSets,
     transitive_closure: &mut TransitiveClosure,
 ) -> GenericArguments {
     GenericArguments {
-        args: original_data_struct_args
+        args: original_args
             .into_iter()
             .map(|arg| match arg {
                 GenericParam::Type(ty) => {
@@ -1087,24 +1099,6 @@ fn get_data_struct_args(
             })
             .collect(),
     }
-}
-
-fn make_concrete_trait_args(
-    trait_args: &mut Vec<GenericArgument>,
-    concrete_maps_and_sets: &mut ConcreteMapAndSets,
-    transitive_closure: &mut TransitiveClosure,
-) {
-    trait_args.iter_mut().for_each(|arg| match arg {
-        GenericArgument::Type(ty) => {
-            ty.0.make_most_concrete(concrete_maps_and_sets, transitive_closure);
-        }
-
-        GenericArgument::Lifetime(lifetime) => {
-            lifetime.make_most_concrete(transitive_closure);
-        }
-
-        _ => unimplemented!(),
-    })
 }
 
 impl GenericConstraint {

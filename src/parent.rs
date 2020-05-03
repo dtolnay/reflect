@@ -1,4 +1,4 @@
-use crate::{Generics, Path, SynParamMap};
+use crate::{Generics, ParamMap, Path, SynParamMap};
 use std::default::Default;
 
 #[derive(Debug, Clone)]
@@ -68,14 +68,26 @@ impl ParentBuilder {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ParentKind {
     Trait,
-    DataStructure,
+    Impl,
 }
 
 impl Parent {
     pub fn get_param_map(&self) -> &SynParamMap {
         &self.generics.param_map
+    }
+
+    pub(crate) fn clone_with_fresh_generics(&self) -> (Self, ParamMap) {
+        let (generics, param_map) = self.generics.clone_with_fresh_generics();
+        (
+            Parent {
+                path: self.path.clone_with_fresh_generics(&param_map),
+                generics,
+                parent_kind: self.parent_kind,
+            },
+            param_map,
+        )
     }
 }

@@ -39,10 +39,10 @@ impl Function {
     }
 
     pub fn clone_with_fresh_generics(self: Rc<Self>) -> Rc<Self> {
-        if let Some((parent_generics, mut param_map)) = self
+        if let Some((parent, mut param_map)) = self
             .parent
             .as_ref()
-            .map(|parent| parent.generics.clone_with_fresh_generics())
+            .map(|parent| parent.clone_with_fresh_generics())
         {
             let generics = &self.sig.generics;
             let sig_generics = Generics {
@@ -66,11 +66,7 @@ impl Function {
             let old_sig = &self.sig;
 
             Rc::new(Function {
-                parent: Some(Rc::new(Parent {
-                    path: old_parent.path.clone_with_fresh_generics(&param_map),
-                    generics: parent_generics,
-                    parent_kind: old_parent.parent_kind,
-                })),
+                parent: Some(Rc::new(parent)),
                 name: self.name.clone(),
                 sig: Signature {
                     generics: sig_generics,

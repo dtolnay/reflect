@@ -382,7 +382,7 @@ use crate::global_data::{
 use crate::ident::Ident;
 use crate::index::{InvokeRef, MacroInvokeRef, Push, TypeEqualitySetRef, TypedIndex, ValueRef};
 use crate::node::ValueNode;
-use crate::path::{PathArguments, SimplePath};
+use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
 use crate::signature::Receiver;

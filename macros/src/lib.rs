@@ -8,9 +8,9 @@ use std::iter::once;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
-    braced, parenthesized, parse2, parse_macro_input, parse_str, token, GenericArgument,
-    GenericParam, Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token,
-    TypeParamBound, TypeTraitObject,
+    braced, parenthesized, parse2, parse_macro_input, token, GenericArgument, GenericParam,
+    Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
+    TypeTraitObject,
 };
 
 use self::proc_macro::TokenStream;
@@ -43,7 +43,7 @@ struct ItemImpl {
 }
 
 struct ItemTrait {
-    segment: PathSegment,
+    ident: Ident,
     generics: Generics,
     functions: Vec<Function>,
 }
@@ -80,7 +80,7 @@ enum Type {
 
 enum ParentKind {
     Trait,
-    DataStructure,
+    Impl,
 }
 
 impl Parse for Input {
@@ -204,29 +204,12 @@ impl Parse for ItemTrait {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![trait]>()?;
 
-        let mut generics: Generics = Generics::default();
-        let segment: PathSegment = input.parse()?;
+        let ident = input.parse()?;
 
-        if let PathArguments::AngleBracketed(args) = &segment.arguments {
-            let args = args
-                .args
-                .iter()
-                .filter_map::<GenericParam, _>(|arg| match arg {
-                    GenericArgument::Type(syn::Type::Path(path)) => {
-                        if let Some(ident) = path.path.get_ident() {
-                            parse_str(&ident.to_string()).ok()
-                        } else {
-                            None
-                        }
-                    }
-                    GenericArgument::Constraint(constraint) => {
-                        parse_str(&constraint.ident.to_string()).ok()
-                    }
-                    GenericArgument::Lifetime(lifetime) => parse_str(&lifetime.to_string()).ok(),
-                    _ => None,
-                })
-                .collect();
-            generics.params = args;
+        let mut generics = if has_generics(input) {
+            input.parse()?
+        } else {
+            Generics::default()
         };
         generics.where_clause = input.parse()?;
 
@@ -238,7 +221,7 @@ impl Parse for ItemTrait {
         }
 
         Ok(ItemTrait {
-            segment,
+            ident,
             generics,
             functions,
         })
@@ -426,16 +409,14 @@ fn declare_mod(module: &ItemMod) -> TokenStream2 {
 fn declare_item(item: &Item, mod_path: &Path) -> TokenStream2 {
     match item {
         Item::Mod(item) => declare_mod(item),
-        Item::Type(item) => declare_type(item),
+        Item::Type(item) => declare_type(&item.segment.ident),
         Item::Impl(item) => declare_impl(item, mod_path),
         Item::Trait(item) => declare_trait(item, mod_path),
         Item::Macro(item) => declare_macro(item),
     }
 }
 
-fn declare_type(item: &ItemType) -> TokenStream2 {
-    let name = &item.segment.ident;
-
+fn declare_type(name: &Ident) -> TokenStream2 {
     quote! {
         #[derive(Copy, Clone)]
         #[allow(non_camel_case_types)]
@@ -481,8 +462,8 @@ fn declare_parent(
         ParentKind::Trait => quote! {
             _reflect::ParentKind::Trait
         },
-        ParentKind::DataStructure => quote! {
-            _reflect::ParentKind::DataStructure
+        ParentKind::Impl => quote! {
+            _reflect::ParentKind::Impl
         },
     };
 
@@ -522,9 +503,8 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         .params
         .iter()
         .filter(|param| match param {
-            GenericParam::Type(_) => true,
-            GenericParam::Lifetime(_) => true,
-            _ => false,
+            GenericParam::Const(_) => false,
+            _ => true,
         })
         .collect();
 
@@ -533,7 +513,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         &item.segment,
         mod_path,
         params,
-        ParentKind::DataStructure,
+        ParentKind::Impl,
     );
 
     let functions = item.functions.iter().map(|f| {
@@ -556,25 +536,25 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
 }
 
 fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
-    let d_type = declare_type(&ItemType {
-        segment: item.segment.clone(),
-    });
-    let parent = &item.segment.ident;
+    let d_type = declare_type(&item.ident);
+    let parent = &item.ident;
 
     let params: &Vec<_> = &item
         .generics
         .params
         .iter()
         .filter(|param| match param {
-            GenericParam::Type(_) => true,
-            GenericParam::Lifetime(_) => true,
-            _ => false,
+            GenericParam::Const(_) => false,
+            _ => true,
         })
         .collect();
 
     let declare_parent = declare_parent(
         &item.generics,
-        &item.segment,
+        &PathSegment {
+            ident: item.ident.clone(),
+            arguments: PathArguments::None,
+        },
         mod_path,
         params,
         ParentKind::Trait,

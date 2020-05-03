@@ -1,7 +1,7 @@
 use crate::ident::Ident;
 use crate::{
-    Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, PathArguments, Print, Receiver,
-    SimplePath, TraitInferenceResult, Type, TypeNode, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
+    Function, GlobalBorrow, InvokeRef, MacroInvokeRef, Parent, Print, Receiver, SimplePath,
+    TraitInferenceResult, Type, TypeNode, ValueNode, ValueRef, INVOKES, MACROS, VALUES,
 };
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
@@ -70,13 +70,16 @@ impl CompleteImpl {
                 Some(quote!(where #(#constraints,)*))
             };
             let trait_ty = self.trait_ty.as_ref().map(|parent| {
-                let mut path = parent.path.clone();
-                let args = &mut path.path.last_mut().unwrap().args;
-                if let PathArguments::AngleBracketed(args) = args {
-                    args.args = result.trait_args.clone();
+                let path = &parent.path;
+                let path = Print::ref_cast(SimplePath::ref_cast(path));
+                let args = result.trait_args.args.iter().map(Print::ref_cast);
+                let args = if result.trait_args.args.is_empty() {
+                    None
+                } else {
+                    Some(quote!(<#(#args),*>))
                 };
-                let path = Print::ref_cast(&path);
-                quote!(#path)
+
+                quote!(#path #args)
             });
             (params, self_ty_args, where_clause, trait_ty)
         } else {

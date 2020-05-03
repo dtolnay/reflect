@@ -15,6 +15,8 @@ library! {
         }
 
         trait Bound {}
+
+        trait TraitArgs<'a, 'b: 'a, T, U: 'static> {}
     }
 }
 

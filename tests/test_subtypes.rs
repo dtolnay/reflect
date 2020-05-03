@@ -6,8 +6,8 @@ library! {
         type Subtypes;
 
         impl Subtypes {
-            fn sub1<'a, 'b, T, U>(&'a T, &'b U) -> &'b U where 'a: 'b;
-            fn sub2<'b, 'c, U, V>(&'b U, &'c V) -> &'c V where 'b: 'c, 'c: 'b;
+            fn sub1<'a, 'b, 'c, T, U>(&'a T, &'b U) -> &'c U where 'a: 'b;
+            fn sub2<'c, 'b: 'c, 'd, U, V>(&'b U, &'c V) -> &'d V;
             fn sub3<'c, 'd, V, W>(&'c V, &'d W) where 'c: 'd, 'd: 'static;
         }
 
