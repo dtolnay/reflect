@@ -767,7 +767,7 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> Toke
                 _reflect::Type::get_trait_object(&[#(#bound_strings),*], param_map)
             }
         }
-        // FIXME: add lifetimes
+
         Type::Reference {
             is_mut,
             lifetime,

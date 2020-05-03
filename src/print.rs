@@ -26,7 +26,6 @@ impl ToTokens for Print<Type> {
 }
 
 impl ToTokens for Print<TypeNode> {
-    //FIXME: generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use crate::TypeNode::*;
         tokens.append_all(match &self.0 {

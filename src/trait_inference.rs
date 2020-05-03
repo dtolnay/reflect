@@ -248,10 +248,17 @@ impl LifetimeSubtypeMap {
 }
 
 impl TransitiveClosure {
-    pub(crate) fn make_most_concrete_lifetime(&mut self, lifetime: &mut Lifetime) {
+    pub(crate) fn make_most_concrete(&mut self, lifetime: &mut Lifetime) {
         // Always looking up a cached result first is to insure correctnes in
-        // `CompleteFunction::make_concrete_function`.
-        // TODO: explain why
+        // `WipFunction::make_concrete_function`.
+        //
+        // The reason is that the generic parameters that are tied directly to a
+        // function definition inside a trait impl must remain unchanged for the
+        // impl to compile, even if a more concrete lifetime or type can be
+        // inferred for those parameters. The `WipFunction::make_concrete_function`
+        // will mutate `the most_concrete_lifetime_map` and the
+        // `the most_concrete_type_map`, so that each parameter tied to a trait
+        // function is mapped to itself.
         if let Some(&most_concrete) = self.most_concrete_lifetime_map.get(lifetime) {
             *lifetime = most_concrete;
             return;
@@ -379,6 +386,9 @@ impl TypeEqualitySetRef {
         concrete_maps_and_sets: &mut ConcreteMapAndSets,
         transitive_closure: &mut TransitiveClosure,
     ) -> TypeNode {
+        // Always checking the `most_concrete_type_map` is done for efficiency as
+        // well as correctness. See the `TransitiveClosure::make_most_concrete`
+        // method for an explanation.
         let most_concrete = concrete_maps_and_sets.most_concrete_type_map.get(&self);
         match most_concrete {
             Some(node) => node.clone(),
@@ -871,7 +881,6 @@ impl WipFunction {
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         // Add parent constraints
-        // FIXME: Add constraints from parent type
         if let Some(generics) = invoke
             .function
             .parent
@@ -891,7 +900,6 @@ impl WipFunction {
         };
 
         // Add function constraints
-        // FIXME: Add constraints from types in signature
         invoke
             .function
             .sig
@@ -953,7 +961,7 @@ impl WipFunction {
                         .most_concrete_lifetime_map
                         .insert(*param, *param);
                 }
-                _ => unimplemented!("CompleteFunction::make_concrete_function: Const"),
+                _ => unimplemented!("WipFunction::make_concrete_function: Const"),
             }
         }
 
@@ -1365,7 +1373,7 @@ impl TypeNode {
 
 impl Lifetime {
     fn make_most_concrete(&mut self, transitive_closure: &mut TransitiveClosure) {
-        transitive_closure.make_most_concrete_lifetime(self);
+        transitive_closure.make_most_concrete(self);
     }
 
     fn is_relevant_for_constraint(self, relevant_generic_params: &BTreeSet<GenericParam>) -> bool {
