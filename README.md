@@ -5,6 +5,10 @@ I thought Rust doesn't have reflection...?
 custom derive macros through a programming model that resembles compile-time
 reflection.*
 
+## The development of this project has been moved to [**`8BitMate/reflect`**]
+
+[**`8BitMate/reflect`**]: https://github.com/8BitMate/reflect
+
 ## Motivation
 
 My existing [**`syn`**] and [**`quote`**] libraries approach the problem space
