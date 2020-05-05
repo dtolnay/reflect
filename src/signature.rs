@@ -262,7 +262,7 @@ impl TypeNode {
         }
     }
 
-    fn has_lifetimes(&self) -> bool {
+    pub(crate) fn has_lifetimes(&self) -> bool {
         match self {
             Reference { .. } => true,
             Tuple(types) => types.iter().any(TypeNode::has_lifetimes),
@@ -314,7 +314,7 @@ impl Path {
         }
     }
 
-    fn has_lifetimes(&self) -> bool {
+    pub(crate) fn has_lifetimes(&self) -> bool {
         self.path.iter().any(|segment| match &segment.args {
             PathArguments::None => false,
             PathArguments::AngleBracketed(args) => args.args.args.iter().any(|arg| match arg {

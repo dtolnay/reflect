@@ -1,7 +1,7 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, Function, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Invoke, Lifetime, LifetimeDef,
-    Parent, ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
+    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Lifetime, LifetimeDef, Parent,
+    ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
     TypeEqualitySetRef, TypeNode, TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME,
     VALUES,
 };
@@ -501,34 +501,37 @@ impl TypeEqualitySets {
     /// insert `T: Clone` as constraint.
     fn insert_types_as_equal(
         &mut self,
-        ty1: TypeNode,
-        ty2: TypeNode,
+        subtype: TypeNode,
+        supertype: TypeNode,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use TypeNode::*;
-        match (&ty1, &ty2) {
+        match (subtype, supertype) {
             (TraitObject(bounds1), TraitObject(bounds2)) => {
                 if bounds1.len() != bounds2.len() {
                     panic!("TypeEqualitySets::insert_types_as_equal: TraitObjects have different number of bounds")
                 }
-                return self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints, subtypes);
+                self.insert_inner_type_as_equal(
+                    &TraitObject(bounds1),
+                    &TraitObject(bounds2),
+                    constraints,
+                    subtypes,
+                );
             }
-            (TraitObject(bounds), _) => {
+            (TraitObject(bounds), supertype) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
-                    bounded_ty: Type(ty2),
-                    bounds: bounds.clone(),
+                    bounded_ty: Type(supertype),
+                    bounds,
                 }));
-                return;
             }
-            (_, TraitObject(bounds)) => {
+            (subtype, TraitObject(bounds)) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
-                    bounded_ty: Type(ty1),
-                    bounds: bounds.clone(),
+                    bounded_ty: Type(subtype),
+                    bounds,
                 }));
-                return;
             }
             // A reference and a mutable reference are not equal, but a mutable reference may conform to a
             // normal reference, so the inner types may be considered equal
@@ -545,25 +548,111 @@ impl TypeEqualitySets {
                 },
             ) if is_mut1 != is_mut2 => {
                 if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
-                    subtypes.insert_as_equal(*lifetime1, *lifetime2);
+                    subtypes.insert_as_equal(lifetime1, lifetime2);
                 }
-                return self.insert_types_as_equal(
-                    *inner1.clone(),
-                    *inner2.clone(),
+                self.insert_types_as_equal(*inner1, *inner2, constraints, subtypes);
+            }
+            (subtype, supertype) => {
+                self.insert_inner_type_as_equal(&subtype, &supertype, constraints, subtypes);
+                self.insert_as_equal(subtype, supertype)
+            }
+        }
+    }
+
+    fn insert_as_subtype_or_equal(
+        &mut self,
+        subtype: TypeNode,
+        supertype: TypeNode,
+        constraints: &mut ConstraintSet,
+        subtypes: &mut LifetimeSubtypeMap,
+        lifetime_map: &mut BTreeMap<Lifetime, Lifetime>,
+    ) {
+        use TypeNode::*;
+        match (subtype, supertype) {
+            (Tuple(types1), Tuple(types2)) => {
+                if types1.len() == types2.len() {
+                    types1
+                        .into_iter()
+                        .zip(types2.into_iter())
+                        .for_each(|(subtype, supertype)| {
+                            self.insert_as_subtype_or_equal(
+                                subtype,
+                                supertype,
+                                constraints,
+                                subtypes,
+                                lifetime_map,
+                            )
+                        })
+                } else {
+                    panic!("TypeEqualitySets::insert_as_subtype_or_equal: Tuples have different number of arguments")
+                }
+            }
+            (TraitObject(bounds1), TraitObject(bounds2)) => {
+                if bounds1.len() != bounds2.len() {
+                    panic!("TypeEqualitySets::insert_as_subtype_or_equal: TraitObjects have different number of bounds")
+                }
+                self.insert_inner_type_as_equal(
+                    &TraitObject(bounds1),
+                    &TraitObject(bounds2),
                     constraints,
                     subtypes,
                 );
             }
-            _ => (),
+            (TraitObject(bounds), supertype) => {
+                constraints.insert(GenericConstraint::Type(PredicateType {
+                    lifetimes: Vec::new(),
+                    bounded_ty: Type(supertype),
+                    bounds,
+                }));
+            }
+            (subtype, TraitObject(bounds)) => {
+                constraints.insert(GenericConstraint::Type(PredicateType {
+                    lifetimes: Vec::new(),
+                    bounded_ty: Type(subtype),
+                    bounds,
+                }));
+            }
+            (
+                Reference {
+                    is_mut: is_mut1,
+                    lifetime: lifetime1,
+                    inner: inner1,
+                },
+                Reference {
+                    is_mut: is_mut2,
+                    lifetime: lifetime2,
+                    inner: inner2,
+                },
+            ) => {
+                if is_mut1 {
+                    if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                        subtypes.insert(lifetime1, lifetime2);
+                    }
+                    self.insert_inner_type_as_equal(&*inner1, &*inner2, constraints, subtypes);
+                    self.insert_as_equal(*inner1, *inner2);
+                } else if !is_mut1 && !is_mut2 {
+                    if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
+                        subtypes.insert(lifetime1, lifetime2);
+                    }
+                    self.insert_types_as_equal(*inner1, *inner2, constraints, subtypes)
+                } else {
+                    panic!("TypeEqualitySets::insert_as_subtype_or_equal: Cannot use a mutable reference in this context")
+                }
+                if let (Some(subtype), Some(supertype)) = (lifetime1, lifetime2) {
+                    lifetime_map.insert(supertype, subtype);
+                }
+            }
+            (subtype, supertype) => {
+                self.insert_inner_type_as_equal(&subtype, &supertype, constraints, subtypes);
+                self.insert_as_equal(subtype, supertype)
+            }
         }
-        self.insert_inner_type_as_equal_to(&ty1, &ty2, constraints, subtypes);
-        self.insert_as_equal(ty1, ty2)
     }
 
     /// Insert the inner types of two types as equal to each other
     /// For example if we have two tuple types (T, &str) and (U, S) we would
     /// get two sets {T, U}, and {&str, S}
-    fn insert_inner_type_as_equal_to(
+    fn insert_inner_type_as_equal(
         &mut self,
         ty1: &TypeNode,
         ty2: &TypeNode,
@@ -578,7 +667,7 @@ impl TypeEqualitySets {
                         self.insert_types_as_equal(ty1.clone(), ty2.clone(), constraints, subtypes)
                     })
                 } else {
-                    panic!("TypeEqualitySets::insert_inner_type_as_equal_to: Tuples have different number of arguments")
+                    panic!("TypeEqualitySets::insert_inner_type_as_equal: Tuples have different number of arguments")
                 }
             }
             (
@@ -599,14 +688,14 @@ impl TypeEqualitySets {
                 self.insert_types_as_equal(*inner1.clone(), *inner2.clone(), constraints, subtypes)
             }
             (Path(path1), Path(path2)) => {
-                self.insert_path_arguments_as_equal_to(path1, path2, constraints, subtypes);
+                self.insert_path_arguments_as_equal(path1, path2, constraints, subtypes);
             }
             (TraitObject(bounds1), TraitObject(bounds2)) => bounds1
                 .iter()
                 .zip(bounds2.iter())
                 .for_each(|bounds| match bounds {
                     (TypeParamBound::Trait(trait_bound1), TypeParamBound::Trait(trait_bound2)) => {
-                        self.insert_path_arguments_as_equal_to(
+                        self.insert_path_arguments_as_equal(
                             &trait_bound1.path,
                             &trait_bound2.path,
                             constraints,
@@ -638,7 +727,7 @@ impl TypeEqualitySets {
     /// the type with more parameters. Unfortunately, it is not possible to
     /// know which paramter corresponds to which, and thus the parameters can
     /// not be compared.
-    fn insert_path_arguments_as_equal_to(
+    fn insert_path_arguments_as_equal(
         &mut self,
         path1: &Path,
         path2: &Path,
@@ -672,14 +761,12 @@ impl TypeEqualitySets {
                         ) => {
                             subtypes.insert_as_equal(*lifetime1, *lifetime2);
                         }
-                        _ => {
-                            unimplemented!("TypeEqualitySets::insert_inner_type_as_equal_to: Path")
-                        }
+                        _ => unimplemented!("TypeEqualitySets::insert_inner_type_as_equal: Path"),
                     })
             }
             (PathArguments::Parenthesized(args1), _) | (_, PathArguments::Parenthesized(args1)) => {
                 unimplemented!(
-                    "TypeEqualitySets::insert_inner_type_as_equal_to: ParenthesizedGenericArgument"
+                    "TypeEqualitySets::insert_inner_type_as_equal: ParenthesizedGenericArgument"
                 )
             }
             _ => (),
@@ -806,6 +893,10 @@ impl WipFunction {
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use Receiver::*;
+        // TODO: What is the lifetime_map. Should I change types to:
+        // BTreeMap<(Lifetime, Vec<Lifetime>)>?
+        let mut lifetime_map = BTreeMap::new();
+
         INVOKES.with_borrow(|invokes| {
             for invoke in invokes[self.invokes.start.0..self.invokes.end.unwrap().0].iter() {
                 let parent = &invoke.function.parent;
@@ -828,11 +919,12 @@ impl WipFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::Impl => type_equality_sets.insert_types_as_equal(
-                                    TypeNode::Path(parent.path.clone()),
+                                ParentKind::Impl => type_equality_sets.insert_as_subtype_or_equal(
                                     first_type.0,
+                                    TypeNode::Path(parent.path.clone()),
                                     constraints,
                                     subtypes,
+                                    &mut lifetime_map,
                                 ),
                             },
                             SelfByReference { is_mut, lifetime } => match parent.parent_kind {
@@ -842,15 +934,16 @@ impl WipFunction {
                                         add_self_trait_bound(parent, first_type, constraints)
                                     }
                                 }
-                                ParentKind::Impl => type_equality_sets.insert_types_as_equal(
+                                ParentKind::Impl => type_equality_sets.insert_as_subtype_or_equal(
+                                    first_type.0,
                                     TypeNode::Reference {
                                         is_mut,
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
                                         lifetime: lifetime.0,
                                     },
-                                    first_type.0,
                                     constraints,
                                     subtypes,
+                                    &mut lifetime_map,
                                 ),
                             },
                             NoSelf => unreachable!(),
@@ -860,80 +953,83 @@ impl WipFunction {
                 };
 
                 sig.inputs.iter().zip(args_iter).for_each(|(ty, val)| {
-                    type_equality_sets.insert_types_as_equal(
-                        ty.0.clone(),
+                    type_equality_sets.insert_as_subtype_or_equal(
                         val.node().get_type().0,
+                        ty.0.clone(),
                         constraints,
                         subtypes,
+                        &mut lifetime_map,
                     )
                 });
 
-                Self::add_constraints(invoke, constraints, subtypes);
+                Self::add_constraints(&invoke.function, constraints, subtypes, &lifetime_map);
             }
         });
 
-        self.set_output_equal_to_last_value(constraints, type_equality_sets, subtypes);
+        self.set_last_value_subtype_to_output(
+            constraints,
+            type_equality_sets,
+            subtypes,
+            &mut lifetime_map,
+        );
+    }
+
+    fn constraint_iterator(f: &Function) -> impl Iterator<Item = &GenericConstraint> {
+        f.parent
+            .iter()
+            .map(|parent| parent.generics.constraints.iter())
+            .flatten()
+            .chain(f.sig.generics.constraints.iter())
     }
 
     fn add_constraints(
-        invoke: &Invoke,
+        function: &Function,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
+        lifetime_map: &BTreeMap<Lifetime, Lifetime>,
     ) {
-        // Add parent constraints
-        if let Some(generics) = invoke
-            .function
-            .parent
-            .as_ref()
-            .map(|parent| &parent.generics)
-        {
-            generics.constraints.iter().for_each(|constraint| {
-                if !constraints.contains(constraint) {
-                    constraints.insert(constraint.clone());
-                };
-                if let GenericConstraint::Lifetime(lifetime) = constraint {
-                    for &supertype in &lifetime.bounds {
-                        subtypes.insert(lifetime.lifetime, supertype);
-                    }
-                };
-            })
-        };
+        Self::constraint_iterator(&function).for_each(|constraint| match constraint {
+            GenericConstraint::Lifetime(lifetime_def) => {
+                for &supertype in &lifetime_def.bounds {
+                    subtypes.insert(lifetime_def.lifetime, supertype);
 
-        // Add function constraints
-        invoke
-            .function
-            .sig
-            .generics
-            .constraints
-            .iter()
-            .for_each(|constraint| {
+                    if let Some(&subtype) = lifetime_map.get(&lifetime_def.lifetime) {
+                        lifetime_def.bounds.iter().for_each(|lifetime| {
+                            if let Some(&supertype) = lifetime_map.get(lifetime) {
+                                subtypes.insert(subtype, supertype);
+                            }
+                        })
+                    }
+                }
+            }
+            GenericConstraint::Type(pred_ty) => {
                 if !constraints.contains(constraint) {
                     constraints.insert(constraint.clone());
-                };
-                if let GenericConstraint::Lifetime(lifetime) = constraint {
-                    for &supertype in &lifetime.bounds {
-                        subtypes.insert(lifetime.lifetime, supertype);
-                    }
-                };
-            })
+                }
+
+                // TODO: clone with lifetime_map
+            }
+        });
     }
 
-    fn set_output_equal_to_last_value(
+    fn set_last_value_subtype_to_output(
         &self,
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
+        lifetime_map: &mut BTreeMap<Lifetime, Lifetime>,
     ) {
         // The type of the outgoing value must be the same as the return value
         if self.values.end.unwrap().0 > self.values.start.0 {
             let return_value_type =
                 VALUES.with_borrow(|values| values[self.values.end.unwrap().0 - 1].get_type());
 
-            type_equality_sets.insert_types_as_equal(
-                self.f.sig.output.0.clone(),
+            type_equality_sets.insert_as_subtype_or_equal(
                 return_value_type.0,
+                self.f.sig.output.0.clone(),
                 constraints,
                 subtypes,
+                lifetime_map,
             )
         }
     }
