@@ -565,7 +565,7 @@ impl TypeEqualitySets {
         supertype: TypeNode,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &mut BTreeMap<Lifetime, Lifetime>,
+        lifetime_map: &mut BTreeMap<Lifetime, Vec<Lifetime>>,
     ) {
         use TypeNode::*;
         match (subtype, supertype) {
@@ -634,12 +634,18 @@ impl TypeEqualitySets {
                     if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
                         subtypes.insert(lifetime1, lifetime2);
                     }
-                    self.insert_types_as_equal(*inner1, *inner2, constraints, subtypes)
+                    self.insert_as_subtype_or_equal(
+                        *inner1,
+                        *inner2,
+                        constraints,
+                        subtypes,
+                        lifetime_map,
+                    )
                 } else {
                     panic!("TypeEqualitySets::insert_as_subtype_or_equal: Cannot use a mutable reference in this context")
                 }
                 if let (Some(subtype), Some(supertype)) = (lifetime1, lifetime2) {
-                    lifetime_map.insert(supertype, subtype);
+                    lifetime_map.entry(supertype).or_default().push(subtype);
                 }
             }
             (subtype, supertype) => {
@@ -885,6 +891,16 @@ impl WipImpl {
     }
 }
 
+macro_rules! lifetime_map_iterator {
+    ( $lifetime_map:expr, $lifetime:expr ) => {
+        $lifetime_map
+            .get(&$lifetime)
+            .iter()
+            .map(|&subtypes| subtypes.iter().cloned())
+            .flatten()
+    };
+}
+
 impl WipFunction {
     fn compute_trait_bounds(
         &self,
@@ -896,6 +912,7 @@ impl WipFunction {
         // TODO: What is the lifetime_map. Should I change types to:
         // BTreeMap<(Lifetime, Vec<Lifetime>)>?
         let mut lifetime_map = BTreeMap::new();
+        lifetime_map.insert(STATIC_LIFETIME, vec![STATIC_LIFETIME]);
 
         INVOKES.with_borrow(|invokes| {
             for invoke in invokes[self.invokes.start.0..self.invokes.end.unwrap().0].iter() {
@@ -986,21 +1003,17 @@ impl WipFunction {
         function: &Function,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &BTreeMap<Lifetime, Lifetime>,
+        lifetime_map: &BTreeMap<Lifetime, Vec<Lifetime>>,
     ) {
         Self::constraint_iterator(&function).for_each(|constraint| match constraint {
             GenericConstraint::Lifetime(lifetime_def) => {
-                for &supertype in &lifetime_def.bounds {
-                    subtypes.insert(lifetime_def.lifetime, supertype);
-
-                    if let Some(&subtype) = lifetime_map.get(&lifetime_def.lifetime) {
-                        lifetime_def.bounds.iter().for_each(|lifetime| {
-                            if let Some(&supertype) = lifetime_map.get(lifetime) {
-                                subtypes.insert(subtype, supertype);
-                            }
+                lifetime_map_iterator!(lifetime_map, &lifetime_def.lifetime).for_each(|subtype| {
+                    lifetime_def.bounds.iter().for_each(|lifetime| {
+                        lifetime_map_iterator!(lifetime_map, lifetime).for_each(|supertype| {
+                            subtypes.insert(subtype, supertype);
                         })
-                    }
-                }
+                    })
+                })
             }
             GenericConstraint::Type(pred_ty) => {
                 if !constraints.contains(constraint) {
@@ -1017,7 +1030,7 @@ impl WipFunction {
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &mut BTreeMap<Lifetime, Lifetime>,
+        lifetime_map: &mut BTreeMap<Lifetime, Vec<Lifetime>>,
     ) {
         // The type of the outgoing value must be the same as the return value
         if self.values.end.unwrap().0 > self.values.start.0 {
