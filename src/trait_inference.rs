@@ -11,7 +11,7 @@ use crate::{
 // compiles.
 use fxhash::{FxHashMap, FxHashSet};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::identity;
 use std::hash::Hash;
 use std::iter::Extend;
@@ -113,6 +113,27 @@ struct Mapping {
     index_lifetime_mapping: BTreeMap<usize, Lifetime>,
     lifetime_index_mapping: BTreeMap<Lifetime, usize>,
     size: usize,
+}
+
+/// A mapping between a supertype and its subtypes
+struct SupertypeMap {
+    map: BTreeMap<Lifetime, Vec<Lifetime>>,
+}
+
+impl SupertypeMap {
+    fn new() -> Self {
+        let mut map = BTreeMap::new();
+        map.insert(STATIC_LIFETIME, vec![STATIC_LIFETIME]);
+        SupertypeMap { map }
+    }
+
+    fn get(&self, lifetime: &Lifetime) -> Option<&Vec<Lifetime>> {
+        self.map.get(lifetime)
+    }
+
+    fn entry(&mut self, lifetime: Lifetime) -> btree_map::Entry<Lifetime, Vec<Lifetime>> {
+        self.map.entry(lifetime)
+    }
 }
 
 impl BoolMatrix {
@@ -565,7 +586,7 @@ impl TypeEqualitySets {
         supertype: TypeNode,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &mut BTreeMap<Lifetime, Vec<Lifetime>>,
+        supertype_map: &mut SupertypeMap,
     ) {
         use TypeNode::*;
         match (subtype, supertype) {
@@ -580,7 +601,7 @@ impl TypeEqualitySets {
                                 supertype,
                                 constraints,
                                 subtypes,
-                                lifetime_map,
+                                supertype_map,
                             )
                         })
                 } else {
@@ -625,27 +646,27 @@ impl TypeEqualitySets {
                 },
             ) => {
                 if is_mut1 {
-                    if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
-                        subtypes.insert(lifetime1, lifetime2);
+                    if let (Some(subtype), Some(supertype)) = (lifetime1, lifetime2) {
+                        subtypes.insert(subtype, supertype);
                     }
                     self.insert_inner_type_as_equal(&*inner1, &*inner2, constraints, subtypes);
                     self.insert_as_equal(*inner1, *inner2);
                 } else if !is_mut1 && !is_mut2 {
-                    if let (Some(lifetime1), Some(lifetime2)) = (lifetime1, lifetime2) {
-                        subtypes.insert(lifetime1, lifetime2);
+                    if let (Some(subtype), Some(supertype)) = (lifetime1, lifetime2) {
+                        subtypes.insert(subtype, supertype);
                     }
                     self.insert_as_subtype_or_equal(
                         *inner1,
                         *inner2,
                         constraints,
                         subtypes,
-                        lifetime_map,
+                        supertype_map,
                     )
                 } else {
                     panic!("TypeEqualitySets::insert_as_subtype_or_equal: Cannot use a mutable reference in this context")
                 }
                 if let (Some(subtype), Some(supertype)) = (lifetime1, lifetime2) {
-                    lifetime_map.entry(supertype).or_default().push(subtype);
+                    supertype_map.entry(supertype).or_default().push(subtype);
                 }
             }
             (subtype, supertype) => {
@@ -891,7 +912,7 @@ impl WipImpl {
     }
 }
 
-macro_rules! lifetime_map_iterator {
+macro_rules! supertype_map_iterator {
     ( $lifetime_map:expr, $lifetime:expr ) => {
         $lifetime_map
             .get(&$lifetime)
@@ -909,10 +930,7 @@ impl WipFunction {
         subtypes: &mut LifetimeSubtypeMap,
     ) {
         use Receiver::*;
-        // TODO: What is the lifetime_map. Should I change types to:
-        // BTreeMap<(Lifetime, Vec<Lifetime>)>?
-        let mut lifetime_map = BTreeMap::new();
-        lifetime_map.insert(STATIC_LIFETIME, vec![STATIC_LIFETIME]);
+        let mut supertype_map = SupertypeMap::new();
 
         INVOKES.with_borrow(|invokes| {
             for invoke in invokes[self.invokes.start.0..self.invokes.end.unwrap().0].iter() {
@@ -941,7 +959,7 @@ impl WipFunction {
                                     TypeNode::Path(parent.path.clone()),
                                     constraints,
                                     subtypes,
-                                    &mut lifetime_map,
+                                    &mut supertype_map,
                                 ),
                             },
                             SelfByReference { is_mut, lifetime } => match parent.parent_kind {
@@ -960,7 +978,7 @@ impl WipFunction {
                                     },
                                     constraints,
                                     subtypes,
-                                    &mut lifetime_map,
+                                    &mut supertype_map,
                                 ),
                             },
                             NoSelf => unreachable!(),
@@ -975,11 +993,11 @@ impl WipFunction {
                         ty.0.clone(),
                         constraints,
                         subtypes,
-                        &mut lifetime_map,
+                        &mut supertype_map,
                     )
                 });
 
-                Self::add_constraints(&invoke.function, constraints, subtypes, &lifetime_map);
+                Self::add_constraints(&invoke.function, constraints, subtypes, &supertype_map);
             }
         });
 
@@ -987,7 +1005,7 @@ impl WipFunction {
             constraints,
             type_equality_sets,
             subtypes,
-            &mut lifetime_map,
+            &mut supertype_map,
         );
     }
 
@@ -1003,13 +1021,20 @@ impl WipFunction {
         function: &Function,
         constraints: &mut ConstraintSet,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &BTreeMap<Lifetime, Vec<Lifetime>>,
+        supertype_map: &SupertypeMap,
     ) {
         Self::constraint_iterator(&function).for_each(|constraint| match constraint {
             GenericConstraint::Lifetime(lifetime_def) => {
-                lifetime_map_iterator!(lifetime_map, &lifetime_def.lifetime).for_each(|subtype| {
+                lifetime_def
+                    .bounds
+                    .iter()
+                    .for_each(|&supertype| subtypes.insert(lifetime_def.lifetime, supertype));
+
+                // Make sure that the subtypes have the same lifetime
+                // constraints as the supertypes have in the signature.
+                supertype_map_iterator!(supertype_map, &lifetime_def.lifetime).for_each(|subtype| {
                     lifetime_def.bounds.iter().for_each(|lifetime| {
-                        lifetime_map_iterator!(lifetime_map, lifetime).for_each(|supertype| {
+                        supertype_map_iterator!(supertype_map, lifetime).for_each(|supertype| {
                             subtypes.insert(subtype, supertype);
                         })
                     })
@@ -1019,8 +1044,6 @@ impl WipFunction {
                 if !constraints.contains(constraint) {
                     constraints.insert(constraint.clone());
                 }
-
-                // TODO: clone with lifetime_map
             }
         });
     }
@@ -1030,7 +1053,7 @@ impl WipFunction {
         constraints: &mut ConstraintSet,
         type_equality_sets: &mut TypeEqualitySets,
         subtypes: &mut LifetimeSubtypeMap,
-        lifetime_map: &mut BTreeMap<Lifetime, Vec<Lifetime>>,
+        supertype_map: &mut SupertypeMap,
     ) {
         // The type of the outgoing value must be the same as the return value
         if self.values.end.unwrap().0 > self.values.start.0 {
@@ -1042,7 +1065,7 @@ impl WipFunction {
                 self.f.sig.output.0.clone(),
                 constraints,
                 subtypes,
-                lifetime_map,
+                supertype_map,
             )
         }
     }
