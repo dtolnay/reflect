@@ -7,7 +7,7 @@ reflection.*
 
 ## Motivation
 
-My existing [**`syn`**] and [**`quote`**] libraries approach the problem space
+[dtolnay's] [**`syn`**] and [**`quote`**] libraries approach the problem space
 of procedural macros in a super general way and are a good fit for maybe 95% of
 use cases. However, the generality comes with the cost of operating at a
 relatively low level of abstraction. The macro author is responsible for the
@@ -19,6 +19,7 @@ The design explored here focuses on what it would take to make all the edge
 cases disappear -- such that if your macro works for the most basic case, then
 it also works in every tricky case under the sun.
 
+[dtolnay's]: https://github.com/dtolnay
 [**`syn`**]: https://github.com/dtolnay/syn
 [**`quote`**]: https://github.com/dtolnay/quote
 
@@ -246,12 +247,12 @@ built-in `derive(Debug)` macro produces for the same data structure.
 
 ## Robustness and how things go wrong
 
-I mentioned above about how implementing robust macros simply using `syn` and
+It was mentioned above that implementing robust macros simply using `syn` and
 `quote` is quite challenging.
 
-The example I like to use is taking a single struct field and temporarily
-wrapping it in a new struct. This is a real life use case drawn from how
-`serde_derive` handles `serialize_with` attributes. Conceptually:
+A good example of this is taking a single struct field and temporarily wrapping
+it in a new struct. This is a real life use case drawn from how `serde_derive`
+handles `serialize_with` attributes. Conceptually:
 
 ```rust
 let input: DeriveInput = syn::parse(...).unwrap();
@@ -293,15 +294,14 @@ wrapper.instantiate(vec![input.get_field("x").reference()])
 
 ## Remaining work
 
-In its current state the proof of concept generates just barely working code for
-our simple `Debug` derive. The `reflect` library needs more work to produce
-robust code in the presence of lifetimes and generic parameters, and for library
-signatures involving more complicated types.
+In its current state the proof of concept generates just barely working code
+for our simple `Debug` derive. The `reflect` library needs more work to produce
+robust code for library signatures involving more complicated types.
 
 Crucially all remaining work should happen without touching the code of our
-`Debug` derive. The promise of `reflect` is that if the macro works for the most
-basic cases (which the code above already does) then it also works in all the
-edge cases. From here it is `reflect`'s responsibility to compile the dead
+`Debug` derive. The promise of `reflect` is that if the macro works for the
+most basic cases (which the code above already does) then it also works in all
+the edge cases. From here it is `reflect`'s responsibility to compile the dead
 simple reflection-like `reflect::Value` object manipulations into a fully
 general and robust procedural macro.
 
