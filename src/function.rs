@@ -38,7 +38,7 @@ impl Function {
         self.parent = Some(parent);
     }
 
-    pub fn clone_with_fresh_generics(self: Rc<Self>) -> Rc<Self> {
+    pub(crate) fn clone_with_fresh_generics(self: Rc<Self>) -> Rc<Self> {
         if let Some((parent, mut param_map)) = self
             .parent
             .as_ref()

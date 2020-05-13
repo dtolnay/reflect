@@ -71,7 +71,7 @@ pub(crate) struct ConstParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericArguments {
+pub(crate) struct GenericArguments {
     pub(crate) args: Vec<GenericArgument>,
 }
 
