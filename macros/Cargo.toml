@@ -1,6 +1,6 @@
 [package]
 name = "reflect-internal"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Asbjørn Gaarde <asbjorn_gaarde@hotmail.com>", "David Tolnay <dtolnay@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Procedural macros required by the `reflect` crate."
