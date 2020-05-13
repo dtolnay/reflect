@@ -71,8 +71,8 @@ case] shows what code we emit when deriving `Debug` for a struct `Point` with
 two fields; it is equivalent to the code that a handwritten `derive(Debug)`
 macro without reflection would emit for the same data structure.
 
-[`tests/debug/`]: https://github.com/dtolnay/reflect/blob/master/tests/debug/mod.rs
-[test case]: https://github.com/dtolnay/reflect/blob/master/tests/test_debug.rs
+[`tests/debug/`]: https://github.com/8BitMate/reflect/blob/master/tests/debug/mod.rs
+[test case]: https://github.com/8BitMate/reflect/blob/master/tests/test_debug.rs
 
 The macro implementation begins with a DSL declaration of the types and
 functions that will be required at runtime:

@@ -66,7 +66,7 @@
 //! The [`tests/debug/`] directory demonstrates a working compilable implementation
 //! of `#[derive(Debug)]` for structs with named fields.
 //!
-//! [`tests/debug/`]: https://github.com/dtolnay/reflect/blob/master/tests/debug/mod.rs
+//! [`tests/debug/`]: https://github.com/8BitMate/reflect/blob/master/tests/debug/mod.rs
 //!
 //! We begin with a DSL declaration of the types and functions that will be required
 //! at runtime. There may be additional `extern crate` blocks here if we need to use
