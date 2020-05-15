@@ -4,13 +4,12 @@ extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::iter::once;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
-    braced, parenthesized, parse2, parse_macro_input, token, GenericArgument, GenericParam,
-    Generics, Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
-    TypeTraitObject,
+    braced, parenthesized, parse_macro_input, token, GenericArgument, GenericParam, Generics,
+    Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
+    TypeTraitObject, WherePredicate,
 };
 
 use self::proc_macro::TokenStream;
@@ -425,17 +424,17 @@ fn declare_type(name: &Ident) -> TokenStream2 {
 }
 
 fn declare_parent(
-    parent_generics: &Generics,
+    generics: &Generics,
     parent_type: &PathSegment,
     mod_path: &Path,
     params: &[&GenericParam],
     parent_kind: ParentKind,
 ) -> TokenStream2 {
-    let set_parent_params = if !parent_generics.params.is_empty() {
-        let param_strings = parent_generics
-            .params
-            .iter()
-            .map(|param| param.to_token_stream().to_string());
+    let set_parent_params = if !generics.params.is_empty() {
+        let param_strings = generics.params.iter().cloned().map(|mut param| {
+            expand_generic_param(&mut param, mod_path, params);
+            param.to_token_stream().to_string()
+        });
 
         Some(quote! {
             parent_builder.set_generic_params(&[#(#param_strings),*]);
@@ -444,11 +443,11 @@ fn declare_parent(
         None
     };
 
-    let set_parent_constraints = if let Some(clause) = &parent_generics.where_clause {
-        let constraint_strings = clause
-            .predicates
-            .iter()
-            .map(|clause| clause.to_token_stream().to_string());
+    let set_parent_constraints = if let Some(clause) = &generics.where_clause {
+        let constraint_strings = clause.predicates.iter().cloned().map(|mut predicate| {
+            expand_where_predicate(&mut predicate, mod_path, params);
+            predicate.to_token_stream().to_string()
+        });
 
         Some(quote! {
             parent_builder.set_generic_constraints(&[#(#constraint_strings),*]);
@@ -498,15 +497,7 @@ fn declare_parent(
 
 fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
     let parent = &item.segment.ident;
-    let params: &Vec<_> = &item
-        .generics
-        .params
-        .iter()
-        .filter(|param| match param {
-            GenericParam::Const(_) => false,
-            _ => true,
-        })
-        .collect();
+    let params: &Vec<_> = &item.generics.params.iter().collect();
 
     let declare_parent = declare_parent(
         &item.generics,
@@ -516,15 +507,10 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
         ParentKind::Impl,
     );
 
-    let functions = item.functions.iter().map(|f| {
-        declare_function(
-            parent,
-            !item.generics.params.is_empty(),
-            f,
-            mod_path,
-            params,
-        )
-    });
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, !params.is_empty(), f, mod_path, params));
 
     quote! {
         #declare_parent
@@ -538,16 +524,7 @@ fn declare_impl(item: &ItemImpl, mod_path: &Path) -> TokenStream2 {
 fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
     let d_type = declare_type(&item.ident);
     let parent = &item.ident;
-
-    let params: &Vec<_> = &item
-        .generics
-        .params
-        .iter()
-        .filter(|param| match param {
-            GenericParam::Const(_) => false,
-            _ => true,
-        })
-        .collect();
+    let params: &Vec<_> = &item.generics.params.iter().collect();
 
     let declare_parent = declare_parent(
         &item.generics,
@@ -560,15 +537,10 @@ fn declare_trait(item: &ItemTrait, mod_path: &Path) -> TokenStream2 {
         ParentKind::Trait,
     );
 
-    let functions = item.functions.iter().map(|f| {
-        declare_function(
-            parent,
-            !item.generics.params.is_empty(),
-            f,
-            mod_path,
-            params,
-        )
-    });
+    let functions = item
+        .functions
+        .iter()
+        .map(|f| declare_function(parent, !params.is_empty(), f, mod_path, params));
 
     quote! {
         #d_type
@@ -605,21 +577,15 @@ fn declare_function(
         .generics
         .params
         .iter()
-        .filter(|param| match param {
-            GenericParam::Type(_) => true,
-            GenericParam::Lifetime(_) => true,
-            _ => false,
-        })
         .chain(params.iter().copied())
         .collect();
 
     let function_has_generics = !function.generics.params.is_empty();
     let set_sig_params = if function_has_generics {
-        let param_strings = function
-            .generics
-            .params
-            .iter()
-            .map(|param| param.to_token_stream().to_string());
+        let param_strings = function.generics.params.iter().cloned().map(|mut param| {
+            expand_generic_param(&mut param, mod_path, params);
+            param.to_token_stream().to_string()
+        });
 
         Some(quote! {
             sig.set_generic_params(&[#(#param_strings),*]);
@@ -637,10 +603,10 @@ fn declare_function(
     };
 
     let set_sig_constraints = if let Some(clause) = &function.generics.where_clause {
-        let constraint_strings = clause
-            .predicates
-            .iter()
-            .map(|clause| clause.to_token_stream().to_string());
+        let constraint_strings = clause.predicates.iter().cloned().map(|mut predicate| {
+            expand_where_predicate(&mut predicate, mod_path, params);
+            predicate.to_token_stream().to_string()
+        });
 
         Some(quote! {
             sig.set_generic_constraints(&[#(#constraint_strings),*]);
@@ -746,8 +712,8 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> Toke
         }
         Type::Path(path) => {
             if let Some(ident) = path.get_ident() {
-                // Check if the path is a generic argument
-                if params.contains(&&parse2(quote! { #ident }).unwrap()) {
+                // Check if the path is a generic param
+                if ident_is_param(ident, params) {
                     let type_param = ident.to_string();
                     return quote! {
                         _reflect::Type::type_param_from_str(#type_param, param_map)
@@ -757,8 +723,10 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> Toke
             to_runtime_path_type(path, mod_path, params)
         }
 
-        Type::TraitObject(type_trait_objects) => {
-            let bound_strings = type_trait_objects
+        Type::TraitObject(trait_object) => {
+            let mut trait_object = trait_object.clone();
+            expand_trait_object(&mut trait_object, mod_path, params);
+            let bound_strings = trait_object
                 .bounds
                 .iter()
                 .map(|bound| bound.to_token_stream().to_string());
@@ -803,6 +771,16 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> Toke
     }
 }
 
+fn ident_is_param(ident: &Ident, params: &[&GenericParam]) -> bool {
+    params.iter().any(|param| {
+        if let GenericParam::Type(type_param) = param {
+            ident == &type_param.ident
+        } else {
+            false
+        }
+    })
+}
+
 fn to_runtime_path_type(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
     let path = to_runtime_path(path, mod_path, params);
     quote! {
@@ -835,7 +813,7 @@ fn to_runtime_path(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> To
     }
 }
 
-/// Expand module defined types inside of a PathArgumet as fully qualified paths
+/// Expand module defined types inside of a PathArgument as fully qualified paths
 fn expand_path_arguments(arguments: &mut PathArguments, mod_path: &Path, params: &[&GenericParam]) {
     match arguments {
         PathArguments::None => {}
@@ -875,13 +853,7 @@ fn expand_type(ty: &mut syn::Type, mod_path: &Path, params: &[&GenericParam]) {
     match ty {
         Path(type_path) => expand_path(&mut type_path.path, mod_path, params),
         Reference(reference) => expand_type(&mut reference.elem, mod_path, params),
-
-        TraitObject(type_trait_object) => type_trait_object.bounds.iter_mut().for_each(|bound| {
-            if let TypeParamBound::Trait(bound) = bound {
-                expand_path(&mut bound.path, mod_path, params)
-            }
-        }),
-
+        TraitObject(trait_object) => expand_trait_object(trait_object, mod_path, params),
         Tuple(type_tuple) => type_tuple
             .elems
             .iter_mut()
@@ -906,16 +878,57 @@ fn expand_path(path: &mut syn::Path, mod_path: &Path, params: &[&GenericParam]) 
     if path.segments.len() == 1 && path.leading_colon.is_none() {
         let segment = &path.segments[0];
         let ident = &segment.ident;
-        if !params.contains(&&parse2(quote! { #ident }).unwrap()) {
+
+        if !ident_is_param(ident, params) {
             let mut segments = Punctuated::new();
-            mod_path
-                .segments
-                .iter()
-                .cloned()
-                .chain(once(segment.clone()))
-                .for_each(|segment| segments.push(segment));
+            segments.extend(mod_path.segments.iter().cloned());
+            segments.push(segment.clone());
             path.segments = segments;
             path.leading_colon = Some(Token![::](Span::call_site()));
         }
+    }
+}
+
+fn expand_trait_object(
+    trait_object: &mut TypeTraitObject,
+    mod_path: &Path,
+    params: &[&GenericParam],
+) {
+    trait_object.bounds.iter_mut().for_each(|bound| {
+        if let TypeParamBound::Trait(bound) = bound {
+            expand_path(&mut bound.path, mod_path, params)
+        }
+    })
+}
+
+fn expand_generic_param(param: &mut GenericParam, mod_path: &Path, temp_params: &[&GenericParam]) {
+    if let GenericParam::Type(type_param) = param {
+        type_param.bounds.iter_mut().for_each(|bound| {
+            if let TypeParamBound::Trait(trait_bound) = bound {
+                expand_path(&mut trait_bound.path, mod_path, temp_params)
+            }
+        })
+    }
+}
+
+fn expand_where_predicate(
+    predicate: &mut WherePredicate,
+    mod_path: &Path,
+    temp_params: &[&GenericParam],
+) {
+    match predicate {
+        WherePredicate::Type(ty) => {
+            expand_type(&mut ty.bounded_ty, mod_path, temp_params);
+            ty.bounds.iter_mut().for_each(|bound| {
+                if let TypeParamBound::Trait(bound) = bound {
+                    expand_path(&mut bound.path, mod_path, temp_params)
+                }
+            })
+        }
+        WherePredicate::Eq(eq) => {
+            expand_type(&mut eq.lhs_ty, mod_path, temp_params);
+            expand_type(&mut eq.rhs_ty, mod_path, temp_params);
+        }
+        _ => {}
     }
 }

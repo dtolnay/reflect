@@ -50,18 +50,21 @@ fn test_debug() {
 #[test]
 fn test_generic_debug() {
     let input = quote! {
-    struct Generic<'a, T: Debug, U> where U: Clone {
-                t: T,
-                u: &'a U,
-            }
-        };
+        struct Generic<'a, T: ::std::fmt::Debug, U>
+        where
+            U: ::std::clone::Clone,
+        {
+            t: T,
+            u: &'a U,
+        }
+    };
 
     let expected = quote! {
         impl<'__a1, __T0, __T1> ::std::fmt::Debug for Generic<'__a1, __T0, __T1>
         where
-            __T0: Debug,
-            __T1: Clone,
-            &'__a1 __T1: Debug,
+            __T0: ::std::fmt::Debug,
+            __T1: ::std::clone::Clone,
+            &'__a1 __T1: ::std::fmt::Debug,
         {
             fn fmt<'__a2, '__a3>(
                 &'__a2 self,
