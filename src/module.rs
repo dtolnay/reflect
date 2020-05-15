@@ -23,12 +23,12 @@ impl Module {
         }
     }
 
-    /// Get a `Path` by appending a path segment onto a module path
+    /// Get a path by appending a path segment at the end of a module path
     pub fn get_path(&self, segment: &str, param_map: &mut SynParamMap) -> Path {
         self.path.get_path(segment, param_map)
     }
 
-    /// Get a path type by appending a path segment onto a module path
+    /// Get a path type by appending a path segment at the end of a module path
     pub fn get_path_type(&self, segment: &str, param_map: &mut SynParamMap) -> Type {
         self.get_path(segment, param_map).SELF()
     }
