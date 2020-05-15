@@ -19,10 +19,6 @@
 //! cases disappear -- such that if your macro works for the most basic case, then
 //! it also works in every tricky case under the sun.
 //!
-//! The design explored here focuses on what it would take to make all the edge
-//! cases disappear -- such that if your macro works for the most basic case, then
-//! it also works in every tricky case under the sun.
-//!
 //! [dtolnay's]: https://github.com/dtolnay
 //! [**`syn`**]: https://github.com/dtolnay/syn
 //! [**`quote`**]: https://github.com/dtolnay/quote
