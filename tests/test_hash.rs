@@ -13,7 +13,7 @@ library! {
     }
 }
 
-pub fn derive(ex: Execution) {
+fn derive(ex: Execution) {
     ex.make_trait_impl(RUNTIME::std::hash::Hash, ex.target_type(), |block| {
         block.make_function(RUNTIME::std::hash::Hash::hash, make_hash);
     });
