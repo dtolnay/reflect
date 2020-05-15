@@ -1,4 +1,6 @@
-use crate::{GlobalPush, MacroInvoke, Path, Value, ValueNode, MACROS, VALUES};
+use crate::{
+    GlobalPush, MacroInvoke, Path, RuntimeType, SynParamMap, Type, Value, ValueNode, MACROS, VALUES,
+};
 
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -19,6 +21,16 @@ impl Module {
         Module {
             path: self.path.get_simple_path(name),
         }
+    }
+
+    /// Get a `Path` by appending a path segment onto a module path
+    pub fn get_path(&self, segment: &str, param_map: &mut SynParamMap) -> Path {
+        self.path.get_path(segment, param_map)
+    }
+
+    /// Get a path type by appending a path segment onto a module path
+    pub fn get_path_type(&self, segment: &str, param_map: &mut SynParamMap) -> Type {
+        self.get_path(segment, param_map).SELF()
     }
 
     pub fn invoke_macro(&self, name: &str, values: &[Value]) -> Value {

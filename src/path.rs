@@ -69,6 +69,15 @@ impl Path {
         path
     }
 
+    pub(crate) fn get_path(&self, segment: &str, param_map: &mut SynParamMap) -> Self {
+        let mut path = self.clone();
+        path.path.push(Path::syn_to_path_segment(
+            parse_str(segment).expect("Path::get_path: Not a PathSegment"),
+            param_map,
+        ));
+        path
+    }
+
     pub fn path_from_str(path: &str, param_map: &mut SynParamMap) -> Self {
         Self::syn_to_path(
             parse_str(path).expect("Path::path_from_str: Not a Path"),

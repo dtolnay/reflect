@@ -790,26 +790,23 @@ fn to_runtime_path_type(path: &Path, mod_path: &Path, params: &[&GenericParam]) 
     }
 }
 
-fn to_runtime_path_str(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> String {
+fn to_runtime_path(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
     let mut path = path.clone();
-
-    // Check if path is defined in current module
-    if path.segments.len() == 1 && path.leading_colon.is_none() {
-        let mut full_path = mod_path.clone();
-        full_path.segments.push(path.segments[0].clone());
-        full_path.to_token_stream().to_string();
-        path = full_path
-    }
 
     let arguments = &mut path.segments.last_mut().unwrap().arguments;
     expand_path_arguments(arguments, mod_path, params);
-    path.to_token_stream().to_string()
-}
 
-fn to_runtime_path(path: &Path, mod_path: &Path, params: &[&GenericParam]) -> TokenStream2 {
-    let path_str = to_runtime_path_str(path, mod_path, params);
-    quote! {
-        _reflect::Path::path_from_str(#path_str, param_map)
+    // Check if path is defined in current module
+    if path.segments.len() == 1 && path.leading_colon.is_none() {
+        let segment = path.segments[0].to_token_stream().to_string();
+        quote! {
+            MODULE().get_path(#segment, param_map)
+        }
+    } else {
+        let path_str = path.to_token_stream().to_string();
+        quote! {
+            _reflect::Path::path_from_str(#path_str, param_map)
+        }
     }
 }
 
