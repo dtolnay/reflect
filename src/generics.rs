@@ -1,5 +1,4 @@
 use crate::{GlobalCounter, Ident, Path, Type, TypeNode, LIFETIMES, STATIC_LIFETIME, TYPE_PARAMS};
-use proc_macro2::Span;
 use std::collections::BTreeMap;
 use std::default::Default;
 use syn::{parse_str, BoundLifetimes, PredicateLifetime, WhereClause, WherePredicate};
@@ -103,9 +102,8 @@ pub(crate) struct Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SynParamMap {
-    // TODO: Perhaps change key type from syn:Ident to syn::GenericParam or GenericParam
-    // to avoid name collisions with type params and generic params with the same name
-    pub(crate) map: BTreeMap<syn::Ident, GenericParam>,
+    // TODO: Unify SynParamMap and ParamMap
+    pub(crate) map: BTreeMap<String, GenericParam>,
 }
 
 pub struct ParamMap {
@@ -114,17 +112,17 @@ pub struct ParamMap {
 
 impl SynParamMap {
     pub(crate) fn new() -> Self {
-        let static_lifetime = syn::Ident::new("static", Span::call_site());
+        let static_lifetime = "'static".to_string();
         let mut param_map = BTreeMap::new();
         param_map.insert(static_lifetime, GenericParam::Lifetime(STATIC_LIFETIME));
         SynParamMap { map: param_map }
     }
 
-    pub(crate) fn insert(&mut self, key: syn::Ident, value: GenericParam) -> Option<GenericParam> {
+    pub(crate) fn insert(&mut self, key: String, value: GenericParam) -> Option<GenericParam> {
         self.map.insert(key, value)
     }
 
-    pub(crate) fn get(&self, key: &syn::Ident) -> Option<&GenericParam> {
+    pub(crate) fn get(&self, key: &str) -> Option<&GenericParam> {
         self.map.get(key)
     }
 
@@ -144,7 +142,7 @@ impl SynParamMap {
         syn_param_map
     }
 
-    pub(crate) fn get_lifetime(&self, ident: &syn::Ident) -> Lifetime {
+    pub(crate) fn get_lifetime(&self, ident: &str) -> Lifetime {
         self.get(ident)
             .and_then(|param| param.lifetime())
             .expect("Lifetime::get_lifetime: ident is not a lifetime")
@@ -346,11 +344,11 @@ fn syn_to_bound_lifetimes(
             .into_iter()
             .map(
                 |syn::LifetimeDef {
-                     lifetime: syn::Lifetime { ident, .. },
+                     lifetime: syn_lifetime,
                      ..
                  }| {
                     let lifetime = LIFETIMES.count();
-                    param_map.insert(ident, GenericParam::Lifetime(lifetime));
+                    param_map.insert(syn_lifetime.to_string(), GenericParam::Lifetime(lifetime));
                     lifetime
                 },
             )
@@ -384,14 +382,12 @@ where
             bounds: syn_to_type_param_bounds(bounds, param_map).collect(),
         }),
         WherePredicate::Lifetime(PredicateLifetime {
-            lifetime: syn::Lifetime { ident, .. },
-            bounds,
-            ..
+            lifetime, bounds, ..
         }) => GenericConstraint::Lifetime(LifetimeDef {
-            lifetime: param_map.get_lifetime(&ident),
+            lifetime: param_map.get_lifetime(&lifetime.to_string()),
             bounds: bounds
                 .into_iter()
-                .map(|syn::Lifetime { ident, .. }| param_map.get_lifetime(&ident))
+                .map(|lifetime| param_map.get_lifetime(&lifetime.to_string()))
                 .collect(),
         }),
         WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
@@ -414,7 +410,7 @@ where
         .into_iter()
         .map(|param| match param {
             syn::GenericParam::Type(syn::TypeParam { ident, bounds, .. }) => {
-                let &param = param_map.get(&ident).unwrap();
+                let &param = param_map.get(&ident.to_string()).unwrap();
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Type(PredicateType {
                         lifetimes: Vec::new(),
@@ -429,17 +425,16 @@ where
                 param
             }
             syn::GenericParam::Lifetime(syn::LifetimeDef {
-                lifetime: syn::Lifetime { ident, .. },
-                bounds,
-                ..
+                lifetime, bounds, ..
             }) => {
-                let &param = param_map.get(&ident).unwrap();
+                let lifetime = lifetime.to_string();
+                let &param = param_map.get(&lifetime).unwrap();
                 if !bounds.is_empty() {
                     constraints.push(GenericConstraint::Lifetime(LifetimeDef {
-                        lifetime: param_map.get_lifetime(&ident),
+                        lifetime: param_map.get_lifetime(&lifetime),
                         bounds: bounds
                             .into_iter()
-                            .map(|syn::Lifetime { ident, .. }| param_map.get_lifetime(&ident))
+                            .map(|lifetime| param_map.get_lifetime(&lifetime.to_string()))
                             .collect(),
                     }));
                 }
@@ -455,14 +450,11 @@ pub(crate) fn param_mapping(param: &syn::GenericParam, param_map: &mut SynParamM
     match &param {
         syn::GenericParam::Type(syn::TypeParam { ident, .. }) => {
             let param = GenericParam::Type(TYPE_PARAMS.count());
-            param_map.insert(ident.clone(), param);
+            param_map.insert(ident.to_string(), param);
         }
-        syn::GenericParam::Lifetime(syn::LifetimeDef {
-            lifetime: syn::Lifetime { ident, .. },
-            ..
-        }) => {
+        syn::GenericParam::Lifetime(syn::LifetimeDef { lifetime, .. }) => {
             let param = GenericParam::Lifetime(LIFETIMES.count());
-            param_map.insert(ident.clone(), param);
+            param_map.insert(lifetime.to_string(), param);
         }
         syn::GenericParam::Const(_const) => unimplemented!("Generics::param_mapping: Const"),
     }
@@ -492,7 +484,7 @@ pub(crate) fn syn_to_type_param_bound(
             path: Path::syn_to_path(path, param_map),
         }),
         syn::TypeParamBound::Lifetime(lifetime) => {
-            TypeParamBound::Lifetime(param_map.get_lifetime(&lifetime.ident))
+            TypeParamBound::Lifetime(param_map.get_lifetime(&lifetime.to_string()))
         }
     }
 }
@@ -520,7 +512,7 @@ impl GenericArgument {
             }
 
             syn::GenericArgument::Lifetime(lifetime) => {
-                GenericArgument::Lifetime(param_map.get_lifetime(&lifetime.ident))
+                GenericArgument::Lifetime(param_map.get_lifetime(&lifetime.to_string()))
             }
 
             syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {

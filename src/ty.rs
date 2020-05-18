@@ -6,7 +6,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
 use std::fmt::Debug;
-use syn::{parse_str, TypePath};
+use syn::TypePath;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
@@ -60,9 +60,7 @@ impl Type {
     }
 
     pub fn reference_with_lifetime(&self, lifetime: &str, param_map: &SynParamMap) -> Self {
-        let lifetime: syn::Lifetime = syn::parse_str(lifetime)
-            .expect("Type::reference_with_lifetime: couldn't parse lifetime");
-        let lifetime = param_map.get_lifetime(&lifetime.ident);
+        let lifetime = param_map.get_lifetime(&lifetime);
 
         Type(TypeNode::Reference {
             is_mut: false,
@@ -80,9 +78,7 @@ impl Type {
     }
 
     pub fn reference_mut_with_lifetime(&self, lifetime: &str, param_map: &SynParamMap) -> Self {
-        let lifetime: syn::Lifetime = syn::parse_str(lifetime)
-            .expect("Type::reference_with_lifetime: couldn't parse lifetime");
-        let lifetime = param_map.get_lifetime(&lifetime.ident);
+        let lifetime = param_map.get_lifetime(&lifetime);
 
         Type(TypeNode::Reference {
             is_mut: true,
@@ -134,8 +130,7 @@ impl Type {
     }
 
     pub fn type_param_from_str(type_param: &str, param_map: &mut SynParamMap) -> Self {
-        let ident = parse_str(type_param).unwrap();
-        if let Some(&param) = param_map.get(&ident) {
+        if let Some(&param) = param_map.get(&type_param) {
             Type(TypeNode::TypeParam(
                 param
                     .type_param()
@@ -154,7 +149,7 @@ impl Type {
                 path,
             }) => {
                 if let Some(ident) = path.get_ident() {
-                    if let Some(&param) = param_map.get(ident) {
+                    if let Some(&param) = param_map.get(&ident.to_string()) {
                         return Type(TypeNode::TypeParam(
                             param
                                 .type_param()
@@ -169,7 +164,7 @@ impl Type {
                 let inner = Box::new(Type::syn_to_type(*reference.elem, param_map).0);
                 let lifetime = reference
                     .lifetime
-                    .map(|lifetime| param_map.get_lifetime(&lifetime.ident));
+                    .map(|lifetime| param_map.get_lifetime(&lifetime.to_string()));
 
                 Type(TypeNode::Reference {
                     is_mut: reference.mutability.is_some(),
