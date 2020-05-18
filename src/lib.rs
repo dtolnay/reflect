@@ -313,7 +313,7 @@
 //! simple reflection-like `reflect::Value` object manipulations into a fully
 //! general and robust procedural macro.
 
-#![doc(html_root_url = "https://docs.rs/reflect/0.0.6")]
+#![doc(html_root_url = "https://docs.rs/reflect/0.0.7")]
 #![warn(clippy::explicit_iter_loop, clippy::doc_markdown)]
 #![allow(unused_variables, dead_code)]
 #![allow(
