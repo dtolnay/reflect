@@ -112,7 +112,7 @@ impl Type {
     pub(crate) fn syn_to_type(ty: syn::Type) -> Self {
         match ty {
             syn::Type::Path(TypePath {
-                //FIXME: add qself to Path
+                // FIXME: add qself to Path
                 qself: None,
                 path,
             }) => Type(TypeNode::Path(Path::syn_to_path(path))),
@@ -128,7 +128,7 @@ impl Type {
                     Type(TypeNode::Reference { lifetime, inner })
                 }
             }
-            //FIXME: TraitObject
+            // FIXME: TraitObject
             syn::Type::TraitObject(type_trait_object) => Type(TypeNode::TraitObject(
                 generics::syn_to_type_param_bounds(type_trait_object.bounds),
             )),
@@ -164,7 +164,7 @@ impl Type {
 impl TypeNode {
     pub(crate) fn get_name(&self) -> String {
         match self {
-            //FIXME: Add more TypeNode branches
+            // FIXME: Add more TypeNode branches
             TypeNode::Tuple(types) => {
                 let types = types.iter().map(Print::ref_cast);
                 quote!((#(#types),*)).to_string()
@@ -229,7 +229,7 @@ impl TypeNode {
             } => (quote!(#name), params.clone(), constraints.clone()),
 
             Path(path) => {
-                //FIXME: separate generics from path if possible
+                // FIXME: separate generics from path if possible
                 let path = Print::ref_cast(path);
                 (quote!(path), Vec::new(), Vec::new())
             }

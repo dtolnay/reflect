@@ -31,7 +31,7 @@ pub(crate) enum GenericConstraint {
 
 #[derive(Debug, Clone)]
 pub(crate) struct PredicateType {
-    ///A set of bound Lifetimes: `for<'a, 'b, 'c>`.
+    /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
     pub(crate) lifetimes: Vec<Lifetime>,
     pub(crate) bounded_ty: Type,
     pub(crate) bounds: Vec<TypeParamBound>,
@@ -45,7 +45,7 @@ pub(crate) enum TypeParamBound {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TraitBound {
-    ///A set of bound Lifetimes: `for<'a, 'b, 'c>`.
+    /// A set of bound Lifetimes: `for<'a, 'b, 'c>`.
     pub(crate) lifetimes: Vec<Lifetime>,
     pub(crate) path: Path,
 }

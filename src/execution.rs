@@ -76,8 +76,8 @@ pub(crate) trait StaticBorrow<T> {
 }
 
 impl<T> StaticBorrow<T> for LocalKey<Rc<RefCell<Option<T>>>> {
-    //These functions will panic if self is None or in cases where
-    //RefCell::borrow and RefCell::borrow_mut would normally panic
+    // These functions will panic if self is None or in cases where
+    // RefCell::borrow and RefCell::borrow_mut would normally panic
     fn with_borrow<R, F>(&'static self, f: F) -> R
     where
         F: FnOnce(&T) -> R,

@@ -26,7 +26,7 @@ impl ToTokens for Print<Type> {
 }
 
 impl ToTokens for Print<TypeNode> {
-    //FIXME: generics
+    // FIXME: generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use crate::TypeNode::*;
         tokens.append_all(match &self.0 {
@@ -53,7 +53,7 @@ impl ToTokens for Print<TypeNode> {
             }
             Dereference(inner) => panic!("Type::Dereference::to_tokens"),
             DataStructure { name, .. } => {
-                //FIXME: generics
+                // FIXME: generics
                 quote!(#name)
             }
             TraitObject(bounds) => {
@@ -206,7 +206,7 @@ impl ToTokens for Print<GenericArgument> {
 }
 
 impl ToTokens for Print<path::Path> {
-    //FIXME generics
+    // FIXME generics
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let leading = if self.0.global {
             Some(quote!(::))
