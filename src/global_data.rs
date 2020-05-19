@@ -1,13 +1,13 @@
 use crate::{Invoke, Lifetime, MacroInvoke, Push, TypeParam, TypedIndex, ValueNode};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::thread::LocalKey;
 
 thread_local! {
     pub(crate) static VALUES: RefCell<Vec<ValueNode>> = RefCell::new(Vec::new());
     pub(crate) static INVOKES: RefCell<Vec<Invoke>> = RefCell::new(Vec::new());
     pub(crate) static MACROS: RefCell<Vec<MacroInvoke>> = RefCell::new(Vec::new());
-    pub(crate) static TYPE_PARAMS: RefCell<usize> = RefCell::new(0);
-    pub(crate) static LIFETIMES: RefCell<usize> = RefCell::new(1);
+    pub(crate) static TYPE_PARAMS: Cell<usize> = Cell::new(0);
+    pub(crate) static LIFETIMES: Cell<usize> = Cell::new(1);
 }
 
 pub(crate) const STATIC_LIFETIME: Lifetime = Lifetime(0);
@@ -59,24 +59,22 @@ pub(crate) trait GlobalCounter<T> {
     fn count(&'static self) -> T;
 }
 
-impl GlobalCounter<Lifetime> for LocalKey<RefCell<usize>> {
+impl GlobalCounter<Lifetime> for LocalKey<Cell<usize>> {
     fn count(&'static self) -> Lifetime {
         self.with(|counter| {
-            let mut counter = counter.borrow_mut();
-            let num = *counter;
-            *counter += 1;
-            Lifetime(num)
+            let count = counter.get();
+            counter.set(count + 1);
+            Lifetime(count)
         })
     }
 }
 
-impl GlobalCounter<TypeParam> for LocalKey<RefCell<usize>> {
+impl GlobalCounter<TypeParam> for LocalKey<Cell<usize>> {
     fn count(&'static self) -> TypeParam {
         self.with(|counter| {
-            let mut counter = counter.borrow_mut();
-            let num = *counter;
-            *counter += 1;
-            TypeParam(num)
+            let count = counter.get();
+            counter.set(count + 1);
+            TypeParam(count)
         })
     }
 }
