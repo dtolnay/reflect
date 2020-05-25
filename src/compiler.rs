@@ -146,11 +146,13 @@ impl CompleteFunction {
 
         let reachable = self.compute_reachability();
         let mutable = self.compute_mutability();
-        let values = self.refs().flat_map(|v| {
-            VALUES.with_borrow(|values| {
-                // Don't create let bindings for string literals as they're will be inlined
-                if let ValueNode::Str(_) = values[v.0] {
-                    return None;
+        VALUES.with_borrow(|value_nodes| {
+            let values = self.refs().flat_map(|v| {
+                // Don't create let bindings for string literals or () as they will be inlined
+                match &value_nodes[v.0] {
+                    ValueNode::Str(_) => return None,
+                    ValueNode::Tuple(values) if values.is_empty() => return None,
+                    _ => {}
                 }
 
                 let expr = self.compile_value(v);
@@ -171,17 +173,21 @@ impl CompleteFunction {
                 } else {
                     None
                 }
-            })
-        });
+            });
 
-        let ret = self.ret.map(ValueRef::binding);
+            let ret = self.ret.and_then(|v| match &value_nodes[v.0] {
+                ValueNode::Str(_) => Some(self.compile_value(v)),
+                ValueNode::Tuple(values) if values.is_empty() => None,
+                _ => Some(v.binding().to_token_stream()),
+            });
 
-        quote! {
-            fn #name #params (#(#inputs),*) #output #where_clause {
-                #(#values)*
-                #ret
+            quote! {
+                fn #name #params (#(#inputs),*) #output #where_clause {
+                    #(#values)*
+                    #ret
+                }
             }
-        }
+        })
     }
 
     fn refs(&self) -> impl Iterator<Item = ValueRef> {
@@ -340,15 +346,16 @@ impl CompleteFunction {
     }
 
     /// Makes a list of comma-separated values with string literals inlined
-    fn make_values_list(&self, values: &[ValueRef]) -> TokenStream {
-        let values = values.iter().map(|value| {
-            VALUES.with_borrow(|values| match &values[value.0] {
+    fn make_values_list(&self, values_refs: &[ValueRef]) -> TokenStream {
+        VALUES.with_borrow(|values| {
+            let values = values_refs.iter().map(|value| match &values[value.0] {
                 ValueNode::Str(s) => self.compile_value(*value),
+                ValueNode::Tuple(values) if values.is_empty() => quote!(()),
                 _ => value.binding().to_token_stream(),
-            })
-        });
+            });
 
-        quote! { #(#values),* }
+            quote! { #(#values),* }
+        })
     }
 }
 

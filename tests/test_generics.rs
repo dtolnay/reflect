@@ -46,10 +46,7 @@ fn test_generics1() {
                 __arg0: __T1,
                 __arg1: ::generic::Wrapper<__T2>,
                 __arg2: ::generic::Wrapper<::generic::Wrapper<::std::string::String> >
-            ) {
-                let __v0 = ();
-                __v0
-            }
+            ) {}
         }
     };
 
@@ -112,8 +109,6 @@ fn test_generics2() {
                 let __v3 = __v0.three;
                 let __v4 = __v0.four;
                 let _ = ::generic::Generic::generic(__v1, __v2, __v3, __v4);
-                let __v6 = ();
-                __v6
             }
         }
     };

@@ -61,8 +61,6 @@ fn test_field_access() {
                 let __v0 = self;
                 let __v1 = &__v0.test;
                 let _ = ::base::FieldAccessor::access_field(__v1);
-                let __v4 = ();
-                __v4
             }
         }
     };

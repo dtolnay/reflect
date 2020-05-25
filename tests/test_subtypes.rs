@@ -57,8 +57,6 @@ fn test_transitive_closure() {
                 let __v2 = ::subtypes::Subtypes::sub1(__v0, __v1);
                 let __v3 = ::subtypes::Subtypes::sub2(__v1, __v2);
                 let _ = ::subtypes::Subtypes::sub3(__v2, __v3);
-                let __v5 = ();
-                __v5
             }
         }
     };

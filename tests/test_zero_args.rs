@@ -27,10 +27,7 @@ fn test_zero_args() {
 
     let expected = quote! {
         impl::zero::Zero for Zero {
-            fn zero() {
-                let __v0 = ();
-                __v0
-            }
+            fn zero() {}
         }
     };
 

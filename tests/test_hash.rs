@@ -63,8 +63,6 @@ fn test_hash() {
                 let __v3 = &__v0.y;
                 let _ = ::std::hash::Hash::hash(__v2, __v1);
                 let _ = ::std::hash::Hash::hash(__v3, __v1);
-                let __v6 = ();
-                __v6
             }
         }
     };
@@ -101,8 +99,6 @@ fn test_generic_hash() {
                 let _ = ::std::hash::Hash::hash(__v2, __v1);
                 let _ = ::std::hash::Hash::hash(__v3, __v1);
                 let _ = ::std::hash::Hash::hash(__v4, __v1);
-                let __v8 = ();
-                __v8
             }
         }
     };
