@@ -148,11 +148,9 @@ impl CompleteFunction {
         let mutable = self.compute_mutability();
         VALUES.with_borrow(|value_nodes| {
             let values = self.refs().flat_map(|v| {
-                // Don't create let bindings for string literals or () as they will be inlined
-                match &value_nodes[v.0] {
-                    ValueNode::Str(_) => return None,
-                    ValueNode::Tuple(values) if values.is_empty() => return None,
-                    _ => {}
+                // Don't create let bindings for inlineable values
+                if value_nodes[v.0].inlineable() {
+                    return None;
                 }
 
                 let expr = self.compile_value(v);
@@ -176,8 +174,8 @@ impl CompleteFunction {
             });
 
             let ret = self.ret.and_then(|v| match &value_nodes[v.0] {
-                ValueNode::Str(_) => Some(self.compile_value(v)),
                 ValueNode::Tuple(values) if values.is_empty() => None,
+                value if value.inlineable() => Some(self.compile_value(v)),
                 _ => Some(v.binding().to_token_stream()),
             });
 
@@ -283,16 +281,31 @@ impl CompleteFunction {
             }
             ValueNode::Str(s) => quote! { #s },
             ValueNode::Reference { is_mut, value } if !is_mut => {
-                let v = value.binding();
-                quote! { &#v }
+                if values[value.0].inlineable() {
+                    let v = self.compile_value(*value);
+                    quote! { &#v }
+                } else {
+                    let v = value.binding();
+                    quote! { &#v }
+                }
             }
             ValueNode::Reference { is_mut, value } => {
-                let v = value.binding();
-                quote! { &mut #v }
+                if values[value.0].inlineable() {
+                    let v = self.compile_value(*value);
+                    quote! { &mut #v }
+                } else {
+                    let v = value.binding();
+                    quote! { &mut #v }
+                }
             }
             ValueNode::Dereference(v) => {
-                let v = v.binding();
-                quote! { *#v }
+                if values[v.0].inlineable() {
+                    let v = self.compile_value(*v);
+                    quote! { *#v }
+                } else {
+                    let v = v.binding();
+                    quote! { *#v }
+                }
             }
             ValueNode::Binding { name, .. } => quote! { #name },
             ValueNode::Invoke(invoke) => INVOKES.with_borrow(|invokes| {
@@ -349,8 +362,7 @@ impl CompleteFunction {
     fn make_values_list(&self, values_refs: &[ValueRef]) -> TokenStream {
         VALUES.with_borrow(|values| {
             let values = values_refs.iter().map(|value| match &values[value.0] {
-                ValueNode::Str(s) => self.compile_value(*value),
-                ValueNode::Tuple(values) if values.is_empty() => quote!(()),
+                node if node.inlineable() => self.compile_value(*value),
                 _ => value.binding().to_token_stream(),
             });
 
@@ -383,5 +395,15 @@ fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
 impl ValueRef {
     fn binding(self) -> Ident {
         Ident::new(format!("__v{}", self.0))
+    }
+}
+
+impl ValueNode {
+    fn inlineable(&self) -> bool {
+        match self {
+            ValueNode::Str(_) => true,
+            ValueNode::Tuple(values) => values.is_empty(),
+            _ => false,
+        }
     }
 }
