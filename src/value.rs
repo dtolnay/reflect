@@ -1,5 +1,6 @@
 use crate::{
-    Accessor, Data, GlobalBorrow, GlobalPush, Type, TypeNode, ValueNode, ValueRef, VALUES,
+    ty::DataStructure, Accessor, Data, GlobalBorrow, GlobalPush, Struct, TupleStruct, Type,
+    TypeNode, ValueNode, ValueRef, VALUES,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -83,8 +84,8 @@ impl Value {
         }
     }
 
-    /// Returns a Value from a Tuple
-    pub fn get_tuple_value(&self, index: usize) -> Self {
+    /// Returns a `Value` from a `Tuple` or `TupleStruct`
+    pub fn get_index(&self, index: usize) -> Self {
         match self.index.node() {
             ValueNode::Tuple(values) => Value {
                 index: values[index],
@@ -94,7 +95,7 @@ impl Value {
                 ..
             } => {
                 if index >= types.len() {
-                    panic!("Value:get_tuple_value: Out of bounds")
+                    panic!("Value:get_index: Out of bounds")
                 }
                 let node = ValueNode::Destructure {
                     parent: self.index,
@@ -105,8 +106,57 @@ impl Value {
                     index: VALUES.index_push(node),
                 }
             }
-            _ => panic!("Value:get_tuple_value: Not a Tuple"),
+            ValueNode::DataStructure {
+                data: Data::Struct(Struct::Tuple(TupleStruct { fields, .. })),
+                ..
+            } => {
+                let field = &fields[index];
+                let node = ValueNode::Destructure {
+                    parent: self.index,
+                    accessor: field.accessor.clone(),
+                    ty: field.element.get_type(),
+                };
+                Value {
+                    index: VALUES.index_push(node),
+                }
+            }
+            ValueNode::Binding {
+                ty: Type(TypeNode::DataStructure(data)),
+                ..
+            } if is_tuple_struct(&*data) => {
+                if let Data::Struct(Struct::Tuple(TupleStruct { fields, .. })) = data.data {
+                    let field = &fields[index];
+                    let node = ValueNode::Destructure {
+                        parent: self.index,
+                        accessor: field.accessor.clone(),
+                        ty: field.element.clone(),
+                    };
+                    Value {
+                        index: VALUES.index_push(node),
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+            node => {
+                let node = ValueNode::Destructure {
+                    parent: self.index,
+                    accessor: Accessor::Index(index),
+                    ty: Type(TypeNode::Infer),
+                };
+                Value {
+                    index: VALUES.index_push(node),
+                }
+            }
         }
+    }
+}
+
+fn is_tuple_struct(data: &DataStructure) -> bool {
+    if let Data::Struct(Struct::Tuple(_)) = data.data {
+        true
+    } else {
+        false
     }
 }
 

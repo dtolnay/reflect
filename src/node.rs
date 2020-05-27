@@ -1,6 +1,6 @@
 use crate::{
     Accessor, Data, GlobalBorrow, Ident, InvokeRef, MacroInvokeRef, Type, TypeNode, ValueRef,
-    INVOKES,
+    INVOKES, VALUES,
 };
 
 #[derive(Debug, Clone)]
@@ -34,16 +34,13 @@ impl ValueNode {
     pub fn get_type(&self) -> Type {
         match self {
             ValueNode::Tuple(types) => Type(TypeNode::Tuple(
-                types
-                    .iter()
-                    .map(|type_ref| type_ref.node().get_type().0)
-                    .collect(),
+                types.iter().map(|type_ref| type_ref.get_type().0).collect(),
             )),
             ValueNode::Str(_) => Type(TypeNode::PrimitiveStr),
             ValueNode::Reference { is_mut, value } => Type(TypeNode::Reference {
                 is_mut: *is_mut,
                 lifetime: None,
-                inner: Box::new(value.node().get_type().0),
+                inner: Box::new(value.get_type().0),
             }),
             ValueNode::Binding { ty, .. } => ty.clone(),
             ValueNode::Destructure {
@@ -64,22 +61,23 @@ impl ValueNode {
     pub fn get_type_name(&self) -> Self {
         match self {
             ValueNode::Tuple(types) => {
-                let types: String = types.iter().fold(String::from(""), |mut acc, v| {
-                    match &v.node().get_type_name() {
-                        ValueNode::Str(name) => {
-                            acc.push_str(name);
-                            acc.push_str(", ");
-                            acc
-                        }
-                        _ => unreachable!(),
-                    }
-                });
+                let types: String =
+                    types
+                        .iter()
+                        .fold(String::from(""), |mut acc, v| match &v.get_type_name() {
+                            ValueNode::Str(name) => {
+                                acc.push_str(name);
+                                acc.push_str(", ");
+                                acc
+                            }
+                            _ => unreachable!(),
+                        });
                 let types = format!("({})", types.trim_end_matches(", "));
                 ValueNode::Str(types)
             }
             ValueNode::Str(_) => ValueNode::Str(String::from("str")),
             ValueNode::DataStructure { name, .. } => ValueNode::Str(name.to_owned()),
-            ValueNode::Reference { value, .. } => value.node().get_type_name(),
+            ValueNode::Reference { value, .. } => value.get_type_name(),
             ValueNode::Binding { ty, .. } => ValueNode::Str(ty.0.get_name()),
             ValueNode::Destructure {
                 parent,
@@ -92,5 +90,15 @@ impl ValueNode {
             ),
             node => panic!("ValueNode::get_type_name"),
         }
+    }
+}
+
+impl ValueRef {
+    pub(crate) fn get_type(self) -> Type {
+        VALUES.with_borrow(|values| values[self.0].get_type())
+    }
+
+    pub(crate) fn get_type_name(self) -> ValueNode {
+        VALUES.with_borrow(|values| values[self.0].get_type_name())
     }
 }

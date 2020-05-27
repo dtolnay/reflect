@@ -1,6 +1,6 @@
 use crate::{
-    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, SynParamMap,
-    TypeParam, TypeParamBound,
+    generics, Data, GenericParam, Generics, Ident, Lifetime, ParamMap, Path, Print, Struct,
+    SynParamMap, TupleStruct, TypeParam, TypeParamBound,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -112,11 +112,18 @@ impl Type {
         }
     }
 
-    /// Returns a Type from a Tuple
-    pub fn get_tuple_type(&self, index: usize) -> Self {
+    /// Returns a `Type` from a `Tuple` or `TupleStruct`
+    pub fn get_index(&self, index: usize) -> Self {
         match &self.0 {
             TypeNode::Tuple(types) => Type(types[index].clone()),
-            _ => panic!("Type::get_tuple_type: Not a Tuple"),
+            TypeNode::DataStructure(data) => {
+                if let Data::Struct(Struct::Tuple(TupleStruct { fields, .. })) = &data.data {
+                    fields[index].element.clone()
+                } else {
+                    panic!("Type::get_index: Not a TupleStruct")
+                }
+            }
+            _ => panic!("Type::get_index: Not a Tuple"),
         }
     }
 
