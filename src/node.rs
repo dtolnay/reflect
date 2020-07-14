@@ -91,6 +91,21 @@ impl ValueNode {
             node => panic!("ValueNode::get_type_name"),
         }
     }
+
+    pub(crate) fn is_unit_type(&self) -> bool {
+        match self {
+            ValueNode::Tuple(values) if values.is_empty() => true,
+            ValueNode::Invoke(invoke_ref) => {
+                INVOKES.with_borrow(
+                    |invokes| match &invokes[invoke_ref.0].function.sig.output.0 {
+                        TypeNode::Tuple(types) => types.is_empty(),
+                        _ => false,
+                    },
+                )
+            }
+            _ => false,
+        }
+    }
 }
 
 impl ValueRef {
@@ -100,5 +115,9 @@ impl ValueRef {
 
     pub(crate) fn get_type_name(self) -> ValueNode {
         VALUES.with_borrow(|values| values[self.0].get_type_name())
+    }
+
+    pub(crate) fn is_unit_type(&self) -> bool {
+        VALUES.with_borrow(|values| values[self.0].is_unit_type())
     }
 }

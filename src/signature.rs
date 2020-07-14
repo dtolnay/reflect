@@ -103,10 +103,26 @@ impl Signature {
         };
     }
 
+    // TODO: Find better name
+    pub fn set_self_by_reference_with_lifetime(&mut self, lifetime: &str) {
+        self.receiver = Receiver::SelfByReference {
+            is_mut: false,
+            lifetime: OptionLifetime(Some(self.generics.param_map.get_lifetime(lifetime))),
+        };
+    }
+
     pub fn set_self_by_reference_mut(&mut self) {
         self.receiver = Receiver::SelfByReference {
             is_mut: true,
             lifetime: OptionLifetime(None),
+        };
+    }
+
+    // TODO: Find better name
+    pub fn set_self_by_reference_mut_with_lifetime(&mut self, lifetime: &str) {
+        self.receiver = Receiver::SelfByReference {
+            is_mut: true,
+            lifetime: OptionLifetime(Some(self.generics.param_map.get_lifetime(lifetime))),
         };
     }
 
@@ -150,6 +166,7 @@ impl Signature {
         // Vec with the old params in the end
         let params = std::mem::replace(&mut generics.params, Vec::new());
 
+        // FIXME: not correct
         match &mut self.receiver {
             NoSelf => {
                 for ty in &mut self.inputs {

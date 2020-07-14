@@ -385,7 +385,7 @@ use crate::node::ValueNode;
 use crate::path::{AngleBracketedGenericArguments, PathArguments, SimplePath};
 use crate::print::Print;
 use crate::runtime::{RuntimeFunction, RuntimeTrait, RuntimeType};
-use crate::signature::Receiver;
+use crate::signature::{OptionLifetime, Receiver};
 use crate::trait_inference::{TraitInferenceResult, TypeEqualitySet};
 use crate::ty::{DataStructure, TypeNode};
 use crate::wip::{Invoke, MacroInvoke, WipFunction, WipImpl};

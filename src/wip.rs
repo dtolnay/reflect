@@ -84,11 +84,11 @@ impl<'a> MakeImpl<'a> {
             macros: WipRange::new(MacroInvokeRef(MACROS.with_borrow(Vec::len))),
             ret: None,
         };
-        let ret = Some(run(MakeFunction { wip: &wip }).index);
+        let ret = run(MakeFunction { wip: &wip }).index;
         wip.values.end = Some(ValueRef(VALUES.with_borrow(Vec::len)));
         wip.invokes.end = Some(InvokeRef(INVOKES.with_borrow(Vec::len)));
         wip.macros.end = Some(MacroInvokeRef(MACROS.with_borrow(Vec::len)));
-        wip.ret = ret;
+        wip.ret = if ret.is_unit_type() { None } else { Some(ret) };
 
         self.wip.functions.borrow_mut().push(wip);
     }

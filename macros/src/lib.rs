@@ -60,10 +60,12 @@ struct ItemMacro {
 }
 
 enum Receiver {
-    None,
-    ByValue,
-    ByRef,
-    ByMut,
+    NoSelf,
+    SelfByValue,
+    SelfByReference {
+        is_mut: bool,
+        lifetime: Option<Lifetime>,
+    },
 }
 
 enum Type {
@@ -150,7 +152,7 @@ impl ItemMod {
             ident: name,
             arguments: PathArguments::None,
         });
-        let items = ItemMod::parse_items(input, &path.clone())?;
+        let items = ItemMod::parse_items(input, &path)?;
         Ok(ItemMod { path, items })
     }
 }
@@ -278,20 +280,22 @@ impl Parse for Function {
 
 impl Parse for Receiver {
     fn parse(input: ParseStream) -> Result<Self> {
+        let fork = input.fork();
         if input.peek(Token![self]) {
             input.parse::<Token![self]>()?;
-            Ok(Receiver::ByValue)
-        } else if input.peek(Token![&]) && input.peek2(Token![self]) {
+            Ok(Receiver::SelfByValue)
+        } else if fork.parse::<Token![&]>().is_ok()
+            && fork.parse::<Option<Lifetime>>().is_ok()
+            && fork.parse::<Option<Token![mut]>>().is_ok()
+            && fork.parse::<Token![self]>().is_ok()
+        {
             input.parse::<Token![&]>()?;
+            let lifetime = input.parse::<Option<Lifetime>>()?;
+            let is_mut = input.parse::<Option<Token![mut]>>()?.is_some();
             input.parse::<Token![self]>()?;
-            Ok(Receiver::ByRef)
-        } else if input.peek(Token![&]) && input.peek2(Token![mut]) && input.peek3(Token![self]) {
-            input.parse::<Token![&]>()?;
-            input.parse::<Token![mut]>()?;
-            input.parse::<Token![self]>()?;
-            Ok(Receiver::ByMut)
+            Ok(Receiver::SelfByReference { is_mut, lifetime })
         } else {
-            Ok(Receiver::None)
+            Ok(Receiver::NoSelf)
         }
     }
 }
@@ -344,10 +348,9 @@ impl Parse for ItemMacro {
 
 impl Receiver {
     fn is_none(&self) -> bool {
-        use self::Receiver::*;
         match self {
-            None => true,
-            ByValue | ByRef | ByMut => false,
+            Receiver::NoSelf => true,
+            _ => false,
         }
     }
 }
@@ -562,16 +565,36 @@ fn declare_function(
     let name = &function.name;
     let name_str = name.to_string();
     let setup_receiver = match function.receiver {
-        Receiver::None => None,
-        Receiver::ByValue => Some(quote! {
+        Receiver::NoSelf => None,
+        Receiver::SelfByValue => Some(quote! {
             sig.set_self_by_value();
         }),
-        Receiver::ByRef => Some(quote! {
-            sig.set_self_by_reference();
-        }),
-        Receiver::ByMut => Some(quote! {
-            sig.set_self_by_reference_mut();
-        }),
+        Receiver::SelfByReference {
+            is_mut,
+            ref lifetime,
+        } => match (is_mut, lifetime) {
+            (false, None) => Some(quote! {
+                sig.set_self_by_reference();
+            }),
+
+            (true, None) => Some(quote! {
+                sig.set_self_by_reference_mut();
+            }),
+
+            (false, Some(lifetime)) => {
+                let lifetime_str = lifetime.to_string();
+                Some(quote! {
+                    sig.set_self_by_reference_with_lifetime(#lifetime_str);
+                })
+            }
+
+            (true, Some(lifetime)) => {
+                let lifetime_str = lifetime.to_string();
+                Some(quote! {
+                    sig.set_self_by_reference_mut_with_lifetime(#lifetime_str);
+                })
+            }
+        },
     };
     let params: &Vec<_> = &function
         .generics

@@ -56,7 +56,11 @@ impl CompleteImpl {
         };
         let (params, self_ty_args, where_clause, trait_ty) = if let Some(result) = &self.result {
             let params = result.generic_params.iter().map(Print::ref_cast);
-            let params = Some(quote!(<#(#params),*>));
+            let params = if result.generic_params.is_empty() {
+                None
+            } else {
+                Some(quote!(<#(#params),*>))
+            };
             let constraints = result.constraints.set.iter().map(Print::ref_cast);
             let self_ty_args = result.data_struct_args.args.iter().map(Print::ref_cast);
             let self_ty_args = if result.data_struct_args.args.is_empty() {
@@ -174,7 +178,6 @@ impl CompleteFunction {
             });
 
             let ret = self.ret.and_then(|v| match &value_nodes[v.0] {
-                ValueNode::Tuple(values) if values.is_empty() => None,
                 value if value.inlineable() => Some(self.compile_value(v)),
                 _ => Some(v.binding().to_token_stream()),
             });
@@ -208,7 +211,7 @@ impl CompleteFunction {
                 Tuple(values) => {
                     for &v in values.iter() {
                         if reachable.insert(v) {
-                            stack.extend(values);
+                            stack.push(v);
                         }
                     }
                 }

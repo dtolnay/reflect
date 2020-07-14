@@ -10,6 +10,8 @@ library! {
             fn sub1<'a, 'b, 'c, T, U>(&'a T, &'b U) -> &'c U where 'a: 'b;
             fn sub2<'c, 'b: 'c, 'd, U, V>(&'b U, &'c V) -> &'d V;
             fn sub3<'c, 'd, V, W>(&'c V, &'d W) where 'c: 'd, 'd: 'static;
+            fn ident_elided<T>(&T) -> &T;
+            fn consume_static<T>(&'static T);
         }
 
         trait CallSubtypes<'a, 'b, T, U> {
@@ -18,6 +20,10 @@ library! {
 
         trait HasSubtypes<'a, 'b, T> where 'a: 'b {
             fn has_subtypes(&'a T, &'b T) -> &'b T;
+        }
+
+        trait IdentElided<'a> {
+            fn ident_elided(&'a self);
         }
 
         impl<'a, T> SameLifetime<'a, T> {
@@ -35,8 +41,7 @@ fn derive_subtypes(ex: Execution) {
                 let b = make_function.arg(1);
                 let c = RUNTIME::subtypes::Subtypes::sub1.INVOKE(a, b);
                 let stat = RUNTIME::subtypes::Subtypes::sub2.INVOKE(b, c);
-                RUNTIME::subtypes::Subtypes::sub3.INVOKE(c, stat);
-                make_function.unit()
+                RUNTIME::subtypes::Subtypes::sub3.INVOKE(c, stat)
             },
         );
     });
@@ -100,5 +105,39 @@ fn keep_subtypes() {
     };
 
     let output = reflect::derive(input, derive_keep_subtypes);
+    assert_eq!(output.to_string(), expected.to_string());
+}
+
+fn derive_elided_static(ex: Execution) {
+    ex.make_trait_impl(RUNTIME::subtypes::IdentElided, ex.target_type(), |block| {
+        block.make_function(
+            RUNTIME::subtypes::IdentElided::ident_elided,
+            |make_function| {
+                let receiver = make_function.arg(0);
+                let receiver = RUNTIME::subtypes::Subtypes::ident_elided.INVOKE(receiver);
+                RUNTIME::subtypes::Subtypes::consume_static.INVOKE(receiver)
+            },
+        );
+    });
+}
+
+// FIXME: infer 'static lifetime
+#[test]
+fn elided_static() {
+    let input = quote! {
+        struct Trivial;
+    };
+
+    let expected = quote! {
+        impl ::subtypes::IdentElided<'static> for Trivial {
+            fn ident_elided(&'static self) {
+                let __v0 = self;
+                let __v1 = ::subtypes::Subtypes::ident_elided(__v0);
+                let _ = ::subtypes::Subtypes::consume_static(__v1);
+            }
+        }
+    };
+
+    let output = reflect::derive(input, derive_elided_static);
     assert_eq!(output.to_string(), expected.to_string());
 }

@@ -76,8 +76,7 @@ fn test_generics2() {
                         let two = fields.next().unwrap().get_value();
                         let three = fields.next().unwrap().get_value();
                         let four = fields.next().unwrap().get_value();
-                        RUNTIME::generic::Generic::generic.INVOKE(one, two, three, four);
-                        make_function.unit()
+                        RUNTIME::generic::Generic::generic.INVOKE(one, two, three, four)
                     }
                     _ => unimplemented!(),
                 }
