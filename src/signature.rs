@@ -165,34 +165,18 @@ impl Signature {
         // temporarily swap the params with an empty Vec, and then extend that
         // Vec with the old params in the end
         let params = std::mem::replace(&mut generics.params, Vec::new());
+        let mut total_lifetimes = Vec::new();
 
-        // FIXME: not correct
         match &mut self.receiver {
-            NoSelf => {
+            NoSelf | SelfByValue => {
                 for ty in &mut self.inputs {
-                    ty.0.insert_new_lifetimes(&mut generics.params);
+                    ty.0.insert_new_lifetimes(&mut generics.params, &mut total_lifetimes);
                 }
-                if self.inputs.len() == 1 {
-                    match &mut self.inputs[0].0 {
-                        Reference {
-                            lifetime: Some(lifetime),
-                            inner,
-                            ..
-                        } if !inner.has_lifetimes() => self
-                            .output
-                            .0
-                            .insert_new_lifetimes2(*lifetime, &mut generics.params),
-                        _ => {}
-                    }
-                } else {
-                    self.output.0.insert_new_lifetimes(&mut generics.params);
+                if total_lifetimes.len() == 1 {
+                    self.output
+                        .0
+                        .insert_lifetime(total_lifetimes[0], &mut generics.params);
                 }
-            }
-            SelfByValue => {
-                for ty in &mut self.inputs {
-                    ty.0.insert_new_lifetimes(&mut generics.params);
-                }
-                self.output.0.insert_new_lifetimes(&mut generics.params);
             }
             SelfByReference {
                 lifetime: option_lifetime,
@@ -207,11 +191,11 @@ impl Signature {
                 };
                 option_lifetime.0 = Some(lifetime);
                 for ty in &mut self.inputs {
-                    ty.0.insert_new_lifetimes(&mut generics.params);
+                    ty.0.insert_new_lifetimes(&mut generics.params, &mut total_lifetimes);
                 }
                 self.output
                     .0
-                    .insert_new_lifetimes2(lifetime, &mut generics.params);
+                    .insert_lifetime(lifetime, &mut generics.params);
             }
         }
         // Insert the old params back into place
@@ -220,7 +204,11 @@ impl Signature {
 }
 
 impl TypeNode {
-    fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
+    fn insert_new_lifetimes(
+        &mut self,
+        params: &mut Vec<GenericParam>,
+        total_lifetimes: &mut Vec<Lifetime>,
+    ) {
         match self {
             Reference {
                 inner, lifetime, ..
@@ -229,29 +217,31 @@ impl TypeNode {
                     let new_lifetime = LIFETIMES.count();
                     params.push(GenericParam::Lifetime(new_lifetime));
                     *lifetime = Some(new_lifetime)
-                };
-                inner.insert_new_lifetimes(params);
+                }
+                total_lifetimes.push(lifetime.unwrap());
+
+                inner.insert_new_lifetimes(params, total_lifetimes);
             }
 
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.insert_new_lifetimes(params);
+                    ty.insert_new_lifetimes(params, total_lifetimes);
                 }
             }
-            Dereference(node) => node.insert_new_lifetimes(params),
+            Dereference(node) => node.insert_new_lifetimes(params, total_lifetimes),
             TraitObject(bounds) => {
                 for bound in bounds.iter_mut() {
                     if let TypeParamBound::Trait(bound) = bound {
-                        bound.path.insert_new_lifetimes(params);
+                        bound.path.insert_new_lifetimes(params, total_lifetimes);
                     }
                 }
             }
-            Path(path) => path.insert_new_lifetimes(params),
+            Path(path) => path.insert_new_lifetimes(params, total_lifetimes),
             _ => {}
         }
     }
 
-    fn insert_new_lifetimes2(&mut self, new_lifetime: Lifetime, params: &mut Vec<GenericParam>) {
+    fn insert_lifetime(&mut self, new_lifetime: Lifetime, params: &mut Vec<GenericParam>) {
         match self {
             Reference {
                 inner, lifetime, ..
@@ -259,50 +249,46 @@ impl TypeNode {
                 if lifetime.is_none() {
                     *lifetime = Some(new_lifetime);
                 };
-                inner.insert_new_lifetimes(params);
+                inner.insert_lifetime(new_lifetime, params);
             }
             Tuple(types) => {
                 for ty in types.iter_mut() {
-                    ty.insert_new_lifetimes2(new_lifetime, params);
+                    ty.insert_lifetime(new_lifetime, params);
                 }
             }
-            Dereference(node) => node.insert_new_lifetimes2(new_lifetime, params),
+            Dereference(node) => node.insert_lifetime(new_lifetime, params),
             TraitObject(bounds) => {
                 for bound in bounds.iter_mut() {
                     if let TypeParamBound::Trait(bound) = bound {
-                        bound.path.insert_new_lifetimes2(new_lifetime, params);
+                        bound.path.insert_lifetime(new_lifetime, params);
                     }
                 }
             }
-            Path(path) => path.insert_new_lifetimes2(new_lifetime, params),
+            Path(path) => path.insert_lifetime(new_lifetime, params),
             _ => {}
-        }
-    }
-
-    pub(crate) fn has_lifetimes(&self) -> bool {
-        match self {
-            Reference { .. } => true,
-            Tuple(types) => types.iter().any(TypeNode::has_lifetimes),
-            Dereference(node) => node.has_lifetimes(),
-            TraitObject(bounds) => bounds.iter().any(|bound| match bound {
-                TypeParamBound::Trait(bound) => bound.path.has_lifetimes(),
-                TypeParamBound::Lifetime(_) => true,
-            }),
-            Path(path) => path.has_lifetimes(),
-            _ => false,
         }
     }
 }
 
 impl Path {
-    fn insert_new_lifetimes(&mut self, params: &mut Vec<GenericParam>) {
+    fn insert_new_lifetimes(
+        &mut self,
+        params: &mut Vec<GenericParam>,
+        total_lifetimes: &mut Vec<Lifetime>,
+    ) {
         for segment in &mut self.path {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
                     for arg in &mut args.args.args {
-                        if let GenericArgument::Type(ty) = arg {
-                            ty.0.insert_new_lifetimes(params)
+                        match arg {
+                            GenericArgument::Type(ty) => {
+                                ty.0.insert_new_lifetimes(params, total_lifetimes)
+                            }
+
+                            GenericArgument::Lifetime(lifetime) => total_lifetimes.push(*lifetime),
+
+                            _ => unimplemented!("Path::insert_elided_lifetimes: GenericArgument"),
                         }
                     }
                 }
@@ -313,14 +299,14 @@ impl Path {
         }
     }
 
-    fn insert_new_lifetimes2(&mut self, lifetime: Lifetime, params: &mut Vec<GenericParam>) {
+    fn insert_lifetime(&mut self, lifetime: Lifetime, params: &mut Vec<GenericParam>) {
         for segment in &mut self.path {
             match &mut segment.args {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
                     for arg in &mut args.args.args {
                         if let GenericArgument::Type(ty) = arg {
-                            ty.0.insert_new_lifetimes2(lifetime, params)
+                            ty.0.insert_lifetime(lifetime, params)
                         }
                     }
                 }
@@ -329,19 +315,5 @@ impl Path {
                 }
             }
         }
-    }
-
-    pub(crate) fn has_lifetimes(&self) -> bool {
-        self.path.iter().any(|segment| match &segment.args {
-            PathArguments::None => false,
-            PathArguments::AngleBracketed(args) => args.args.args.iter().any(|arg| match arg {
-                GenericArgument::Type(ty) => ty.0.has_lifetimes(),
-                GenericArgument::Lifetime(_) => true,
-                _ => unimplemented!(),
-            }),
-            PathArguments::Parenthesized(args) => {
-                unimplemented!("Path::has_lifetimes: PathArguments::Parenthesized")
-            }
-        })
     }
 }
