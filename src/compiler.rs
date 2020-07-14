@@ -379,17 +379,11 @@ fn receiver_tokens(receiver: Receiver) -> Option<TokenStream> {
         Receiver::NoSelf => None,
         Receiver::SelfByValue => Some(quote!(self)),
         Receiver::SelfByReference { is_mut, lifetime } if !is_mut => {
-            let lifetime = lifetime
-                .0
-                .as_ref()
-                .map(|lifetime| Print::ref_cast(lifetime));
+            let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
             Some(quote!(&#lifetime self))
         }
         Receiver::SelfByReference { is_mut, lifetime } => {
-            let lifetime = lifetime
-                .0
-                .as_ref()
-                .map(|lifetime| Print::ref_cast(lifetime));
+            let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
             Some(quote!(&#lifetime mut self))
         }
     }

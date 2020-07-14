@@ -15,18 +15,14 @@ pub struct Signature {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Receiver {
+pub(crate) enum Receiver {
     NoSelf,
     SelfByValue,
     SelfByReference {
         is_mut: bool,
-        lifetime: OptionLifetime,
+        lifetime: Option<Lifetime>,
     },
 }
-
-#[derive(Debug, Clone, Copy)]
-#[doc(hidden)]
-pub struct OptionLifetime(pub(crate) Option<Lifetime>);
 
 pub trait AddInput<'a, T> {
     fn add_input(&'a mut self, into_input: T);
@@ -44,9 +40,7 @@ impl Receiver {
             SelfByValue => SelfByValue,
             SelfByReference { is_mut, lifetime } => SelfByReference {
                 is_mut,
-                lifetime: OptionLifetime(Some(
-                    lifetime.0.unwrap().clone_with_fresh_generics(param_map),
-                )),
+                lifetime: Some(lifetime.unwrap().clone_with_fresh_generics(param_map)),
             },
         }
     }
@@ -99,7 +93,7 @@ impl Signature {
     pub fn set_self_by_reference(&mut self) {
         self.receiver = Receiver::SelfByReference {
             is_mut: false,
-            lifetime: OptionLifetime(None),
+            lifetime: None,
         };
     }
 
@@ -107,14 +101,14 @@ impl Signature {
     pub fn set_self_by_reference_with_lifetime(&mut self, lifetime: &str) {
         self.receiver = Receiver::SelfByReference {
             is_mut: false,
-            lifetime: OptionLifetime(Some(self.generics.param_map.get_lifetime(lifetime))),
+            lifetime: Some(self.generics.param_map.get_lifetime(lifetime)),
         };
     }
 
     pub fn set_self_by_reference_mut(&mut self) {
         self.receiver = Receiver::SelfByReference {
             is_mut: true,
-            lifetime: OptionLifetime(None),
+            lifetime: None,
         };
     }
 
@@ -122,7 +116,7 @@ impl Signature {
     pub fn set_self_by_reference_mut_with_lifetime(&mut self, lifetime: &str) {
         self.receiver = Receiver::SelfByReference {
             is_mut: true,
-            lifetime: OptionLifetime(Some(self.generics.param_map.get_lifetime(lifetime))),
+            lifetime: Some(self.generics.param_map.get_lifetime(lifetime)),
         };
     }
 
@@ -182,14 +176,14 @@ impl Signature {
                 lifetime: option_lifetime,
                 ..
             } => {
-                let lifetime = if let Some(lifetime) = option_lifetime.0 {
-                    lifetime
+                let lifetime = if let Some(lifetime) = option_lifetime {
+                    *lifetime
                 } else {
                     let lifetime = LIFETIMES.count();
                     generics.params.push(GenericParam::Lifetime(lifetime));
                     lifetime
                 };
-                option_lifetime.0 = Some(lifetime);
+                *option_lifetime = Some(lifetime);
                 for ty in &mut self.inputs {
                     ty.0.insert_new_lifetimes(&mut generics.params, &mut total_lifetimes);
                 }

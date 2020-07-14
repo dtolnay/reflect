@@ -112,7 +112,7 @@ impl<'a> MakeFunction<'a> {
             SelfByReference { is_mut, lifetime } if index == 0 => wip.self_ty.clone().map(|ty| {
                 Type(TypeNode::Reference {
                     is_mut,
-                    lifetime: lifetime.0,
+                    lifetime,
                     inner: Box::new(ty.0),
                 })
             }),

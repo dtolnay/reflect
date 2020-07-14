@@ -1,9 +1,9 @@
 use crate::{
     AngleBracketedGenericArguments, CompleteFunction, CompleteImpl, Function, GenericArgument,
-    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Lifetime, LifetimeDef,
-    OptionLifetime, Parent, ParentKind, Path, PathArguments, PredicateType, Push, Receiver,
-    TraitBound, Type, TypeEqualitySetRef, TypeNode, TypeParamBound, WipFunction, WipImpl, INVOKES,
-    STATIC_LIFETIME, VALUES,
+    GenericArguments, GenericConstraint, GenericParam, GlobalBorrow, Lifetime, LifetimeDef, Parent,
+    ParentKind, Path, PathArguments, PredicateType, Push, Receiver, TraitBound, Type,
+    TypeEqualitySetRef, TypeNode, TypeParamBound, WipFunction, WipImpl, INVOKES, STATIC_LIFETIME,
+    VALUES,
 };
 // FxHasher is used because it is a faster hashing algorithm than the
 // default one, but most importantly because it has a hasher with a default
@@ -974,7 +974,7 @@ impl WipFunction {
                                     TypeNode::Reference {
                                         is_mut,
                                         inner: Box::new(TypeNode::Path(parent.path.clone())),
-                                        lifetime: lifetime.0,
+                                        lifetime,
                                     },
                                     constraints,
                                     subtypes,
@@ -1098,7 +1098,7 @@ impl WipFunction {
         }
 
         if let Receiver::SelfByReference {
-            lifetime: OptionLifetime(Some(ref mut lifetime)),
+            lifetime: Some(ref mut lifetime),
             ..
         } = f.sig.receiver
         {
