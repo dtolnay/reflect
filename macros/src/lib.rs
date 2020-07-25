@@ -8,8 +8,8 @@ use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{
     braced, parenthesized, parse_macro_input, token, GenericArgument, GenericParam, Generics,
-    Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeParamBound,
-    TypeTraitObject, WherePredicate,
+    Ident, Lifetime, Path, PathArguments, PathSegment, ReturnType, Token, TypeImplTrait,
+    TypeParamBound, TypeTraitObject, WherePredicate,
 };
 
 use self::proc_macro::TokenStream;
@@ -72,6 +72,7 @@ enum Type {
     Tuple(Vec<Type>),
     Path(Path),
     TraitObject(TypeTraitObject),
+    ImplTrait(TypeImplTrait),
     Reference {
         is_mut: bool,
         lifetime: Option<Lifetime>,
@@ -327,6 +328,8 @@ impl Parse for Type {
             })
         } else if lookahead.peek(Token![dyn]) {
             Ok(Type::TraitObject(input.parse()?))
+        } else if lookahead.peek(Token![impl]) {
+            Ok(Type::ImplTrait(input.parse()?))
         } else if lookahead.peek(Ident) || lookahead.peek(Token![::]) {
             input.parse().map(Type::Path)
         } else {
@@ -759,6 +762,19 @@ fn to_runtime_type(ty: &Type, mod_path: &Path, params: &[&GenericParam]) -> Toke
             }
         }
 
+        Type::ImplTrait(impl_trait) => {
+            let mut impl_trait = impl_trait.clone();
+            expand_impl_trait(&mut impl_trait, mod_path, params);
+            let bound_strings = impl_trait
+                .bounds
+                .iter()
+                .map(|bound| bound.to_token_stream().to_string());
+
+            quote! {
+                _reflect::Type::get_impl_trait(&[#(#bound_strings),*], param_map)
+            }
+        }
+
         Type::Reference {
             is_mut,
             lifetime,
@@ -874,6 +890,7 @@ fn expand_type(ty: &mut syn::Type, mod_path: &Path, params: &[&GenericParam]) {
         Path(type_path) => expand_path(&mut type_path.path, mod_path, params),
         Reference(reference) => expand_type(&mut reference.elem, mod_path, params),
         TraitObject(trait_object) => expand_trait_object(trait_object, mod_path, params),
+        ImplTrait(impl_trait) => expand_impl_trait(impl_trait, mod_path, params),
         Tuple(type_tuple) => type_tuple
             .elems
             .iter_mut()
@@ -915,6 +932,14 @@ fn expand_trait_object(
     params: &[&GenericParam],
 ) {
     trait_object.bounds.iter_mut().for_each(|bound| {
+        if let TypeParamBound::Trait(bound) = bound {
+            expand_path(&mut bound.path, mod_path, params)
+        }
+    })
+}
+
+fn expand_impl_trait(impl_trait: &mut TypeImplTrait, mod_path: &Path, params: &[&GenericParam]) {
+    impl_trait.bounds.iter_mut().for_each(|bound| {
         if let TypeParamBound::Trait(bound) = bound {
             expand_path(&mut bound.path, mod_path, params)
         }

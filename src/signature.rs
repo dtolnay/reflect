@@ -230,6 +230,13 @@ impl TypeNode {
                     }
                 }
             }
+            ImplTrait(bounds) => {
+                for bound in bounds.iter_mut() {
+                    if let TypeParamBound::Trait(bound) = bound {
+                        bound.path.insert_new_lifetimes(params, total_lifetimes);
+                    }
+                }
+            }
             Path(path) => path.insert_new_lifetimes(params, total_lifetimes),
             _ => {}
         }

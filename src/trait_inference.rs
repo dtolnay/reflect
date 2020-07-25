@@ -540,14 +540,25 @@ impl TypeEqualitySets {
                     subtypes,
                 );
             }
-            (TraitObject(bounds), supertype) => {
+            (ImplTrait(bounds1), ImplTrait(bounds2)) => {
+                if bounds1.len() != bounds2.len() {
+                    panic!("TypeEqualitySets::insert_types_as_equal: ImplTraits have different number of bounds")
+                }
+                self.insert_inner_type_as_equal(
+                    &ImplTrait(bounds1),
+                    &ImplTrait(bounds2),
+                    constraints,
+                    subtypes,
+                );
+            }
+            (TraitObject(bounds), supertype) | (ImplTrait(bounds), supertype) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
                     bounded_ty: Type(supertype),
                     bounds,
                 }));
             }
-            (subtype, TraitObject(bounds)) => {
+            (subtype, TraitObject(bounds)) | (subtype, ImplTrait(bounds)) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
                     bounded_ty: Type(subtype),
@@ -619,14 +630,25 @@ impl TypeEqualitySets {
                     subtypes,
                 );
             }
-            (TraitObject(bounds), supertype) => {
+            (ImplTrait(bounds1), ImplTrait(bounds2)) => {
+                if bounds1.len() != bounds2.len() {
+                    panic!("TypeEqualitySets::insert_as_subtype_or_equal: ImplTraits have different number of bounds")
+                }
+                self.insert_inner_type_as_equal(
+                    &ImplTrait(bounds1),
+                    &ImplTrait(bounds2),
+                    constraints,
+                    subtypes,
+                );
+            }
+            (TraitObject(bounds), supertype) | (ImplTrait(bounds), supertype) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
                     bounded_ty: Type(supertype),
                     bounds,
                 }));
             }
-            (subtype, TraitObject(bounds)) => {
+            (subtype, TraitObject(bounds)) | (subtype, ImplTrait(bounds)) => {
                 constraints.insert(GenericConstraint::Type(PredicateType {
                     lifetimes: Vec::new(),
                     bounded_ty: Type(subtype),
@@ -717,7 +739,8 @@ impl TypeEqualitySets {
             (Path(path1), Path(path2)) => {
                 self.insert_path_arguments_as_equal(path1, path2, constraints, subtypes);
             }
-            (TraitObject(bounds1), TraitObject(bounds2)) => bounds1
+            (TraitObject(bounds1), TraitObject(bounds2))
+            | (ImplTrait(bounds1), ImplTrait(bounds2)) => bounds1
                 .iter()
                 .zip(bounds2.iter())
                 .for_each(|bounds| match bounds {
@@ -732,7 +755,7 @@ impl TypeEqualitySets {
                     (TypeParamBound::Lifetime(lifetime1), TypeParamBound::Lifetime(lifetime2)) => {
                         subtypes.insert_as_equal(*lifetime1, *lifetime2);
                     }
-                    _ => panic!("TraitObjects have different bound types"),
+                    _ => panic!("Bound types doesn't match"),
                 }),
             _ => (),
         }
@@ -1446,6 +1469,10 @@ impl TypeNode {
                     .or(lifetime2),
             },
             (TraitObject(_), mut node) | (mut node, TraitObject(_)) => {
+                node.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
+                node
+            }
+            (ImplTrait(_), mut node) | (mut node, ImplTrait(_)) => {
                 node.make_most_concrete_inner(concrete_maps_and_sets, transitive_closure);
                 node
             }

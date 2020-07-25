@@ -177,9 +177,9 @@ impl CompleteFunction {
                 }
             });
 
-            let ret = self.ret.and_then(|v| match &value_nodes[v.0] {
-                value if value.inlineable() => Some(self.compile_value(v)),
-                _ => Some(v.binding().to_token_stream()),
+            let ret = self.ret.map(|v| match &value_nodes[v.0] {
+                value if value.inlineable() => self.compile_value(v),
+                _ => v.binding().to_token_stream(),
             });
 
             quote! {

@@ -64,6 +64,10 @@ impl ToTokens for Print<TypeNode> {
                 let bounds = bounds.iter().map(Print::ref_cast);
                 quote!((dyn #(#bounds)+*))
             }
+            ImplTrait(bounds) => {
+                let bounds = bounds.iter().map(Print::ref_cast);
+                quote!((impl #(#bounds)+*))
+            }
             Path(path) => {
                 let path = Print::ref_cast(path);
                 quote!(#path)

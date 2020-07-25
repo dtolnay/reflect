@@ -84,8 +84,8 @@ fn test_generic_hash() {
     let expected = quote! {
         impl<__T0, __T1> ::std::hash::Hash for Generic<__T0, __T1>
         where
-            __T0: ::std::hash::Hash,
             __T1: ::std::hash::Hash,
+            __T0: ::std::hash::Hash,
         {
             fn hash<'__a1, '__a2, __T2>(&'__a1 self, __arg0: &'__a2 mut __T2)
             where

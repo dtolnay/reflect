@@ -24,6 +24,7 @@ pub(crate) enum TypeNode {
     },
     Dereference(Box<TypeNode>),
     TraitObject(Vec<TypeParamBound>),
+    ImplTrait(Vec<TypeParamBound>),
     DataStructure(Box<DataStructure>),
     Path(Path),
     TypeParam(TypeParam),
@@ -129,6 +130,15 @@ impl Type {
 
     pub fn get_trait_object(type_param_bounds: &[&str], param_map: &mut SynParamMap) -> Self {
         Type(TypeNode::TraitObject(
+            type_param_bounds
+                .iter()
+                .map(|bound| TypeParamBound::get_type_param_bound(bound, param_map))
+                .collect(),
+        ))
+    }
+
+    pub fn get_impl_trait(type_param_bounds: &[&str], param_map: &mut SynParamMap) -> Self {
+        Type(TypeNode::ImplTrait(
             type_param_bounds
                 .iter()
                 .map(|bound| TypeParamBound::get_type_param_bound(bound, param_map))
@@ -266,6 +276,13 @@ impl TypeNode {
             }
 
             TraitObject(bounds) => TraitObject(
+                bounds
+                    .iter()
+                    .map(|bound| bound.clone_with_fresh_generics(param_map))
+                    .collect(),
+            ),
+
+            ImplTrait(bounds) => ImplTrait(
                 bounds
                     .iter()
                     .map(|bound| bound.clone_with_fresh_generics(param_map))
