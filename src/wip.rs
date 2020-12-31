@@ -71,7 +71,7 @@ impl<'a> MakeImpl<'a> {
 
 impl MakeFunction {
     pub fn unit(&self) -> Value {
-        WIP.with_borrow_mut(|wip| wip.unit())
+        WIP.with_borrow_mut(WipFunction::unit)
     }
 
     pub fn string(&self, s: &str) -> Value {
