@@ -60,57 +60,52 @@ impl Path {
     }
 
     pub(crate) fn syn_to_path(path: syn::Path) -> Self {
-        match path {
-            syn::Path {
-                leading_colon,
-                segments,
-            } => {
-                let path: Vec<_> = segments
-                    .into_iter()
-                    .map(|syn::PathSegment { ident, arguments }| {
-                        let ident = Ident::from(ident);
-                        match arguments {
-                            syn::PathArguments::None => PathSegment {
-                                ident,
-                                args: PathArguments::None,
+        let syn::Path {
+            leading_colon,
+            segments,
+        } = path;
+        let path: Vec<_> = segments
+            .into_iter()
+            .map(|syn::PathSegment { ident, arguments }| {
+                let ident = Ident::from(ident);
+                match arguments {
+                    syn::PathArguments::None => PathSegment {
+                        ident,
+                        args: PathArguments::None,
+                    },
+                    syn::PathArguments::AngleBracketed(generic_args) => PathSegment {
+                        ident,
+                        args: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                            args: GenericArguments {
+                                args: generic_args
+                                    .args
+                                    .into_iter()
+                                    .map(GenericArgument::syn_to_generic_argument)
+                                    .collect(),
                             },
-                            syn::PathArguments::AngleBracketed(generic_args) => PathSegment {
-                                ident,
-                                args: PathArguments::AngleBracketed(
-                                    AngleBracketedGenericArguments {
-                                        args: GenericArguments {
-                                            args: generic_args
-                                                .args
-                                                .into_iter()
-                                                .map(GenericArgument::syn_to_generic_argument)
-                                                .collect(),
-                                        },
-                                    },
-                                ),
-                            },
+                        }),
+                    },
 
-                            syn::PathArguments::Parenthesized(parenthesized) => PathSegment {
-                                ident,
-                                args: PathArguments::Parenthesized(ParenthesizedGenericArguments {
-                                    inputs: parenthesized
-                                        .inputs
-                                        .into_iter()
-                                        .map(Type::syn_to_type)
-                                        .collect(),
-                                    output: match parenthesized.output {
-                                        ReturnType::Default => None,
-                                        ReturnType::Type(_, ty) => Some(Type::syn_to_type(*ty)),
-                                    },
-                                }),
+                    syn::PathArguments::Parenthesized(parenthesized) => PathSegment {
+                        ident,
+                        args: PathArguments::Parenthesized(ParenthesizedGenericArguments {
+                            inputs: parenthesized
+                                .inputs
+                                .into_iter()
+                                .map(Type::syn_to_type)
+                                .collect(),
+                            output: match parenthesized.output {
+                                ReturnType::Default => None,
+                                ReturnType::Type(_, ty) => Some(Type::syn_to_type(*ty)),
                             },
-                        }
-                    })
-                    .collect();
-                Path {
-                    global: leading_colon.is_some(),
-                    path,
+                        }),
+                    },
                 }
-            }
+            })
+            .collect();
+        Path {
+            global: leading_colon.is_some(),
+            path,
         }
     }
 
