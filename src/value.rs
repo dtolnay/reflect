@@ -50,7 +50,7 @@ impl Value {
     pub fn data(&self) -> Data<Self> {
         use crate::ValueNode::*;
         match self.node() {
-            DataStructure { data, .. } => data.clone().map(|value_ref| Value {
+            DataStructure { data, .. } => data.map(|value_ref| Value {
                 index: value_ref.element,
             }),
             Reference(v) => Value { index: v }.data().map(|v| v.element.reference()),
