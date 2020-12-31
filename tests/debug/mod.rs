@@ -1,3 +1,9 @@
+#![allow(
+    clippy::needless_pass_by_value,
+    clippy::similar_names,
+    clippy::wildcard_imports
+)]
+
 use reflect::*;
 
 reflect::library! {

@@ -1,3 +1,5 @@
+#![allow(clippy::wildcard_imports)]
+
 use quote::quote;
 use reflect::*;
 

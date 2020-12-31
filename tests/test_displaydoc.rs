@@ -1,6 +1,13 @@
 // This test implements a Display derive resembling the displaydoc crate:
 // https://github.com/yaahc/displaydoc
 
+#![allow(
+    clippy::if_not_else,
+    clippy::needless_pass_by_value,
+    clippy::similar_names,
+    clippy::wildcard_imports
+)]
+
 use quote::quote;
 use reflect::*;
 use syn::{Attribute, Lit, Meta, MetaNameValue};
