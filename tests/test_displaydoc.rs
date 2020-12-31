@@ -87,13 +87,11 @@ fn display_fmt(f: MakeFunction) -> Value {
 fn extract_doc_comment(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
         if attr.path.is_ident("doc") {
-            if let Ok(meta) = attr.parse_meta() {
-                if let Meta::NameValue(MetaNameValue {
-                    lit: Lit::Str(lit), ..
-                }) = meta
-                {
-                    return Some(lit.value().trim().to_owned());
-                }
+            if let Ok(Meta::NameValue(MetaNameValue {
+                lit: Lit::Str(lit), ..
+            })) = attr.parse_meta()
+            {
+                return Some(lit.value().trim().to_owned());
             }
         }
     }
