@@ -318,7 +318,7 @@
 #![allow(
     clippy::needless_pass_by_value,
     clippy::new_without_default,
-    clippy::for_loop_over_option,
+    clippy::for_loops_over_fallibles,
     clippy::large_enum_variant,
     clippy::trivially_copy_pass_by_ref
 )]
