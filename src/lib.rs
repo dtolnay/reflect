@@ -316,11 +316,19 @@
 #![doc(html_root_url = "https://docs.rs/reflect/0.0.4")]
 #![allow(unused_variables, dead_code)]
 #![allow(
+    clippy::enum_glob_use,
+    clippy::for_loops_over_fallibles,
+    clippy::items_after_statements,
+    clippy::large_enum_variant,
+    clippy::match_same_arms,
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
     clippy::needless_pass_by_value,
     clippy::new_without_default,
-    clippy::for_loops_over_fallibles,
-    clippy::large_enum_variant,
-    clippy::trivially_copy_pass_by_ref
+    clippy::redundant_closure_for_method_calls,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::unused_self,
+    clippy::wildcard_imports
 )]
 
 #[doc(hidden)]
