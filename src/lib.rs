@@ -321,6 +321,7 @@
     clippy::items_after_statements,
     clippy::large_enum_variant,
     clippy::match_same_arms,
+    clippy::missing_panics_doc,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
     clippy::needless_pass_by_value,
