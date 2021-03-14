@@ -42,7 +42,7 @@ impl ValueNode {
                 ValueNode::Str(types)
             }
             ValueNode::Str(_) => ValueNode::Str(String::from("str")),
-            ValueNode::DataStructure { name, .. } => ValueNode::Str(name.to_owned()),
+            ValueNode::DataStructure { name, .. } => ValueNode::Str(name.clone()),
             ValueNode::Reference(v) => v.node().get_type_name(),
             ValueNode::ReferenceMut(v) => v.node().get_type_name(),
             ValueNode::Binding { ty, .. } => ValueNode::Str(ty.0.get_name()),
