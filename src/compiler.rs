@@ -99,7 +99,7 @@ impl CompleteFunction {
 
         let reachable = self.compute_reachability();
         let mutable = self.compute_mutability();
-        let values = self.refs().flat_map(|v| {
+        let values = self.refs().filter_map(|v| {
             // Don't create let bindings for string literals as they're will be inlined
             if let ValueNode::Str(_) = self.values[v.0] {
                 return None;
