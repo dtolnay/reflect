@@ -252,7 +252,7 @@ impl Parse for Type {
             }
         } else if lookahead.peek(Token![dyn]) {
             let _: Token![dyn] = input.parse()?;
-            let bounds: Punctuated<Ident, Token![+]> = Punctuated::parse_terminated(&input)?;
+            let bounds: Punctuated<Ident, Token![+]> = Punctuated::parse_terminated(input)?;
             Ok(Type::TraitObject(bounds.into_iter().collect()))
         } else if lookahead.peek(Ident) {
             input.parse().map(Type::Ident)
@@ -416,7 +416,7 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
         }
     });
     let set_output = function.ret.as_ref().map(|ty| {
-        let ty = to_runtime_type(&ty);
+        let ty = to_runtime_type(ty);
         quote!(sig.set_output(#ty);)
     });
     let vars = (0..(!function.receiver.is_none() as usize + function.args.len()))

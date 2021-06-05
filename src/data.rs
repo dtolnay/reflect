@@ -13,7 +13,7 @@ pub enum Data<T> {
 impl<T> Data<T> {
     pub fn attrs(&self) -> &[Attribute] {
         match self {
-            Data::Struct(s) => &s.attrs(),
+            Data::Struct(s) => s.attrs(),
             Data::Enum(e) => &e.attrs,
         }
     }
