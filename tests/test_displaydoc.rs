@@ -67,7 +67,7 @@ fn display_fmt(f: MakeFunction) -> Value {
                         formatter,
                         f.string(&fmt_string),
                         field.get_value(),
-                    ])
+                    ]);
                 }
 
                 last_write

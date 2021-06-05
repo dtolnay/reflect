@@ -212,7 +212,7 @@ impl TypeNode {
 
             TraitObject(type_param_bound) => {
                 if type_param_bound.len() != 1 {
-                    panic!("Type::name_and_generics: TraitObject has more than one bound")
+                    panic!("Type::name_and_generics: TraitObject has more than one bound");
                 }
                 let type_param_bound = Print::ref_cast(&type_param_bound[0]);
                 (quote!(dyn #type_param_bound), Vec::new(), Vec::new())

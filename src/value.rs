@@ -81,7 +81,7 @@ impl Value {
                 ..
             } => {
                 if index >= types.len() {
-                    panic!("Value:get_tuple_value: Out of bounds")
+                    panic!("Value:get_tuple_value: Out of bounds");
                 }
                 let node = ValueNode::Destructure {
                     parent: self.index,

@@ -58,7 +58,7 @@ impl<'a> MakeImpl<'a> {
                 invokes: Vec::new(),
                 macros: Vec::new(),
                 ret: None,
-            })
+            });
         });
 
         let ret = Some(run(MakeFunction { private: () }).index);

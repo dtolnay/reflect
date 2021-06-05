@@ -71,7 +71,7 @@ impl ToTokens for Print<TypeNode> {
 impl ToTokens for Print<Generics> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let params = self.0.params.iter().map(Print::ref_cast);
-        tokens.append_all(quote!(#(#params),*))
+        tokens.append_all(quote!(#(#params),*));
     }
 }
 
@@ -120,7 +120,7 @@ impl ToTokens for Print<TraitBound> {
         } else {
             Some(quote!(for <#(#lifetimes)+*>))
         };
-        tokens.append_all(quote!(#lifetimes #path))
+        tokens.append_all(quote!(#lifetimes #path));
     }
 }
 
@@ -139,7 +139,7 @@ impl ToTokens for Print<PredicateType> {
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#lifetimes #ty #colon #(#bounds)+*))
+        tokens.append_all(quote!(#lifetimes #ty #colon #(#bounds)+*));
     }
 }
 
@@ -162,7 +162,7 @@ impl ToTokens for Print<LifetimeDef> {
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon #(#bounds)+*))
+        tokens.append_all(quote!(#ident #colon #(#bounds)+*));
     }
 }
 
@@ -170,7 +170,7 @@ impl ToTokens for Print<Binding> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = &self.0.ident;
         let ty = Print::ref_cast(&self.0.ty);
-        tokens.append_all(quote!(#ident : ty))
+        tokens.append_all(quote!(#ident : ty));
     }
 }
 
@@ -183,7 +183,7 @@ impl ToTokens for Print<Constraint> {
         } else {
             Some(quote!(:))
         };
-        tokens.append_all(quote!(#ident #colon #(#bounds)+*))
+        tokens.append_all(quote!(#ident #colon #(#bounds)+*));
     }
 }
 
@@ -197,7 +197,7 @@ impl ToTokens for Print<GenericArgument> {
             GenericArgument::Binding(binding) => Print::ref_cast(binding).to_tokens(tokens),
 
             GenericArgument::Constraint(constraint) => {
-                Print::ref_cast(constraint).to_tokens(tokens)
+                Print::ref_cast(constraint).to_tokens(tokens);
             }
 
             GenericArgument::Const(_expr) => unimplemented!(),
