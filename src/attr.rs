@@ -1,5 +1,5 @@
 use ref_cast::RefCast;
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Debug};
 use syn::{AttrStyle, Attribute};
 
 #[allow(clippy::ptr_arg)]
@@ -31,11 +31,10 @@ impl Debug for Wrapper<Attribute> {
             if i > 0 || self.0.path.leading_colon.is_some() {
                 f.write_str("::")?;
             }
-            Display::fmt(&segment.ident, f)?;
+            write!(f, "{}", segment.ident)?;
         }
         for token in self.0.tokens.clone() {
-            f.write_str(" ")?;
-            Display::fmt(&token, f)?;
+            write!(f, " {}", token)?;
         }
         f.write_str("]")?;
         Ok(())
