@@ -42,12 +42,12 @@ impl ToTokens for Print<TypeNode> {
             }
             PrimitiveStr => quote!(str),
             Reference { lifetime, inner } => {
-                let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
+                let lifetime = lifetime.as_ref().map(Print::ref_cast);
                 let inner = Print::ref_cast(&**inner);
                 quote!(&#lifetime #inner)
             }
             ReferenceMut { lifetime, inner } => {
-                let lifetime = lifetime.as_ref().map(|lifetime| Print::ref_cast(lifetime));
+                let lifetime = lifetime.as_ref().map(Print::ref_cast);
                 let inner = Print::ref_cast(&**inner);
                 quote!(&mut #lifetime #inner)
             }
