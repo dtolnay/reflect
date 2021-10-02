@@ -5,7 +5,6 @@ use crate::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use ref_cast::RefCast;
-use std::fmt::Debug;
 use syn::TypePath;
 
 #[derive(Debug, Clone)]
