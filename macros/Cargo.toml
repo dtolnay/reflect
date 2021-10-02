@@ -6,6 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Procedural macros required by the `reflect` crate."
 repository = "https://github.com/dtolnay/reflect"
 edition = "2018"
+rust-version = "1.33"
 
 [lib]
 proc-macro = true

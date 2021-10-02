@@ -10,6 +10,7 @@ keywords = ["reflection"]
 categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
 edition = "2018"
+rust-version = "1.33"
 
 [dependencies]
 proc-macro2 = "1.0"
