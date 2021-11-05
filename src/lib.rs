@@ -318,9 +318,9 @@
 #![allow(
     clippy::enum_glob_use,
     clippy::for_loops_over_fallibles,
-    clippy::if_then_panic,
     clippy::items_after_statements,
     clippy::large_enum_variant,
+    clippy::manual_assert,
     clippy::match_same_arms,
     clippy::missing_panics_doc,
     clippy::module_name_repetitions,
