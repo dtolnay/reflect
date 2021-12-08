@@ -1,4 +1,4 @@
-#![allow(clippy::enum_glob_use)]
+#![allow(clippy::cast_lossless, clippy::enum_glob_use)]
 
 extern crate proc_macro;
 
