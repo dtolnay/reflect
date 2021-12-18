@@ -327,6 +327,7 @@
     clippy::must_use_candidate,
     clippy::needless_pass_by_value,
     clippy::new_without_default,
+    clippy::return_self_not_must_use,
     clippy::trivially_copy_pass_by_ref,
     clippy::unused_self,
     clippy::wildcard_imports
