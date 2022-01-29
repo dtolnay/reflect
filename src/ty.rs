@@ -170,8 +170,8 @@ impl TypeNode {
             }
             TypeNode::PrimitiveStr => String::from("str"),
             TypeNode::DataStructure { name, .. } => name.to_string(),
-            TypeNode::Reference { inner, .. } => (&**inner).get_name(),
-            TypeNode::ReferenceMut { inner, .. } => (&**inner).get_name(),
+            TypeNode::Reference { inner, .. } => (**inner).get_name(),
+            TypeNode::ReferenceMut { inner, .. } => (**inner).get_name(),
             TypeNode::Path(path) => {
                 let mut tokens = TokenStream::new();
                 Print::ref_cast(path).to_tokens(&mut tokens);
