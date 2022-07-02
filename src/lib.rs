@@ -317,6 +317,7 @@
 #![allow(unused_variables, dead_code)]
 #![allow(
     clippy::enum_glob_use,
+    clippy::explicit_auto_deref,
     clippy::for_loops_over_fallibles,
     clippy::items_after_statements,
     clippy::large_enum_variant,
