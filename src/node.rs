@@ -28,7 +28,7 @@ impl ValueNode {
     pub fn get_type_name(&self) -> Self {
         match self {
             ValueNode::Tuple(types) => {
-                let types: String = types.iter().fold(String::from(""), |mut acc, v| {
+                let types: String = types.iter().fold(String::new(), |mut acc, v| {
                     match &v.node().get_type_name() {
                         ValueNode::Str(name) => {
                             acc.push_str(name);
