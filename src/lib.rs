@@ -71,8 +71,6 @@
 //! be invoked at runtime.
 //!
 //! ```
-//! extern crate reflect;
-//!
 //! reflect::library! {
 //!     extern crate std {
 //!         mod fmt {
@@ -95,8 +93,6 @@
 //!         }
 //!     }
 //! }
-//! #
-//! # fn main() {}
 //! ```
 //!
 //! Next, the macro entry point is an ordinary `proc_macro_derive` function just as
@@ -109,7 +105,7 @@
 //! vestiges of runtime reflection.
 //!
 //! ```
-//! # extern crate reflect;
+//! # extern crate proc_macro;
 //! #
 //! # reflect::library! {
 //! #     extern crate std {
@@ -124,7 +120,7 @@
 //! #     }
 //! # }
 //! #
-//! use self::proc_macro::TokenStream;
+//! use proc_macro::TokenStream;
 //!
 //! # macro_rules! ignore {
 //! #     ($($tt:tt)*) => {};
@@ -143,8 +139,6 @@
 //! # fn debug_fmt(f: reflect::MakeFunction) -> reflect::Value {
 //! #     unimplemented!()
 //! # }
-//! #
-//! # fn main() {}
 //! ```
 //!
 //! The following looks like a function that does runtime reflection. It receives
@@ -189,8 +183,6 @@
 //! [`DebugStruct`]: https://doc.rust-lang.org/std/fmt/struct.DebugStruct.html
 //!
 //! ```
-//! # extern crate reflect;
-//! #
 //! # use reflect::*;
 //! #
 //! # reflect::library! {
@@ -235,8 +227,6 @@
 //!
 //! RUNTIME::std::fmt::DebugStruct::finish.INVOKE(builder)
 //! # }
-//! #
-//! # fn main() {}
 //! ```
 //!
 //! # Robustness and how things go wrong
