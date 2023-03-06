@@ -1,12 +1,11 @@
 #![allow(clippy::cast_lossless, clippy::enum_glob_use)]
 
+use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, parenthesized, parse_macro_input, token, Ident, Token};
-
-use self::proc_macro::TokenStream;
 
 struct Input {
     crates: Vec<ItemMod>,
