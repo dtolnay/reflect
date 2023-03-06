@@ -119,7 +119,6 @@ that is compiled into the macro user's crate. This token stream contains no
 vestiges of runtime reflection.
 
 ```rust
-extern crate proc_macro;
 use proc_macro::TokenStream;
 
 // Macro that is called when someone writes derive(MyDebug) on a data structure.

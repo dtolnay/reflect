@@ -1,7 +1,5 @@
 #![allow(clippy::cast_lossless, clippy::enum_glob_use)]
 
-extern crate proc_macro;
-
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};

@@ -124,7 +124,6 @@
 //! #     }
 //! # }
 //! #
-//! extern crate proc_macro;
 //! use self::proc_macro::TokenStream;
 //!
 //! # macro_rules! ignore {
