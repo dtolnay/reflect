@@ -8,7 +8,7 @@ fn derive(ex: Execution) {
     fn should_skip(field: &Field<Value>) -> bool {
         field.get_attrs().iter().any(|attr| {
             syn::custom_keyword!(skip);
-            attr.path.is_ident("trivial") && attr.parse_args::<skip>().is_ok()
+            attr.path().is_ident("trivial") && attr.parse_args::<skip>().is_ok()
         })
     }
 

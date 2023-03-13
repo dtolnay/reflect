@@ -10,14 +10,14 @@ keywords = ["reflection"]
 categories = ["development-tools::procedural-macro-helpers"]
 readme = "README.md"
 edition = "2018"
-rust-version = "1.33"
+rust-version = "1.56"
 
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
 ref-cast = "1.0"
 reflect-internal = { version = "=0.0.10", path = "macros" }
-syn = "1.0"
+syn = "2.0"
 
 [workspace]
 members = ["macros"]
