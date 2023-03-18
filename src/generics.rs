@@ -26,7 +26,7 @@ pub(crate) struct TypeParam {
 #[derive(Debug, Clone)]
 pub(crate) enum GenericConstraint {
     Type(PredicateType),
-    Lifetime(LifetimeDef),
+    Lifetime(LifetimeParam),
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +56,7 @@ pub(crate) struct Lifetime {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LifetimeDef {
+pub(crate) struct LifetimeParam {
     pub(crate) ident: Ident,
     pub(crate) bounds: Vec<Lifetime>,
 }
@@ -75,13 +75,13 @@ pub struct GenericArguments {
 pub(crate) enum GenericArgument {
     Type(Type),
     Lifetime(Lifetime),
-    Binding(Binding),
+    AssocType(AssocType),
     Constraint(Constraint),
     Const(Expr),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Binding {
+pub(crate) struct AssocType {
     pub(crate) ident: Ident,
     pub(crate) ty: Type,
 }
@@ -115,14 +115,15 @@ fn syn_to_bound_lifetimes(lifetimes: Option<BoundLifetimes>) -> Vec<Lifetime> {
         lifetimes
             .lifetimes
             .into_iter()
-            .map(
-                |syn::LifetimeDef {
-                     lifetime: syn::Lifetime { ident, .. },
-                     ..
-                 }| Lifetime {
+            .filter_map(|generic_param| match generic_param {
+                syn::GenericParam::Lifetime(syn::LifetimeParam {
+                    lifetime: syn::Lifetime { ident, .. },
+                    ..
+                }) => Some(Lifetime {
                     ident: Ident::from(ident),
-                },
-            )
+                }),
+                _ => None,
+            })
             .collect()
     })
 }
@@ -148,7 +149,7 @@ fn syn_to_generic_constraints(
                 lifetime: syn::Lifetime { ident, .. },
                 bounds,
                 ..
-            }) => GenericConstraint::Lifetime(LifetimeDef {
+            }) => GenericConstraint::Lifetime(LifetimeParam {
                 ident: Ident::from(ident),
                 bounds: bounds
                     .into_iter()
@@ -157,7 +158,7 @@ fn syn_to_generic_constraints(
                     })
                     .collect(),
             }),
-            WherePredicate::Eq(_eq) => unimplemented!("Generics::syn_to_generics: Eq"),
+            _ => unimplemented!(),
         })
 }
 
@@ -181,14 +182,14 @@ where
 
                 GenericParam::Type(TypeParam { ident })
             }
-            syn::GenericParam::Lifetime(syn::LifetimeDef {
+            syn::GenericParam::Lifetime(syn::LifetimeParam {
                 lifetime: syn::Lifetime { ident, .. },
                 bounds,
                 ..
             }) => {
                 let ident = Ident::from(ident);
                 if !bounds.is_empty() {
-                    constraints.push(GenericConstraint::Lifetime(LifetimeDef {
+                    constraints.push(GenericConstraint::Lifetime(LifetimeParam {
                         ident: ident.clone(),
                         bounds: bounds
                             .into_iter()
@@ -222,6 +223,7 @@ where
             syn::TypeParamBound::Lifetime(lifetime) => TypeParamBound::Lifetime(Lifetime {
                 ident: Ident::from(lifetime.ident),
             }),
+            _ => unimplemented!(),
         })
         .collect()
 }
@@ -235,7 +237,7 @@ impl GenericArgument {
                 ident: Ident::from(lifetime.ident),
             }),
 
-            syn::GenericArgument::Binding(binding) => GenericArgument::Binding(Binding {
+            syn::GenericArgument::AssocType(binding) => GenericArgument::AssocType(AssocType {
                 ident: Ident::from(binding.ident),
                 ty: Type::syn_to_type(binding.ty),
             }),
@@ -250,6 +252,8 @@ impl GenericArgument {
             syn::GenericArgument::Const(_expr) => {
                 unimplemented!("GenericArguments::syn_to_generic_arguments: Const")
             }
+
+            _ => unimplemented!(),
         }
     }
 }

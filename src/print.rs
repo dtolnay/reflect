@@ -151,7 +151,7 @@ impl ToTokens for Print<Lifetime> {
     }
 }
 
-impl ToTokens for Print<LifetimeDef> {
+impl ToTokens for Print<LifetimeParam> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let apostrophe = Punct::new('\'', Spacing::Joint);
         tokens.append(apostrophe);
@@ -166,7 +166,7 @@ impl ToTokens for Print<LifetimeDef> {
     }
 }
 
-impl ToTokens for Print<Binding> {
+impl ToTokens for Print<AssocType> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = &self.0.ident;
         let ty = Print::ref_cast(&self.0.ty);
@@ -194,7 +194,7 @@ impl ToTokens for Print<GenericArgument> {
 
             GenericArgument::Type(ty) => Print::ref_cast(ty).to_tokens(tokens),
 
-            GenericArgument::Binding(binding) => Print::ref_cast(binding).to_tokens(tokens),
+            GenericArgument::AssocType(assoc_ty) => Print::ref_cast(assoc_ty).to_tokens(tokens),
 
             GenericArgument::Constraint(constraint) => {
                 Print::ref_cast(constraint).to_tokens(tokens);
