@@ -1,6 +1,6 @@
 [package]
 name = "reflect"
-version = "0.0.10"
+version = "0.0.11"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "The \"but I thought Rust doesn't have reflection?\" memorial brand new way of defining procedural macros."
@@ -16,7 +16,7 @@ rust-version = "1.56"
 proc-macro2 = "1.0"
 quote = "1.0"
 ref-cast = "1.0"
-reflect-internal = { version = "=0.0.10", path = "macros" }
+reflect-internal = { version = "=0.0.11", path = "macros" }
 syn = "2.0"
 
 [workspace]
