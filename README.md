@@ -231,7 +231,7 @@ impl ::std::fmt::Debug for Point {
                 let mut _v2 = ::std::fmt::Formatter::debug_struct(_arg1, "Point");
                 let _ = ::std::fmt::DebugStruct::field(&mut _v2, "x", _v0);
                 let _ = ::std::fmt::DebugStruct::field(&mut _v2, "y", _v1);
-                let _v3 = ::std::fmt::DebugStruct::finish(&mut _v0);
+                let _v3 = ::std::fmt::DebugStruct::finish(&mut _v2);
                 _v3
             }
         }
