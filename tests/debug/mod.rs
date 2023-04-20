@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)] // rustc bug: https://github.com/rust-lang/rust/issues/110573
 #![allow(
     clippy::needless_pass_by_value,
     clippy::similar_names,

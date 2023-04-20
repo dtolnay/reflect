@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)] // rustc bug: https://github.com/rust-lang/rust/issues/110573
 #![allow(clippy::wildcard_imports)]
 
 use quote::quote;
