@@ -152,7 +152,7 @@ impl CompleteFunction {
         while let Some(v) = stack.pop() {
             match &self.values[v.0] {
                 Tuple(values) => {
-                    for &v in values.iter() {
+                    for &v in values {
                         if reachable.insert(v) {
                             stack.extend(values);
                         }
