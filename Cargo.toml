@@ -2,14 +2,14 @@
 name = "reflect"
 version = "0.0.12"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
-license = "MIT OR Apache-2.0"
-description = "The \"but I thought Rust doesn't have reflection?\" memorial brand new way of defining procedural macros."
-repository = "https://github.com/dtolnay/reflect"
-documentation = "https://docs.rs/reflect"
-keywords = ["reflection"]
 categories = ["development-tools::procedural-macro-helpers"]
-readme = "README.md"
+description = "The \"but I thought Rust doesn't have reflection?\" memorial brand new way of defining procedural macros."
+documentation = "https://docs.rs/reflect"
 edition = "2021"
+keywords = ["reflection"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/dtolnay/reflect"
 rust-version = "1.56"
 
 [dependencies]

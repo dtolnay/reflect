@@ -2,10 +2,10 @@
 name = "reflect-internal"
 version = "0.0.12"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
-license = "MIT OR Apache-2.0"
 description = "Procedural macros required by the `reflect` crate."
-repository = "https://github.com/dtolnay/reflect"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dtolnay/reflect"
 rust-version = "1.56"
 
 [lib]
