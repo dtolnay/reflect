@@ -77,3 +77,9 @@ impl Field<Value> {
         self.element
     }
 }
+
+impl Field<Type> {
+    pub fn get_type(&self) -> &Type {
+        &self.element
+    }
+}
