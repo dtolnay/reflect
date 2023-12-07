@@ -66,6 +66,10 @@ impl Field<Type> {
     pub fn get_name(&self) -> String {
         self.accessor.to_string()
     }
+
+    pub fn get_attrs(&self) -> &[Attribute] {
+        &self.attrs
+    }
 }
 
 impl Field<Value> {
