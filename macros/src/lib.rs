@@ -451,6 +451,7 @@ fn declare_function(parent: &Ident, function: &Function) -> TokenStream2 {
                     }
                 }
 
+                #[allow(unknown_lints, non_local_definitions)]
                 impl #parent {
                     #[allow(non_upper_case_globals)]
                     pub const #name: #name = #name;
