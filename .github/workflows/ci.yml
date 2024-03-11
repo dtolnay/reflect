@@ -84,7 +84,7 @@ jobs:
       - run: cargo miri setup
       - run: cargo miri test
         env:
-          MIRIFLAGS: -Zmiri-tag-raw-pointers
+          MIRIFLAGS: -Zmiri-strict-provenance
 
   outdated:
     name: Outdated
