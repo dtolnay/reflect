@@ -59,7 +59,7 @@ impl CompleteImpl {
         if let Some(trait_ty) = &self.trait_ty {
             let trait_ty = Print::ref_cast(trait_ty);
             quote! {
-                // FIXME: assosiated types
+                // FIXME: associated types
                 // FIXME: trait generics
                 impl #params #trait_ty for #name #params #where_clause {
                     #(#functions)*
