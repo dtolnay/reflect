@@ -314,6 +314,7 @@
     clippy::missing_panics_doc,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
+    clippy::needless_lifetimes,
     clippy::needless_pass_by_value,
     clippy::new_without_default,
     clippy::return_self_not_must_use,
