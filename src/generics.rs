@@ -102,7 +102,7 @@ impl Generics {
         let (params, mut constraints) = syn_to_generic_params(generics.params);
         if let Some(where_clause) = generics.where_clause {
             constraints.extend(syn_to_generic_constraints(where_clause));
-        };
+        }
         Generics {
             params,
             constraints,
