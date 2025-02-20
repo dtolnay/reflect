@@ -180,7 +180,7 @@
 //! Paths beginning with `RUNTIME::` refer to library signatures declared by the
 //! `library! { ... }` snippet above.
 //!
-//! [`DebugStruct`]: https://doc.rust-lang.org/std/fmt/struct.DebugStruct.html
+//! [`DebugStruct`]: core::fmt::DebugStruct
 //!
 //! ```
 //! # use reflect::*;
