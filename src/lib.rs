@@ -305,6 +305,7 @@
 #![doc(html_root_url = "https://docs.rs/reflect/0.0.14")]
 #![allow(unused_variables, dead_code)]
 #![allow(
+    clippy::elidable_lifetime_names,
     clippy::enum_glob_use,
     clippy::explicit_auto_deref,
     clippy::items_after_statements,
