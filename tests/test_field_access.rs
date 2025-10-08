@@ -1,5 +1,8 @@
 #![allow(non_upper_case_globals)] // rustc bug: https://github.com/rust-lang/rust/issues/110573
-#![allow(clippy::wildcard_imports)]
+#![allow(
+    clippy::expl_impl_clone_on_copy, // https://github.com/rust-lang/rust-clippy/issues/15842
+    clippy::wildcard_imports,
+)]
 
 use quote::quote;
 use reflect::*;
