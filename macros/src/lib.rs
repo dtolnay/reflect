@@ -1,4 +1,8 @@
-#![allow(clippy::cast_lossless, clippy::enum_glob_use)]
+#![allow(
+    clippy::cast_lossless,
+    clippy::enum_glob_use,
+    clippy::uninlined_format_args
+)]
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};

@@ -320,6 +320,7 @@
     clippy::new_without_default,
     clippy::return_self_not_must_use,
     clippy::trivially_copy_pass_by_ref,
+    clippy::uninlined_format_args,
     clippy::unused_self,
     clippy::wildcard_imports
 )]
