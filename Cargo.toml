@@ -10,7 +10,7 @@ keywords = ["reflection"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/dtolnay/reflect"
-rust-version = "1.56"
+rust-version = "1.58"
 
 [dependencies]
 proc-macro2 = "1.0.63"
