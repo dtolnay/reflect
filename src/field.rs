@@ -66,10 +66,20 @@ impl Field<Type> {
     pub fn get_name(&self) -> String {
         self.accessor.to_string()
     }
+
+    pub fn get_attrs(&self) -> &[Attribute] {
+        &self.attrs
+    }
 }
 
 impl Field<Value> {
     pub fn get_value(&self) -> Value {
         self.element
+    }
+}
+
+impl Field<Type> {
+    pub fn get_type(&self) -> &Type {
+        &self.element
     }
 }
