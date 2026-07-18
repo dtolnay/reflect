@@ -17,7 +17,7 @@ proc-macro2 = "1.0.63"
 quote = "1.0.29"
 ref-cast = "1.0.18"
 reflect-internal = { version = "=0.0.15", path = "macros" }
-syn = "2.0.23"
+syn = "3"
 
 [workspace]
 members = ["macros"]

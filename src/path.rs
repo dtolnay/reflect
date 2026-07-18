@@ -92,7 +92,7 @@ impl Path {
                             inputs: parenthesized
                                 .inputs
                                 .into_iter()
-                                .map(Type::syn_to_type)
+                                .map(|named_arg| Type::syn_to_type(named_arg.ty))
                                 .collect(),
                             output: match parenthesized.output {
                                 ReturnType::Default => None,
