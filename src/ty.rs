@@ -111,6 +111,7 @@ impl Type {
     pub(crate) fn syn_to_type(ty: syn::Type) -> Self {
         match ty {
             syn::Type::Path(TypePath {
+                attrs: _,
                 // FIXME: add qself to Path
                 qself: None,
                 path,
